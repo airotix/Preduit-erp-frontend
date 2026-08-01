@@ -5,6 +5,7 @@ import { ScreenRenderer } from "@/components/screens/screen-renderer";
 import { FinanceScreen } from "@/components/screens/finance/finance-screen";
 import { AiScreen } from "@/components/screens/ai/ai-screen";
 import { ProcurementInvoices } from "@/components/screens/procurement/procurement-invoices";
+import { SalesInvoices } from "@/components/screens/sales/sales-invoices";
 
 export function generateStaticParams() {
   return MODULES.flatMap((m) =>
@@ -47,6 +48,18 @@ export default function ScreenPage({
         <PageHeader crumb={mod.label} title="Invoices" />
         <div className="erp-scroll flex-1 overflow-y-auto px-[26px] pb-7 pt-[18px]">
           <ProcurementInvoices />
+        </div>
+      </>
+    );
+  }
+
+  // Sales Invoices — bespoke: generate a retail/online/wholesale invoice from an order.
+  if (mod.id === "sales" && tab.id === "invoices") {
+    return (
+      <>
+        <PageHeader crumb={mod.label} title="Invoices" />
+        <div className="erp-scroll flex-1 overflow-y-auto px-[26px] pb-7 pt-[18px]">
+          <SalesInvoices />
         </div>
       </>
     );

@@ -36,7 +36,7 @@ export const screens: Record<string, ScreenConfig> = {
         },
         {
           "badge": "accent",
-          "t": "Administrator"
+          "t": "Admin"
         },
         "Operations",
         "2 min ago",
@@ -70,7 +70,7 @@ export const screens: Record<string, ScreenConfig> = {
         },
         {
           "badge": "navy",
-          "t": "Warehouse Lead"
+          "t": "Logistics / Inventory"
         },
         "Inventory",
         "Yesterday",
@@ -86,14 +86,48 @@ export const screens: Record<string, ScreenConfig> = {
           "sub": "omar.f@systemsapparel.com"
         },
         {
-          "badge": "neutral",
-          "t": "Buyer"
+          "badge": "navy",
+          "t": "Manager"
         },
         "Procurement",
         "3 days ago",
         {
           "badge": "amber",
           "t": "Invited"
+        }
+      ],
+      [
+        {
+          "t": "Nadia Hassan",
+          "avatar": true,
+          "sub": "nadia.h@systemsapparel.com"
+        },
+        {
+          "badge": "navy",
+          "t": "Accountant"
+        },
+        "Finance",
+        "5 hr ago",
+        {
+          "badge": "green",
+          "t": "Active"
+        }
+      ],
+      [
+        {
+          "t": "Leo Vance",
+          "avatar": true,
+          "sub": "leo.v@systemsapparel.com"
+        },
+        {
+          "badge": "neutral",
+          "t": "User Overview"
+        },
+        "Executive",
+        "2 days ago",
+        {
+          "badge": "green",
+          "t": "Active"
         }
       ]
     ]
@@ -121,11 +155,11 @@ export const screens: Record<string, ScreenConfig> = {
     "rows": [
       [
         {
-          "t": "Administrator",
+          "t": "Admin",
           "strong": true
         },
         {
-          "t": "3",
+          "t": "1",
           "align": "center",
           "mono": true
         },
@@ -134,11 +168,24 @@ export const screens: Record<string, ScreenConfig> = {
       ],
       [
         {
+          "t": "Manager",
+          "strong": true
+        },
+        {
+          "t": "1",
+          "align": "center",
+          "mono": true
+        },
+        "Operations, Approvals",
+        "11 Jun"
+      ],
+      [
+        {
           "t": "Merchandiser",
           "strong": true
         },
         {
-          "t": "8",
+          "t": "1",
           "align": "center",
           "mono": true
         },
@@ -147,29 +194,42 @@ export const screens: Record<string, ScreenConfig> = {
       ],
       [
         {
-          "t": "Warehouse Lead",
+          "t": "Accountant",
           "strong": true
         },
         {
-          "t": "6",
+          "t": "1",
+          "align": "center",
+          "mono": true
+        },
+        "Finance",
+        "05 Jun"
+      ],
+      [
+        {
+          "t": "User Overview",
+          "strong": true
+        },
+        {
+          "t": "1",
+          "align": "center",
+          "mono": true
+        },
+        "Read-only",
+        "03 Jun"
+      ],
+      [
+        {
+          "t": "Logistics / Inventory",
+          "strong": true
+        },
+        {
+          "t": "1",
           "align": "center",
           "mono": true
         },
         "Inventory, Shipments",
         "01 Jun"
-      ],
-      [
-        {
-          "t": "Buyer",
-          "strong": true
-        },
-        {
-          "t": "4",
-          "align": "center",
-          "mono": true
-        },
-        "Procurement",
-        "28 May"
       ]
     ]
   },

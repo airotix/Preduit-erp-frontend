@@ -3,7 +3,14 @@ import { z } from "zod";
 export const userSchema = z.object({
   name: z.string().min(1, "Required"),
   email: z.string().email("Enter a valid email"),
-  role: z.enum(["Administrator", "Merchandiser", "Warehouse Lead", "Buyer"]),
+  role: z.enum([
+    "Admin",
+    "Manager",
+    "Merchandiser",
+    "Accountant",
+    "User Overview",
+    "Logistics / Inventory",
+  ]),
   department: z.string().min(1, "Required"),
 });
 

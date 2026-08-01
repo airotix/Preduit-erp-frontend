@@ -27,8 +27,26 @@ export interface Suggestion {
 export const money = (n: number) =>
   `€${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+interface ColorOption {
+  name: string;
+  hex: string;
+}
+
 interface OrderLine {
   name: string;
+  color: string;
+  sku: string | null;
+  price: number;
+  /** Colors specific to the picked product (empty until an item is chosen). */
+  colorOptions: ColorOption[];
+  /** Per-size quantity breakdown: size label → units. */
+  sizeQty: Record<string, number>;
+}
+
+interface OrderApiLine {
+  name: string;
+  color: string | null;
+  size: string | null;
   sku: string | null;
   qty: number;
   price: number;
@@ -37,7 +55,7 @@ interface OrderLine {
 interface OrderPayload {
   customer: string;
   channel: string;
-  lines: { name: string; sku: string | null; qty: number; price: number }[];
+  lines: OrderApiLine[];
 }
 
 /** Type-ahead product name input backed by /catalog/products/search. */
@@ -110,6 +128,18 @@ export function ProductNameInput({
   );
 }
 
+const newLine = (): OrderLine => ({
+  name: "",
+  color: "",
+  sku: null,
+  price: 0,
+  colorOptions: [],
+  sizeQty: {},
+});
+
+const lineUnits = (l: OrderLine) =>
+  Object.values(l.sizeQty).reduce((s, q) => s + (Number(q) || 0), 0);
+
 export function OrderForm({
   pending,
   onSubmit,
@@ -119,41 +149,76 @@ export function OrderForm({
 }) {
   const [customer, setCustomer] = React.useState("");
   const [channel, setChannel] = React.useState<string>("Wholesale");
-  const [lines, setLines] = React.useState<OrderLine[]>([
-    { name: "", sku: null, qty: 1, price: 0 },
-  ]);
+  const [colors, setColors] = React.useState<ColorOption[]>([]);
+  const [sizes, setSizes] = React.useState<string[]>([]);
+  const [lines, setLines] = React.useState<OrderLine[]>([newLine()]);
   const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!USE_BACKEND) return;
+    apiGet<ColorOption[]>("/catalog/colors").then(setColors).catch(() => setColors([]));
+    apiGet<string[]>("/catalog/sizes").then(setSizes).catch(() => setSizes([]));
+  }, []);
 
   const patch = (i: number, next: Partial<OrderLine>) =>
     setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...next } : l)));
-  const addLine = () =>
-    setLines((ls) => [...ls, { name: "", sku: null, qty: 1, price: 0 }]);
+  const setSize = (i: number, size: string, val: number) =>
+    setLines((ls) =>
+      ls.map((l, j) =>
+        j === i ? { ...l, sizeQty: { ...l.sizeQty, [size]: val } } : l
+      )
+    );
+  const addLine = () => setLines((ls) => [...ls, newLine()]);
   const removeLine = (i: number) =>
     setLines((ls) => (ls.length === 1 ? ls : ls.filter((_, j) => j !== i)));
 
-  const grand = lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.price) || 0), 0);
+  // Picking a product loads its own colors and drops a stale colour pick.
+  const pickProduct = (
+    i: number,
+    s: { name: string; price: number; colors?: ColorOption[] }
+  ) => {
+    const opts = s.colors ?? [];
+    setLines((ls) =>
+      ls.map((l, j) =>
+        j === i
+          ? {
+              ...l,
+              name: s.name,
+              price: s.price,
+              sku: null,
+              colorOptions: opts,
+              color: opts.some((c) => c.name === l.color) ? l.color : "",
+            }
+          : l
+      )
+    );
+  };
+
+  const grand = lines.reduce((s, l) => s + lineUnits(l) * (Number(l.price) || 0), 0);
 
   const submit = () => {
-    if (!customer.trim()) {
-      setError("Customer is required.");
-      return;
+    if (!customer.trim()) return setError("Customer is required.");
+    const apiLines: OrderApiLine[] = [];
+    for (const l of lines) {
+      if (!l.name.trim()) continue;
+      for (const size of sizes) {
+        const q = Math.floor(Number(l.sizeQty[size]) || 0);
+        if (q > 0) {
+          apiLines.push({
+            name: l.name.trim(),
+            color: l.color.trim() || null,
+            size,
+            sku: null,
+            qty: q,
+            price: Number(l.price) || 0,
+          });
+        }
+      }
     }
-    const valid = lines.filter((l) => l.name.trim() && Number(l.qty) > 0);
-    if (valid.length === 0) {
-      setError("Add at least one item with a name and quantity.");
-      return;
-    }
+    if (apiLines.length === 0)
+      return setError("Add at least one item and enter a quantity for one or more sizes.");
     setError(null);
-    onSubmit({
-      customer: customer.trim(),
-      channel,
-      lines: valid.map((l) => ({
-        name: l.name.trim(),
-        sku: l.sku,
-        qty: Math.floor(Number(l.qty)) || 0,
-        price: Number(l.price) || 0,
-      })),
-    });
+    onSubmit({ customer: customer.trim(), channel, lines: apiLines });
   };
 
   return (
@@ -194,66 +259,116 @@ export function OrderForm({
             Items<span className="ml-0.5 text-brand-orange">*</span>
           </Label>
 
-          <div className="space-y-2.5">
-            {lines.map((l, i) => (
-              <div
-                key={i}
-                className="rounded-xl border border-border/60 p-3"
-              >
-                <div className="grid grid-cols-[1fr_auto] gap-2">
-                  <ProductNameInput
-                    value={l.name}
-                    onChange={(v) => patch(i, { name: v })}
-                    onPick={(s) => patch(i, { name: s.name, price: s.price, sku: null })}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeLine(i)}
-                    aria-label="Remove item"
-                    className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-red-600 disabled:opacity-40"
-                    disabled={lines.length === 1}
-                  >
-                    <Trash2 size={16} strokeWidth={2} />
-                  </button>
-                </div>
+          <div className="space-y-3">
+            {lines.map((l, i) => {
+              const opts = l.colorOptions.length ? l.colorOptions : colors;
+              const colorHint =
+                l.name && !l.colorOptions.length ? "No colors for item" : "Color";
+              const units = lineUnits(l);
+              return (
+                <div key={i} className="rounded-xl border border-border/60 p-3">
+                  {/* Item + remove */}
+                  <div className="grid grid-cols-[1fr_auto] gap-2">
+                    <ProductNameInput
+                      value={l.name}
+                      onChange={(v) => patch(i, { name: v })}
+                      onPick={(s) => pickProduct(i, s)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeLine(i)}
+                      aria-label="Remove item"
+                      className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-red-600 disabled:opacity-40"
+                      disabled={lines.length === 1}
+                    >
+                      <Trash2 size={16} strokeWidth={2} />
+                    </button>
+                  </div>
 
-                <div className="mt-2 grid grid-cols-[1fr_1fr_auto] items-end gap-2">
-                  <div className="space-y-1">
-                    <span className="text-[11px] font-semibold uppercase text-muted-foreground">
-                      Qty
-                    </span>
-                    <Input
-                      type="number"
-                      min={1}
-                      value={l.qty}
-                      onChange={(e) =>
-                        patch(i, { qty: Math.max(0, Math.floor(Number(e.target.value) || 0)) })
-                      }
-                    />
+                  {/* Color + unit price */}
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <span className="text-[11px] font-semibold uppercase text-muted-foreground">
+                        Color
+                      </span>
+                      <Select value={l.color} onValueChange={(v) => patch(i, { color: v })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder={colorHint} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {opts.map((c) => (
+                            <SelectItem key={c.name} value={c.name}>
+                              <span className="flex items-center gap-2">
+                                <span
+                                  className="h-3 w-3 rounded-full border border-black/10"
+                                  style={{ background: c.hex }}
+                                />
+                                {c.name}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[11px] font-semibold uppercase text-muted-foreground">
+                        Unit price (€)
+                      </span>
+                      <Input
+                        type="number"
+                        min={0}
+                        step="any"
+                        value={l.price}
+                        onChange={(e) =>
+                          patch(i, { price: Math.max(0, Number(e.target.value) || 0) })
+                        }
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-1">
+
+                  {/* Size breakdown */}
+                  <div className="mt-3">
                     <span className="text-[11px] font-semibold uppercase text-muted-foreground">
-                      Unit price (€)
+                      Size breakdown
                     </span>
-                    <Input
-                      type="number"
-                      min={0}
-                      step="any"
-                      value={l.price}
-                      onChange={(e) => patch(i, { price: Math.max(0, Number(e.target.value) || 0) })}
-                    />
+                    {sizes.length === 0 ? (
+                      <p className="mt-1 text-[12px] text-muted-foreground">
+                        No sizes in the catalog yet.
+                      </p>
+                    ) : (
+                      <div className="mt-1.5 grid grid-cols-5 gap-1.5 sm:grid-cols-6">
+                        {sizes.map((s) => (
+                          <div key={s} className="space-y-0.5">
+                            <span className="block text-center text-[10px] font-bold uppercase text-muted-foreground">
+                              {s}
+                            </span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={l.sizeQty[s] ?? 0}
+                              onChange={(e) =>
+                                setSize(i, s, Math.max(0, Math.floor(Number(e.target.value) || 0)))
+                              }
+                              className="w-full rounded-lg border border-border/60 py-1.5 text-center text-[13px] font-bold tabular outline-none focus:border-primary"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div className="pb-2 text-right">
-                    <span className="block text-[11px] font-semibold uppercase text-muted-foreground">
-                      Line
+
+                  {/* Line summary */}
+                  <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-2.5 text-[13px]">
+                    <span className="text-muted-foreground">
+                      {units.toLocaleString()} unit{units === 1 ? "" : "s"}
                     </span>
                     <span className="font-bold tabular text-foreground">
-                      {money((Number(l.qty) || 0) * (Number(l.price) || 0))}
+                      {money(units * (Number(l.price) || 0))}
                     </span>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <button
