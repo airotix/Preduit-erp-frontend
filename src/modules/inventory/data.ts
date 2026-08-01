@@ -14,21 +14,33 @@ export const screens: Record<string, ScreenConfig> = {
     "total": 1842,
     "columns": [
       {
-        "label": "Variant"
+        "label": "Article"
       },
       {
-        "label": "Location"
+        "label": "SKU ID"
+      },
+      {
+        "label": "Colors",
+        "align": "right"
       },
       {
         "label": "On hand",
         "align": "right"
       },
       {
-        "label": "Reserved",
+        "label": "Available",
         "align": "right"
       },
       {
-        "label": "Available",
+        "label": "Retail Price",
+        "align": "right"
+      },
+      {
+        "label": "Online Price",
+        "align": "right"
+      },
+      {
+        "label": "Wholesale Price",
         "align": "right"
       },
       {
@@ -457,6 +469,9 @@ export const screens: Record<string, ScreenConfig> = {
         "label": "Variant"
       },
       {
+        "label": "SKU ID"
+      },
+      {
         "label": "Available",
         "align": "right"
       },
@@ -466,6 +481,18 @@ export const screens: Record<string, ScreenConfig> = {
       },
       {
         "label": "Suggested",
+        "align": "right"
+      },
+      {
+        "label": "Retail Price",
+        "align": "right"
+      },
+      {
+        "label": "Online Price",
+        "align": "right"
+      },
+      {
+        "label": "Wholesale Price",
         "align": "right"
       },
       {

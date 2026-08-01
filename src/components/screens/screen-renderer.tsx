@@ -30,9 +30,9 @@ export function ScreenRenderer({
     case "dashboard":
       return <DashboardView config={data} />;
     case "board":
-      return <BoardView config={data} />;
+      return <BoardView config={data} module={module} tab={tab.id} />;
     case "settings":
-      return <SettingsView config={data} />;
+      return <SettingsView config={data} module={module} tab={tab.id} />;
     case "list":
       return (
         <ListScreen

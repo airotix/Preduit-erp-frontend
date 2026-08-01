@@ -1,9 +1,9 @@
 import { z } from "zod";
 
+// The New PO form is a bespoke multi-line editor (see po-form.tsx); this schema
+// is kept only so the module still registers a "pos" create form.
 export const purchaseOrderSchema = z.object({
   supplier: z.string().min(1, "Required"),
-  items: z.number({ invalid_type_error: "Must be a number" }).positive("Must be greater than 0"),
-  total: z.number({ invalid_type_error: "Must be a number" }).positive("Must be greater than 0"),
   expected: z.string().min(1, "Required"),
 });
 

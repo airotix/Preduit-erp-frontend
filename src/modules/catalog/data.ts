@@ -17,18 +17,23 @@ export const screens: Record<string, ScreenConfig> = {
         "label": "Product"
       },
       {
-        "label": "Category"
+        "label": "SKU ID"
       },
       {
-        "label": "Season"
+        "label": "Retail Price",
+        "align": "right"
+      },
+      {
+        "label": "Online Price",
+        "align": "right"
+      },
+      {
+        "label": "Wholesale Price",
+        "align": "right"
       },
       {
         "label": "Variants",
         "align": "center"
-      },
-      {
-        "label": "Price",
-        "align": "right"
       },
       {
         "label": "Status"

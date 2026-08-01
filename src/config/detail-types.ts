@@ -5,9 +5,11 @@
  */
 export const DETAIL_TYPES: Record<string, string> = {
   "catalog/products": "product",
+  "inventory/stock": "stockarticle",
   "sales/orders": "order",
   "sales/invoices": "invoice",
   "sales/customers": "customer",
+  "procurement/pos": "purchaseorder",
   "procurement/suppliers": "supplier",
   "procurement/scorecard": "supplier",
   "procurement/receipts": "goodsreceipt",
@@ -15,6 +17,8 @@ export const DETAIL_TYPES: Record<string, string> = {
   "quality/inspections": "inspection",
   "shipments/shipments": "shipment",
   "ai/aireports": "aireport",
+  "production/porders": "productionorder",
+  "production/bom": "bomline",
 };
 
 export function detailTypeFor(

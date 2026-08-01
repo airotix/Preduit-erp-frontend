@@ -1,12 +1,50 @@
 "use client";
 
+import * as React from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "@/components/icon";
 import { ToneBadge } from "@/components/tone-badge";
 import { Button } from "@/components/ui/button";
 import { avatarColor, initials } from "@/lib/tone";
+import { apiPost, USE_BACKEND } from "@/lib/api-client";
 import type { BoardConfig } from "@/lib/screen-types";
 
-export function BoardView({ config }: { config: BoardConfig }) {
+/** module/tab → per-card status endpoint (approve/reject on the board). */
+const CARD_STATUS_ENDPOINTS: Record<string, (id: string) => string> = {
+  "procurement/approvals": (id) => `/procurement/pos/${id}/status`,
+};
+
+export function BoardView({
+  config,
+  module,
+  tab,
+}: {
+  config: BoardConfig;
+  module?: string;
+  tab?: string;
+}) {
+  const queryClient = useQueryClient();
+  const [busyId, setBusyId] = React.useState<string | null>(null);
+  const key = `${module}/${tab}`;
+  const statusBuilder = CARD_STATUS_ENDPOINTS[key];
+
+  const setStatus = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      if (USE_BACKEND && statusBuilder) return apiPost(statusBuilder(id), { status });
+      return null;
+    },
+    onSettled: () => {
+      setBusyId(null);
+      queryClient.invalidateQueries({ queryKey: ["screen", module, tab] });
+    },
+  });
+
+  const act = (id: string | undefined, status: string) => {
+    if (!id) return;
+    setBusyId(id);
+    setStatus.mutate({ id, status });
+  };
+
   return (
     <div className="flex gap-4 overflow-x-auto erp-scroll pb-2">
       {config.columns.map((col) => (
@@ -62,10 +100,21 @@ export function BoardView({ config }: { config: BoardConfig }) {
 
                 {c.approvable && (
                   <div className="mt-3 flex gap-2 border-t border-border/60 pt-3">
-                    <Button size="sm" className="h-8 flex-1">
+                    <Button
+                      size="sm"
+                      className="h-8 flex-1"
+                      disabled={!statusBuilder || busyId === c.public_id}
+                      onClick={() => act(c.public_id, "Approved")}
+                    >
                       {c.aLabel ?? "Approve"}
                     </Button>
-                    <Button size="sm" variant="outline" className="h-8 flex-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 flex-1"
+                      disabled={!statusBuilder || busyId === c.public_id}
+                      onClick={() => act(c.public_id, "Rejected")}
+                    >
                       {c.bLabel ?? "Reject"}
                     </Button>
                   </div>

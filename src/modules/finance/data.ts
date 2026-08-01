@@ -2,6 +2,21 @@ import type { ScreenConfig } from "@/lib/screen-types";
 
 /** In-memory mock store for the finance module — ported from the Apparel ERP design. */
 export const screens: Record<string, ScreenConfig> = {
+  "bills": {
+    "kind": "list",
+    "search": "Search bills…",
+    "action": "New bill",
+    "filters": ["Status", "Supplier"],
+    "columns": [
+      { "label": "Bill" },
+      { "label": "Supplier" },
+      { "label": "PO" },
+      { "label": "Amount", "align": "right" },
+      { "label": "Due" },
+      { "label": "Status" }
+    ],
+    "rows": []
+  },
   "coa": {
     "kind": "list",
     "search": "Search accounts…",

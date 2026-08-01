@@ -20,10 +20,39 @@ import { SheetFooter, SheetClose } from "@/components/ui/sheet";
 type Field = {
   name: string;
   label: string;
-  kind: "text" | "number" | "enum" | "boolean";
+  kind: "text" | "number" | "enum" | "boolean" | "date" | "image";
   options?: string[];
   optional?: boolean;
 };
+
+/** Upload/preview control that stores the chosen image as a data URL. */
+export function ImageField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const pick = (file?: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => onChange(String(reader.result));
+    reader.readAsDataURL(file);
+  };
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-lg border border-dashed border-border bg-muted/40 text-center text-[10px] text-muted-foreground">
+        {value ? <img src={value} alt="" className="h-full w-full object-cover" /> : "No image"}
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted">
+          {value ? "Replace image" : "Upload image"}
+          <input type="file" accept="image/*" className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
+        </label>
+        {value && (
+          <button type="button" onClick={() => onChange("")}
+                  className="text-left text-[12px] font-semibold text-muted-foreground hover:text-[#C0392B]">
+            Remove
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function titleCase(s: string) {
   return s
@@ -55,6 +84,10 @@ function fieldsFromSchema(schema: z.ZodObject<z.ZodRawShape>): Field[] {
       kind = "enum";
       options = def._def.values as string[];
     }
+    // Date-picker for due-date fields (stored/sent as an ISO date string).
+    if (kind === "text" && /due.?date$/i.test(name)) kind = "date";
+    // Image upload for image fields (stored/sent as a data URL or URL string).
+    if (kind === "text" && /image/i.test(name)) kind = "image";
     return { name, label: titleCase(name), kind, options, optional };
   });
 }
@@ -64,6 +97,8 @@ interface AutoFormProps<T extends z.ZodObject<z.ZodRawShape>> {
   submitLabel?: string;
   onSubmit?: (values: z.infer<T>) => void;
   pending?: boolean;
+  /** Prefill values (edit mode). */
+  defaultValues?: Record<string, unknown>;
 }
 
 export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
@@ -71,6 +106,7 @@ export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
   submitLabel = "Create",
   onSubmit,
   pending,
+  defaultValues,
 }: AutoFormProps<T>) {
   const fields = React.useMemo(() => fieldsFromSchema(schema), [schema]);
   const {
@@ -79,7 +115,11 @@ export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
     setValue,
     watch,
     formState: { errors },
-  } = useForm({ resolver: zodResolver(schema), mode: "onBlur" });
+  } = useForm({
+    resolver: zodResolver(schema),
+    mode: "onBlur",
+    defaultValues: defaultValues as Record<string, unknown> | undefined,
+  });
 
   return (
     <form
@@ -106,7 +146,10 @@ export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
                 </span>
               </div>
             ) : f.kind === "enum" ? (
-              <Select onValueChange={(val) => setValue(f.name, val)}>
+              <Select
+                value={(watch(f.name) as string) ?? ""}
+                onValueChange={(val) => setValue(f.name, val)}
+              >
                 <SelectTrigger id={f.name}>
                   <SelectValue placeholder={`Select ${f.label.toLowerCase()}`} />
                 </SelectTrigger>
@@ -118,6 +161,13 @@ export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
                   ))}
                 </SelectContent>
               </Select>
+            ) : f.kind === "image" ? (
+              <ImageField
+                value={(watch(f.name) as string) || ""}
+                onChange={(v) => setValue(f.name, v)}
+              />
+            ) : f.kind === "date" ? (
+              <Input id={f.name} type="date" {...register(f.name)} />
             ) : (
               <Input
                 id={f.name}
@@ -125,7 +175,9 @@ export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
                 step={f.kind === "number" ? "any" : undefined}
                 {...register(
                   f.name,
-                  f.kind === "number" ? { valueAsNumber: true } : {}
+                  f.kind === "number"
+                    ? { setValueAs: (v) => (v === "" || v == null ? undefined : Number(v)) }
+                    : {}
                 )}
               />
             )}

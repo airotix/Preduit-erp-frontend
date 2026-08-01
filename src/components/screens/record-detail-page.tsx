@@ -2,13 +2,17 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ArrowLeft, Printer, Pencil } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Printer, Pencil, Plus, Trash2 } from "lucide-react";
 import { Icon } from "@/components/icon";
 import { ToneBadge } from "@/components/tone-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { avatarColor, initials, tone as toneOf } from "@/lib/tone";
+import { DocumentsPanel } from "@/components/screens/documents-panel";
+import { ImageField } from "@/components/screens/auto-form";
+import { apiPut } from "@/lib/api-client";
 import type { Cell, ColumnDef } from "@/lib/screen-types";
 import {
   buildDetail,
@@ -234,6 +238,29 @@ function VariantMatrix({ product }: { product: NonNullable<DetailModel["product"
   );
 }
 
+/** Product image upload/replace on the drill-down (edit mode). */
+function ProductImageEditor({
+  recordId, initial, onSaved,
+}: { recordId: string; initial: string; onSaved: () => void }) {
+  const [val, setVal] = React.useState(initial || "");
+  const [saving, setSaving] = React.useState(false);
+  const save = async () => {
+    setSaving(true);
+    try { await apiPut(`/catalog/products/${recordId}/image`, { imageUrl: val }); onSaved(); }
+    finally { setSaving(false); }
+  };
+  return (
+    <Panel title="Product image" sub="Upload or replace the product photo">
+      <ImageField value={val} onChange={setVal} />
+      <div className="mt-4 flex justify-end border-t border-border/60 pt-4">
+        <Button variant="navy" size="sm" onClick={save} disabled={saving}>
+          {saving ? "Saving…" : "Save image"}
+        </Button>
+      </div>
+    </Panel>
+  );
+}
+
 function Specs({ specs }: { specs: MetaItem[] }) {
   return (
     <div className="space-y-3">
@@ -247,6 +274,263 @@ function Specs({ specs }: { specs: MetaItem[] }) {
         </div>
       ))}
     </div>
+  );
+}
+
+/* ---------- stock article: color × size matrix with per-color totals ---------- */
+
+function StockMatrix({ stock }: { stock: NonNullable<DetailModel["stock"]> }) {
+  const { sizes, colors } = stock;
+
+  if (!colors.length) {
+    return (
+      <Panel title="Stock by color & size">
+        <div className="py-6 text-center text-muted-foreground">
+          No stock recorded for this article.
+        </div>
+      </Panel>
+    );
+  }
+
+  // Column totals across colors.
+  const sizeTotals = sizes.map((_, i) =>
+    colors.reduce((sum, c) => sum + (c.cells[i] ?? 0), 0)
+  );
+  const grand = colors.reduce((sum, c) => sum + c.total, 0);
+
+  return (
+    <Panel title="Stock by color & size" sub="Units on hand by color and size">
+      <div className="overflow-x-auto">
+        <table className="w-full text-[13px]">
+          <thead>
+            <tr>
+              <th className="pb-2 text-left text-[11px] font-bold uppercase text-muted-foreground">
+                Color
+              </th>
+              {sizes.map((s) => (
+                <th
+                  key={s}
+                  className="px-1 pb-2 text-center text-[11px] font-bold uppercase text-muted-foreground"
+                >
+                  {s}
+                </th>
+              ))}
+              <th className="pb-2 pl-3 text-right text-[11px] font-bold uppercase text-muted-foreground">
+                Total
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {colors.map((c) => (
+              <tr key={c.name}>
+                <td className="py-1.5 pr-3">
+                  <span className="flex items-center gap-2 font-semibold text-foreground">
+                    <span
+                      className="h-3.5 w-3.5 rounded-full border border-black/10"
+                      style={{ background: c.hex }}
+                    />
+                    {c.name}
+                  </span>
+                </td>
+                {c.cells.map((q, i) => {
+                  const k = toneOf(q === 0 ? "red" : q < 40 ? "amber" : "neutral");
+                  return (
+                    <td key={i} className="px-1 py-1.5">
+                      <div
+                        className="rounded-lg py-2 text-center text-[13px] font-bold tabular"
+                        style={{ background: k.bg, color: k.fg }}
+                      >
+                        {q}
+                      </div>
+                    </td>
+                  );
+                })}
+                <td className="py-1.5 pl-3 text-right font-extrabold tabular text-foreground">
+                  {c.total.toLocaleString()}
+                </td>
+              </tr>
+            ))}
+            <tr className="border-t-2 border-border font-extrabold text-foreground">
+              <td className="py-2.5 pr-3">Total</td>
+              {sizeTotals.map((t, i) => (
+                <td key={i} className="px-1 py-2.5 text-center tabular">
+                  {t}
+                </td>
+              ))}
+              <td className="py-2.5 pl-3 text-right tabular">
+                {grand.toLocaleString()}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </Panel>
+  );
+}
+
+/* ---------- stock article: editable color × size grid ---------- */
+
+interface EditRow {
+  name: string;
+  hex: string;
+  cells: number[];
+}
+
+function StockMatrixEditor({
+  stock,
+  recordId,
+  endpoint,
+  onCancel,
+  onSaved,
+}: {
+  stock: NonNullable<DetailModel["stock"]>;
+  recordId: string;
+  /** PUT target; defaults to the inventory stock matrix. */
+  endpoint?: string;
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const sizes = stock.sizes;
+  const [rows, setRows] = React.useState<EditRow[]>(() =>
+    stock.colors.map((c) => ({
+      name: c.name,
+      hex: /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(c.hex) ? c.hex : "#CBD1DC",
+      cells: sizes.map((_, i) => c.cells[i] ?? 0),
+    }))
+  );
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const patch = (ri: number, next: Partial<EditRow>) =>
+    setRows((rs) => rs.map((r, i) => (i === ri ? { ...r, ...next } : r)));
+  const setCell = (ri: number, ci: number, val: number) =>
+    setRows((rs) =>
+      rs.map((r, i) =>
+        i === ri
+          ? { ...r, cells: r.cells.map((q, j) => (j === ci ? val : q)) }
+          : r
+      )
+    );
+  const addColor = () =>
+    setRows((rs) => [...rs, { name: "", hex: "#CBD1DC", cells: sizes.map(() => 0) }]);
+  const removeRow = (ri: number) => setRows((rs) => rs.filter((_, i) => i !== ri));
+
+  const save = async () => {
+    const named = rows.filter((r) => r.name.trim());
+    if (named.some((r, i) => named.findIndex((o) => o.name.trim().toLowerCase() === r.name.trim().toLowerCase()) !== i)) {
+      setError("Two rows use the same color name. Please make them unique.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await apiPut(endpoint ?? `/inventory/stock/${recordId}/matrix`, {
+        colors: named.map((r) => ({
+          color: r.name.trim(),
+          hex: r.hex,
+          cells: sizes.map((s, i) => ({ size: s, qty: Number(r.cells[i]) || 0 })),
+        })),
+      });
+      onSaved();
+    } catch {
+      setError("Could not save changes. Please try again.");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Panel title="Edit stock by color & size" sub="Update counts, rename colors, or add a new color">
+      <div className="overflow-x-auto">
+        <table className="w-full text-[13px]">
+          <thead>
+            <tr>
+              <th className="pb-2 text-left text-[11px] font-bold uppercase text-muted-foreground">
+                Color
+              </th>
+              {sizes.map((s) => (
+                <th
+                  key={s}
+                  className="px-1 pb-2 text-center text-[11px] font-bold uppercase text-muted-foreground"
+                >
+                  {s}
+                </th>
+              ))}
+              <th className="pb-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, ri) => (
+              <tr key={ri}>
+                <td className="py-1.5 pr-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      aria-label="Color swatch"
+                      value={r.hex}
+                      onChange={(e) => patch(ri, { hex: e.target.value })}
+                      className="h-7 w-7 shrink-0 cursor-pointer rounded-full border border-border/60 bg-transparent p-0"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Color name"
+                      value={r.name}
+                      onChange={(e) => patch(ri, { name: e.target.value })}
+                      className="w-32 rounded-lg border border-border/60 px-2.5 py-1.5 font-semibold text-foreground outline-none focus:border-primary"
+                    />
+                  </div>
+                </td>
+                {r.cells.map((q, ci) => (
+                  <td key={ci} className="px-1 py-1.5">
+                    <input
+                      type="number"
+                      min={0}
+                      value={q}
+                      onChange={(e) =>
+                        setCell(ri, ci, Math.max(0, Math.floor(Number(e.target.value) || 0)))
+                      }
+                      className="w-full min-w-[52px] rounded-lg border border-border/60 py-1.5 text-center font-bold tabular outline-none focus:border-primary"
+                    />
+                  </td>
+                ))}
+                <td className="py-1.5 pl-1 text-right">
+                  <button
+                    type="button"
+                    onClick={() => removeRow(ri)}
+                    aria-label="Remove color"
+                    className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-red-600"
+                  >
+                    <Trash2 size={15} strokeWidth={2} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <button
+        type="button"
+        onClick={addColor}
+        className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-2 text-[13px] font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+      >
+        <Plus size={15} strokeWidth={2.5} /> Add color
+      </button>
+
+      {error && (
+        <div className="mt-4 rounded-md bg-[#FBEAEA] p-3 text-sm font-semibold text-[#C0392B]">
+          {error}
+        </div>
+      )}
+
+      <div className="mt-5 flex items-center justify-end gap-2.5 border-t border-border/60 pt-4">
+        <Button variant="outline" size="sm" onClick={onCancel} disabled={saving}>
+          Cancel
+        </Button>
+        <Button variant="navy" size="sm" onClick={save} disabled={saving}>
+          {saving ? "Saving…" : "Save changes"}
+        </Button>
+      </div>
+    </Panel>
   );
 }
 
@@ -275,9 +559,17 @@ function tabContentFor(d: DetailModel): Record<string, React.ReactNode> {
           >
             <VariantMatrix product={p} />
           </Panel>
-          <Panel title="Specifications">
-            <Specs specs={p.specs} />
-          </Panel>
+          <div className="space-y-4">
+            {p.image && (
+              <Panel title="Image">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={p.image} alt={d.title} className="aspect-square w-full rounded-lg border border-border/60 object-cover" />
+              </Panel>
+            )}
+            <Panel title="Specifications">
+              <Specs specs={p.specs} />
+            </Panel>
+          </div>
         </div>
       ),
       "Variant matrix": (
@@ -320,10 +612,12 @@ function tabContentFor(d: DetailModel): Record<string, React.ReactNode> {
         </Panel>
       ),
       Pricing: (
-        <Panel title="Pricing & trade" sub="Retail price and trade details">
+        <Panel title="Pricing & trade" sub="Retail, wholesale & online prices and trade details">
           <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
             {[
-              { k: "Retail price", v: d.meta.find((m) => m.k === "Retail price")?.v ?? "—" },
+              { k: "Retail price", v: p.prices?.retail ?? d.meta.find((m) => m.k === "Retail price")?.v ?? "—" },
+              { k: "Wholesale price", v: p.prices?.wholesale ?? "—" },
+              { k: "Online price", v: p.prices?.online ?? "—" },
               ...p.specs.filter((s) =>
                 ["HS code", "Origin", "Weight", "Composition"].includes(s.k)
               ),
@@ -623,6 +917,170 @@ function tabContentFor(d: DetailModel): Record<string, React.ReactNode> {
     return map;
   }
 
+  /* PRODUCTION ORDER — Materials + Timeline */
+  if (d.variant === "productionorder" && d.porder) {
+    const p = d.porder;
+    const materials = (
+      <Panel title="Bill of materials" sub="Components used for this style">
+        <table className="w-full text-[13px]">
+          <thead>
+            <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              <th className="pb-2 text-left font-bold">Component</th>
+              <th className="pb-2 text-left font-bold">Material</th>
+              <th className="pb-2 text-right font-bold">Qty / unit</th>
+              <th className="pb-2 text-right font-bold">Cost</th>
+            </tr>
+          </thead>
+          <tbody>
+            {p.materials.map((m, i) => (
+              <tr key={i} className="border-t border-border/50">
+                <td className="py-2.5 font-semibold text-foreground">{m.component}</td>
+                <td className="py-2.5">{m.material}</td>
+                <td className="py-2.5 text-right tabular">{m.qty}</td>
+                <td className="py-2.5 text-right font-bold tabular text-foreground">{m.cost}</td>
+              </tr>
+            ))}
+            {p.materials.length === 0 && (
+              <tr>
+                <td colSpan={4} className="py-6 text-center text-muted-foreground">
+                  No materials linked to this style.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </Panel>
+    );
+    const timelinePanel = (
+      <Panel title="Production timeline" sub="Stage-by-stage progress">
+        <Timeline items={p.timeline} />
+      </Panel>
+    );
+    const map: Record<string, React.ReactNode> = {};
+    d.tabs.forEach((t) => (map[t] = /timeline/i.test(t) ? timelinePanel : materials));
+    return map;
+  }
+
+  /* BOM LINE — orders that use this component */
+  if (d.variant === "bomline" && d.bomOrders) {
+    const orders = (
+      <Panel title="Used in orders" sub="Production orders for this component's style">
+        <div className="space-y-2">
+          {d.bomOrders.map((r) => (
+            <div
+              key={r.a}
+              className="flex items-center justify-between rounded-xl border border-border/60 px-4 py-3"
+            >
+              <div>
+                <div className="font-bold tabular text-foreground">{r.a}</div>
+                <div className="text-[13px] text-muted-foreground">{r.b}</div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="font-bold tabular text-foreground">{r.c}</span>
+                <ToneBadge tone={r.tone} dot={false}>
+                  {r.s}
+                </ToneBadge>
+              </div>
+            </div>
+          ))}
+          {d.bomOrders.length === 0 && (
+            <div className="py-6 text-center text-muted-foreground">
+              Not used in any production order yet.
+            </div>
+          )}
+        </div>
+      </Panel>
+    );
+    const map: Record<string, React.ReactNode> = {};
+    d.tabs.forEach((t) => (map[t] = orders));
+    return map;
+  }
+
+  /* SHIPMENT — Tracking timeline + real Contents */
+  if (d.variant === "shipment" && d.shipment) {
+    const trackingPanel = (
+      <Panel title="Tracking" sub="Delivery progress">
+        <Timeline items={d.shipment.tracking} />
+      </Panel>
+    );
+    const contentsPanel = (
+      <Panel title="Contents" sub="Items in this shipment">
+        <table className="w-full text-[13px]">
+          <thead>
+            <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              <th className="pb-2 text-left font-bold">Item</th>
+              <th className="pb-2 text-left font-bold">SKU</th>
+              <th className="pb-2 text-right font-bold">Qty</th>
+            </tr>
+          </thead>
+          <tbody>
+            {d.shipment.contents.map((c, i) => (
+              <tr key={i} className="border-t border-border/50">
+                <td className="py-2.5 font-semibold text-foreground">{c.name}</td>
+                <td className="py-2.5 tabular text-muted-foreground">{c.sku}</td>
+                <td className="py-2.5 text-right font-bold tabular text-foreground">{c.qty}</td>
+              </tr>
+            ))}
+            {d.shipment.contents.length === 0 && (
+              <tr>
+                <td colSpan={3} className="py-6 text-center text-muted-foreground">
+                  No line items recorded for this shipment.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </Panel>
+    );
+    const map: Record<string, React.ReactNode> = {};
+    d.tabs.forEach((t) => {
+      map[t] = /content/i.test(t) ? contentsPanel : trackingPanel;
+    });
+    return map;
+  }
+
+  /* STOCK ARTICLE — colors on the left, sizes & counts on the right */
+  if (d.variant === "stockarticle" && d.stock) {
+    const stock = d.stock;
+    const byColor = <StockMatrix stock={stock} />;
+    const byLocation = (
+      <Panel title="By location" sub="Units held at each location">
+        <table className="w-full text-[13px]">
+          <thead>
+            <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              <th className="pb-2 text-left font-bold">Location</th>
+              <th className="pb-2 text-right font-bold">On hand</th>
+              <th className="pb-2 text-right font-bold">Reserved</th>
+              <th className="pb-2 text-right font-bold">Available</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stock.locations.map((l) => (
+              <tr key={l.location} className="border-t border-border/50">
+                <td className="py-2.5 font-semibold text-foreground">{l.location}</td>
+                <td className="py-2.5 text-right tabular">{l.on_hand.toLocaleString()}</td>
+                <td className="py-2.5 text-right tabular">{l.reserved.toLocaleString()}</td>
+                <td className="py-2.5 text-right font-bold tabular text-foreground">
+                  {l.available.toLocaleString()}
+                </td>
+              </tr>
+            ))}
+            {stock.locations.length === 0 && (
+              <tr>
+                <td colSpan={4} className="py-6 text-center text-muted-foreground">
+                  No location breakdown available.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </Panel>
+    );
+    const map: Record<string, React.ReactNode> = {};
+    d.tabs.forEach((t) => (map[t] = /location/i.test(t) ? byLocation : byColor));
+    return map;
+  }
+
   /* GENERIC (inspection / shipment) */
   const timeline = (
     <Panel title="Timeline">
@@ -642,16 +1100,103 @@ export function RecordDetailPage({
   columns,
   backHref,
   backLabel,
+  model,
+  module,
+  recordId,
 }: {
   type: string;
   row: Cell[];
   columns: ColumnDef[];
   backHref: string;
   backLabel: string;
+  /** Real detail model from the backend; falls back to the mock builder. */
+  model?: DetailModel;
+  /** Owning module — enables the real Documents (attachments) panel. */
+  module?: string;
+  /** Backend public id of this record — enables in-place editing. */
+  recordId?: string;
 }) {
-  const d = buildDetail(type, row, columns);
-  const content = tabContentFor(d);
+  const router = useRouter();
+  const [editing, setEditing] = React.useState(false);
+  const d = model ?? buildDetail(type, row, columns);
+  const content: Record<string, React.ReactNode> = { ...tabContentFor(d) };
   const tabs = d.tabs.length ? d.tabs : ["Overview"];
+
+  // The stock article grid is editable in place via the header Edit button.
+  const canEditStock = d.variant === "stockarticle" && !!d.stock && !!recordId;
+  // The catalog product's variant matrix is editable the same way.
+  const canEditProduct = d.variant === "product" && !!d.product && !!recordId;
+  const canEdit = canEditStock || canEditProduct;
+
+  if (canEditStock && editing) {
+    content["Colors & sizes"] = (
+      <StockMatrixEditor
+        stock={d.stock!}
+        recordId={recordId!}
+        onCancel={() => setEditing(false)}
+        onSaved={() => {
+          setEditing(false);
+          router.refresh();
+        }}
+      />
+    );
+  }
+
+  if (canEditProduct && editing) {
+    const p = d.product!;
+    // Map the product's variant matrix into the shared editor's shape.
+    const stockShape: NonNullable<DetailModel["stock"]> = {
+      sizes: p.sizes,
+      colors: p.matrix.map((c) => ({
+        name: c.name,
+        hex: c.hex,
+        total: c.cells.reduce((s, x) => s + x.q, 0),
+        cells: c.cells.map((x) => x.q),
+      })),
+      locations: [],
+    };
+    const editor = (
+      <StockMatrixEditor
+        stock={stockShape}
+        recordId={recordId!}
+        endpoint={`/catalog/products/${recordId}/matrix`}
+        onCancel={() => setEditing(false)}
+        onSaved={() => {
+          setEditing(false);
+          router.refresh();
+        }}
+      />
+    );
+    content["Overview"] = (
+      <div className="space-y-4">
+        <ProductImageEditor recordId={recordId!} initial={p.image ?? ""} onSaved={() => router.refresh()} />
+        {editor}
+      </div>
+    );
+    content["Variant matrix"] = editor;
+  }
+
+  // Attachment tabs (Documents / Defects / Photos) become upload panels, each
+  // its own list scoped to this record via a distinct entity ref.
+  if (module) {
+    for (const t of tabs) {
+      let bucket: string | null = null;
+      if (/^documents?$/i.test(t)) bucket = "";
+      else if (/^defects?$/i.test(t)) bucket = ":defects";
+      else if (/^photos?$/i.test(t)) bucket = ":photos";
+      if (bucket !== null) {
+        content[t] = (
+          <Panel>
+            <DocumentsPanel
+              module={module}
+              entityRef={`${d.ref}${bucket}`}
+              entityType={`${d.variant}${bucket}`}
+            />
+          </Panel>
+        );
+      }
+    }
+  }
 
   return (
     <div className="mx-auto w-full max-w-[1180px]">
@@ -678,12 +1223,20 @@ export function RecordDetailPage({
             </div>
           </div>
           <div className="flex items-center gap-2.5">
-            <Button variant="outline" size="sm">
-              <Printer size={15} strokeWidth={2} /> Print
-            </Button>
-            <Button variant="navy" size="sm">
-              <Pencil size={15} strokeWidth={2} /> Edit
-            </Button>
+            {canEdit && editing ? null : (
+              <>
+                <Button variant="outline" size="sm">
+                  <Printer size={15} strokeWidth={2} /> Print
+                </Button>
+                <Button
+                  variant="navy"
+                  size="sm"
+                  onClick={canEdit ? () => setEditing(true) : undefined}
+                >
+                  <Pencil size={15} strokeWidth={2} /> Edit
+                </Button>
+              </>
+            )}
           </div>
         </div>
 

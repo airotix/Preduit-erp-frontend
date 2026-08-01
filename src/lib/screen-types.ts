@@ -51,6 +51,12 @@ export interface ListConfig {
   rows: Row[];
   /** Total record count (for the "1–N of total" range) */
   total?: number;
+  /** Stable public ids parallel to rows[] (from the backend), used to open the
+   *  real detail record for a clicked row. Absent for mock screens. */
+  ids?: string[];
+  /** Raw editable field values parallel to rows[] — prefill the Edit form.
+   *  Present on editable backend screens. */
+  records?: Record<string, unknown>[];
 }
 
 /* ---------- Dashboard ---------- */
@@ -102,6 +108,7 @@ export interface DashboardConfig {
 
 export interface BoardCard {
   ref: string;
+  public_id?: string;
   title: string;
   sub: string;
   meta: string;

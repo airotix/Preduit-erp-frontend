@@ -23,7 +23,10 @@ export interface DetailModel {
     | "receipt"
     | "entity"
     | "report"
-    | "generic";
+    | "generic"
+    | "productionorder"
+    | "bomline"
+    | "stockarticle";
   ref: string;
   title: string;
   statusLabel: string;
@@ -34,6 +37,8 @@ export interface DetailModel {
     sizes: string[];
     matrix: { name: string; hex: string; cells: { q: number; tone: "red" | "amber" | "neutral" }[] }[];
     specs: MetaItem[];
+    prices?: { retail: string; wholesale: string; online: string };
+    image?: string | null;
   };
   doc?: {
     lines: { name: string; sku: string; qty: number; price: string; total: string }[];
@@ -68,6 +73,20 @@ export interface DetailModel {
     sections: { heading: string; body: string }[];
   };
   generic?: { timeline: TimelineItem[] };
+  porder?: {
+    materials: { component: string; material: string; qty: string; cost: string }[];
+    timeline: TimelineItem[];
+  };
+  bomOrders?: { a: string; b: string; c: string; tone: Tone; s: string }[];
+  shipment?: {
+    tracking: TimelineItem[];
+    contents: { name: string; sku: string; qty: number }[];
+  };
+  stock?: {
+    sizes: string[];
+    colors: { name: string; hex: string; total: number; cells: number[] }[];
+    locations: { location: string; on_hand: number; reserved: number; available: number }[];
+  };
 }
 
 /* ---------- helpers ---------- */

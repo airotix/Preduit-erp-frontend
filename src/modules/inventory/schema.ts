@@ -12,6 +12,7 @@ export const locationSchema = z.object({
   code: z.string().min(1, "Required"),
   type: z.enum(["Warehouse", "Retail"]),
   region: z.string().min(1, "Required"),
+  capacity: z.number({ invalid_type_error: "Must be a number" }).positive("Must be greater than 0").optional(),
 });
 
 export const transferSchema = z.object({

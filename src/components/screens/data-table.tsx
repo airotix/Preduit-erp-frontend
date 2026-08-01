@@ -20,6 +20,9 @@ import {
   ChevronLeft,
   ChevronRight,
   SlidersHorizontal,
+  Pencil,
+  Play,
+  Truck,
 } from "lucide-react";
 import {
   Table,
@@ -40,6 +43,20 @@ interface DataTableProps {
   actionLabel?: string;
   onAction?: () => void;
   onRowClick?: (row: Row) => void;
+  /** When provided, each row shows an Edit button that calls back with the
+   *  row's original data index (aligned with the backend ids/records arrays). */
+  onEditRow?: (rowIndex: number) => void;
+  /** When provided, each row shows a "Start" button (production workflow). */
+  onStartRow?: (rowIndex: number) => void;
+  /** Parallel to data: rows where Start should NOT show (e.g. already started). */
+  startableRows?: (boolean | undefined)[];
+  /** When provided, rows flagged in shippableRows show a "Send shipment" button. */
+  onShipRow?: (rowIndex: number) => void;
+  shippableRows?: (boolean | undefined)[];
+  /** When provided, each row shows a status dropdown (document state transitions). */
+  statusOptions?: string[];
+  rowStatuses?: (string | null | undefined)[];
+  onStatusChange?: (rowIndex: number, status: string) => void;
   total?: number;
 }
 
@@ -51,8 +68,17 @@ export function DataTable({
   actionLabel = "New",
   onAction,
   onRowClick,
+  onEditRow,
+  onStartRow,
+  startableRows,
+  onShipRow,
+  shippableRows,
+  statusOptions,
+  rowStatuses,
+  onStatusChange,
   total,
 }: DataTableProps) {
+  const hasActions = !!onEditRow || !!onStatusChange || !!onStartRow || !!onShipRow;
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = React.useState("");
 
@@ -146,6 +172,7 @@ export function DataTable({
                   </TableHead>
                 );
               })}
+              {hasActions && <TableHead style={{ width: onStatusChange ? 150 : 64 }} />}
             </TableRow>
           ))}
         </TableHeader>
@@ -162,12 +189,76 @@ export function DataTable({
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>
                 ))}
+                {hasActions && (
+                  <TableCell style={{ textAlign: "right" }}>
+                    {onShipRow && shippableRows?.[row.index] && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onShipRow(row.index);
+                        }}
+                        className="mr-1 inline-flex items-center gap-1 rounded-md bg-gradient-to-br from-brand-orange to-brand-orange-d px-2 py-1 text-[12px] font-semibold text-white transition-[filter] hover:brightness-95"
+                        title="Send shipment"
+                      >
+                        <Truck size={13} strokeWidth={2} /> Send shipment
+                      </button>
+                    )}
+                    {onStartRow && (startableRows ? startableRows[row.index] !== false : true) && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onStartRow(row.index);
+                        }}
+                        className="mr-1 inline-flex items-center gap-1 rounded-md bg-secondary px-2 py-1 text-[12px] font-semibold text-white transition-colors hover:bg-brand-ink"
+                        title="Start production"
+                      >
+                        <Play size={13} strokeWidth={2} /> Start
+                      </button>
+                    )}
+                    {onEditRow && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditRow(row.index);
+                        }}
+                        className="inline-flex items-center gap-1 rounded-md border border-border/70 px-2 py-1 text-[12px] font-semibold text-[#4A4F61] transition-colors hover:bg-muted"
+                        title="Edit"
+                      >
+                        <Pencil size={13} strokeWidth={2} /> Edit
+                      </button>
+                    )}
+                    {onStatusChange && statusOptions && (
+                      <select
+                        value={rowStatuses?.[row.index] ?? ""}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          onStatusChange(row.index, e.target.value);
+                        }}
+                        className="rounded-md border border-border/70 bg-white px-2 py-1 text-[12px] font-semibold text-[#4A4F61]"
+                        title="Change status"
+                      >
+                        {rowStatuses?.[row.index] &&
+                          !statusOptions.includes(rowStatuses[row.index] as string) && (
+                            <option value={rowStatuses[row.index] as string}>
+                              {rowStatuses[row.index]}
+                            </option>
+                          )}
+                        {statusOptions.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </TableCell>
+                )}
               </TableRow>
             ))
           ) : (
             <TableRow>
               <TableCell
-                colSpan={columns.length}
+                colSpan={columns.length + (onEditRow ? 1 : 0)}
                 className="py-16 text-center text-muted-foreground"
               >
                 No records match your search.

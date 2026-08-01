@@ -1,5 +1,6 @@
 import { SidebarRail } from "@/components/shell/sidebar-rail";
 import { Topbar } from "@/components/shell/topbar";
+import { CurrencyProvider } from "@/lib/currency";
 
 export default function ErpLayout({
   children,
@@ -7,12 +8,14 @@ export default function ErpLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-screen w-screen bg-[#C8CCD5] p-4">
-      <div className="flex flex-1 overflow-hidden rounded-[22px] bg-white shadow-erp-lg">
+    <div className="flex h-screen w-screen bg-[#C8CCD5] p-2">
+      <div className="flex flex-1 overflow-hidden rounded-[18px] bg-white shadow-erp-lg">
         <SidebarRail />
         <main className="flex min-w-0 flex-1 flex-col bg-white">
-          <Topbar />
-          {children}
+          <CurrencyProvider>
+            <Topbar />
+            {children}
+          </CurrencyProvider>
         </main>
       </div>
     </div>

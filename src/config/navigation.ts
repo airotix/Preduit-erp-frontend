@@ -39,7 +39,6 @@ export const MODULES: ModuleDef[] = [
     tabs: [
       { id: "products", label: "Products", kind: "list" },
       { id: "categories", label: "Categories", kind: "list" },
-      { id: "attributes", label: "Colors & Sizes", kind: "list" },
     ],
   },
   {
@@ -72,9 +71,8 @@ export const MODULES: ModuleDef[] = [
     tabs: [
       { id: "pos", label: "Purchase Orders", kind: "list" },
       { id: "approvals", label: "Approval Queue", kind: "board" },
-      { id: "receipts", label: "Goods Receipt", kind: "list" },
+      { id: "receipts", label: "Invoices", kind: "list" },
       { id: "suppliers", label: "Suppliers", kind: "list" },
-      { id: "scorecard", label: "Vendor Scorecards", kind: "list" },
     ],
   },
   {
@@ -82,12 +80,12 @@ export const MODULES: ModuleDef[] = [
     icon: "Landmark",
     label: "Finance",
     tabs: [
-      { id: "coa", label: "Chart of Accounts", kind: "list" },
-      { id: "journals", label: "Journal Entries", kind: "list" },
-      { id: "payments", label: "Payments", kind: "list" },
-      { id: "araging", label: "AR Aging", kind: "list" },
-      { id: "apaging", label: "AP Aging", kind: "list" },
-      { id: "finreports", label: "Reports", kind: "dashboard" },
+      { id: "overview", label: "Overview", kind: "dashboard" },
+      { id: "customerledger", label: "Customer ledger", kind: "list" },
+      { id: "supplierledger", label: "Supplier ledger", kind: "list" },
+      { id: "profitability", label: "Profitability", kind: "dashboard" },
+      { id: "reports", label: "Reports", kind: "dashboard" },
+      { id: "banking", label: "Banking", kind: "dashboard" },
     ],
   },
   {
@@ -131,12 +129,14 @@ export const MODULES: ModuleDef[] = [
   {
     id: "ai",
     icon: "BrainCircuit",
-    label: "AI Insights",
+    label: "Demand Planning",
     tabs: [
-      { id: "forecast", label: "Forecast", kind: "dashboard" },
-      { id: "reorder", label: "Reorder Suggestions", kind: "board" },
-      { id: "anomalies", label: "Anomaly Alerts", kind: "list" },
-      { id: "aireports", label: "AI Reports", kind: "list" },
+      { id: "setup", label: "Setup", kind: "settings" },
+      { id: "productkpis", label: "Product KPIs", kind: "dashboard" },
+      { id: "recommendations", label: "SKU Recommendations", kind: "list" },
+      { id: "projection", label: "Demand Projection", kind: "list" },
+      { id: "customers", label: "Customer Coverage", kind: "list" },
+      { id: "validation", label: "Order Validation", kind: "list" },
     ],
   },
   {

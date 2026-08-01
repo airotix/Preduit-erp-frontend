@@ -1,9 +1,22 @@
 import { mockFetch } from "@/lib/mock-fetch";
+import { apiGet, USE_BACKEND } from "@/lib/api-client";
 import type { ScreenConfig } from "@/lib/screen-types";
 import { screens } from "./data";
 
-/** Fetch a screen's config for the procurement module (simulated async). */
+/** Tabs served by the real backend (others still use the in-memory mock). */
+const BACKEND_TABS: Record<string, string> = {
+  pos: "/procurement/pos/screen",
+  approvals: "/procurement/approvals/screen",
+  receipts: "/procurement/receipts/screen",
+  suppliers: "/procurement/suppliers/screen",
+  scorecard: "/procurement/scorecard/screen",
+};
+
+/** Fetch a screen's config for the procurement module. */
 export function fetchScreen(tab: string): Promise<ScreenConfig> {
+  if (USE_BACKEND && BACKEND_TABS[tab]) {
+    return apiGet<ScreenConfig>(BACKEND_TABS[tab]);
+  }
   return mockFetch(screens[tab]);
 }
 
