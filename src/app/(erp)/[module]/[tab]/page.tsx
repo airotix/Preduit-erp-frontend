@@ -6,6 +6,9 @@ import { FinanceScreen } from "@/components/screens/finance/finance-screen";
 import { AiScreen } from "@/components/screens/ai/ai-screen";
 import { ProcurementInvoices } from "@/components/screens/procurement/procurement-invoices";
 import { SalesInvoices } from "@/components/screens/sales/sales-invoices";
+import { AdminUsers } from "@/components/screens/admin/admin-users";
+import { AdminRoles } from "@/components/screens/admin/admin-roles";
+import { AdminCompanies } from "@/components/screens/admin/admin-companies";
 
 export function generateStaticParams() {
   return MODULES.flatMap((m) =>
@@ -48,6 +51,21 @@ export default function ScreenPage({
         <PageHeader crumb={mod.label} title="Invoices" />
         <div className="erp-scroll flex-1 overflow-y-auto px-[26px] pb-7 pt-[18px]">
           <ProcurementInvoices />
+        </div>
+      </>
+    );
+  }
+
+  // Admin team management + platform overview (self-managed auth, AUTH-D).
+  if (mod.id === "admin" && (tab.id === "users" || tab.id === "roles" || tab.id === "companies")) {
+    const titles: Record<string, string> = { users: "Users", roles: "Roles", companies: "Companies" };
+    return (
+      <>
+        <PageHeader crumb={mod.label} title={titles[tab.id]} />
+        <div className="erp-scroll flex-1 overflow-y-auto px-[26px] pb-7 pt-[18px]">
+          {tab.id === "users" && <AdminUsers />}
+          {tab.id === "roles" && <AdminRoles />}
+          {tab.id === "companies" && <AdminCompanies />}
         </div>
       </>
     );

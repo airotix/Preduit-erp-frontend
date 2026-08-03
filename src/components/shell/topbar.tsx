@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Search, Plus, Bell, Sparkles } from "lucide-react";
 import { getModule } from "@/config/navigation";
 import { QUICK_CREATE, NOTIFICATIONS } from "@/config/topbar-data";
+import { useAuth } from "@/lib/auth";
 import { Icon } from "@/components/icon";
 import { ToneBadge } from "@/components/tone-badge";
 import { tone as toneOf } from "@/lib/tone";
@@ -22,6 +23,12 @@ export function Topbar() {
   const pathname = usePathname();
   const [, moduleId, tabId] = pathname.split("/");
   const mod = getModule(moduleId ?? "dashboard");
+  const { user } = useAuth();
+
+  // The cross-company overview tab is Super-Admin only.
+  const tabs = (mod?.tabs ?? []).filter(
+    (t) => !(mod?.id === "admin" && t.id === "companies") || user?.isPlatformAdmin
+  );
 
   const [notifOpen, setNotifOpen] = React.useState(false);
   const [quickOpen, setQuickOpen] = React.useState(false);
@@ -30,7 +37,7 @@ export function Topbar() {
   return (
     <header className="flex flex-shrink-0 items-center gap-5 border-b border-border/70 px-[26px] py-3.5">
       <div className="erp-scroll flex min-w-0 items-center gap-1.5 overflow-x-auto">
-        {mod?.tabs.map((t) => {
+        {tabs.map((t) => {
           const active = t.id === tabId;
           return (
             <Link

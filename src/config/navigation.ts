@@ -146,6 +146,7 @@ export const MODULES: ModuleDef[] = [
     tabs: [
       { id: "users", label: "Users", kind: "list" },
       { id: "roles", label: "Roles", kind: "list" },
+      { id: "companies", label: "Companies", kind: "list" },
       { id: "approvalrules", label: "Approval Rules", kind: "list" },
       { id: "notifsettings", label: "Notifications", kind: "settings" },
       { id: "doclibrary", label: "Documents", kind: "list" },

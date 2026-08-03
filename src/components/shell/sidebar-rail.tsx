@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { MODULES } from "@/config/navigation";
 import { Icon } from "@/components/icon";
 import { apiGet, USE_BACKEND } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const STORAGE_KEY = "erp-sidebar-expanded";
@@ -22,6 +23,12 @@ export function SidebarRail() {
   const pathname = usePathname();
   const activeModule = pathname.split("/")[1] ?? "dashboard";
   const [expanded, setExpanded] = React.useState(false);
+  const { logout, user, hasPermission } = useAuth();
+
+  // Team/admin tools are only shown to workspace admins (and Super Admins).
+  const modules = MODULES.filter((m) =>
+    m.id === "admin" ? !user || hasPermission("admin.users") : true
+  );
 
   const { data } = useQuery({
     queryKey: ["me"],
@@ -95,7 +102,7 @@ export function SidebarRail() {
 
       {/* Modules */}
       <nav className={cn("mt-4 flex flex-1 flex-col", expanded ? "gap-1" : "items-center gap-2")}>
-        {MODULES.map((m) => {
+        {modules.map((m) => {
           const active = m.id === activeModule;
           return (
             <Link
@@ -140,6 +147,7 @@ export function SidebarRail() {
           type="button"
           title="Sign out"
           aria-label="Sign out"
+          onClick={logout}
           suppressHydrationWarning
           className={cn(
             "flex p-1 text-white/45 transition-colors hover:text-brand-orange",
