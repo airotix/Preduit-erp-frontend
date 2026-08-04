@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Loader2, Lock } from "lucide-react";
-import { useAuth } from "@/lib/auth";
+import { useAuth, postAuthPath } from "@/lib/auth";
 
 const INPUT =
   "w-full h-12 rounded-[10px] border border-[#e4e0d6] bg-white px-3.5 text-[15px] text-[#26241f] placeholder:text-[#b3ab9e] outline-none transition-colors focus:border-[#F58220] focus:ring-2 focus:ring-[#F58220]/20";
@@ -25,8 +25,8 @@ export default function LoginPage() {
     e.preventDefault();
     setBusy(true); setError(null);
     try {
-      await login(email, password);
-      router.push("/dashboard/overview");
+      const user = await login(email, password);
+      router.push(postAuthPath(user));
     } catch (err) {
       const e = err as Error & { locked?: boolean; until?: number | null };
       if (e?.locked) {

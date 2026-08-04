@@ -102,6 +102,8 @@ export interface DashboardConfig {
   /** rows: [...cells, accentColorHex] */
   tableData: (string | number)[][];
   activity: ActivityItem[];
+  /** Section title for the activity/alerts panel (defaults to "Recent activity"). */
+  activityTitle?: string;
 }
 
 /* ---------- Board (kanban) ---------- */

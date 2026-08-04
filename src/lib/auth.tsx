@@ -13,17 +13,39 @@ export interface AuthUser {
   role: string | null;
   permissions: string[];
   isPlatformAdmin: boolean;
-  company: { id: string | null; name: string | null };
+  company: {
+    id: string | null;
+    name: string | null;
+    currency?: string | null;
+    setupComplete?: boolean;
+  };
+}
+
+export interface CompanySetupPayload {
+  companyName: string;
+  country?: string;
+  city?: string;
+  currency: string;
+  taxRegistration?: string;
+  modules: string[];
+  invites: { email: string; role: string }[];
+}
+
+/** Where to send a freshly-authenticated user: setup wizard until it's done. */
+export function postAuthPath(user: AuthUser | null): string {
+  if (user && user.company && user.company.setupComplete === false) return "/setup";
+  return "/dashboard/overview";
 }
 
 interface AuthState {
   user: AuthUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (p: RegisterPayload) => Promise<void>;
-  verifyEmail: (email: string, code: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<AuthUser>;
+  register: (p: RegisterPayload) => Promise<AuthUser>;
+  verifyEmail: (email: string, code: string) => Promise<AuthUser>;
   resendVerification: (email: string) => Promise<{ devCode?: string }>;
-  acceptInvite: (token: string, name: string, password: string) => Promise<void>;
+  acceptInvite: (token: string, name: string, password: string) => Promise<AuthUser>;
+  completeSetup: (p: CompanySetupPayload) => Promise<AuthUser>;
   logout: () => void;
   hasPermission: (perm: string) => boolean;
 }
@@ -118,6 +140,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const r = (await res.json()) as { accessToken: string; refreshToken: string; user: AuthUser };
     setTokens(r.accessToken, r.refreshToken);
     setUser(r.user);
+    return r.user;
   }, []);
 
   const register = React.useCallback(async (p: RegisterPayload) => {
@@ -125,6 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       "/auth/register-company", { method: "POST", body: JSON.stringify(p) });
     setTokens(r.accessToken, r.refreshToken);
     setUser(r.user);
+    return r.user;
   }, []);
 
   const verifyEmail = React.useCallback(async (email: string, code: string) => {
@@ -132,6 +156,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       "/auth/verify-email", { method: "POST", body: JSON.stringify({ email, code }) });
     setTokens(r.accessToken, r.refreshToken);
     setUser(r.user);
+    return r.user;
   }, []);
 
   const resendVerification = React.useCallback(async (email: string) => {
@@ -144,6 +169,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       "/auth/invitations/accept", { method: "POST", body: JSON.stringify({ token, name, password }) });
     setTokens(r.accessToken, r.refreshToken);
     setUser(r.user);
+    return r.user;
+  }, []);
+
+  const completeSetup = React.useCallback(async (p: CompanySetupPayload) => {
+    const r = await authFetch<{ user: AuthUser; invited: unknown[] }>(
+      "/auth/company/setup", { method: "POST", body: JSON.stringify(p) }, getAccessToken());
+    setUser(r.user);
+    return r.user;
   }, []);
 
   const logout = React.useCallback(() => {
@@ -161,13 +194,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   const hasPermission = React.useCallback(
-    (perm: string) => !!user && (user.permissions.includes("*") || user.permissions.includes(perm)),
+    (perm: string) => {
+      const perms = user?.permissions ?? [];
+      return perms.includes("*") || perms.includes(perm);
+    },
     [user]
   );
 
   const value = React.useMemo(
-    () => ({ user, loading, login, register, verifyEmail, resendVerification, acceptInvite, logout, hasPermission }),
-    [user, loading, login, register, verifyEmail, resendVerification, acceptInvite, logout, hasPermission]
+    () => ({ user, loading, login, register, verifyEmail, resendVerification, acceptInvite, completeSetup, logout, hasPermission }),
+    [user, loading, login, register, verifyEmail, resendVerification, acceptInvite, completeSetup, logout, hasPermission]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

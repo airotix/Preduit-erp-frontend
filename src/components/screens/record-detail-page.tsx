@@ -261,6 +261,213 @@ function ProductImageEditor({
   );
 }
 
+/** In-place product details editor (title, status, category, season, prices,
+ *  image with remove). Self-contained — no Sheet/Dialog context needed. */
+const _PF_INPUT = "w-full h-10 rounded-lg border border-border/70 bg-white px-3 text-[13px] text-foreground outline-none focus:border-primary";
+const _PF_LBL = "mb-1 block text-[12px] font-semibold text-muted-foreground";
+const _PF_CATEGORIES = ["Knitwear", "Bottoms", "Shirts", "Outerwear", "Accessories"];
+const _PF_SEASONS = ["Core", "Spring '26", "Fall '26", "Winter '26"];
+const _PF_STATUSES = ["Active", "Draft", "Discontinued"];
+
+type ProductForm = NonNullable<NonNullable<DetailModel["product"]>["form"]>;
+
+function ProductDetailsEditor({
+  product, recordId, onCancel, onSaved,
+}: {
+  product: NonNullable<DetailModel["product"]>;
+  recordId: string;
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const form = product.form;
+  const sizes = product.sizes;
+  const stockShape: NonNullable<DetailModel["stock"]> = {
+    sizes,
+    colors: product.matrix.map((c) => ({
+      name: c.name,
+      hex: c.hex,
+      total: c.cells.reduce((s, x) => s + x.q, 0),
+      cells: c.cells.map((x) => x.q),
+    })),
+    locations: [],
+  };
+  const [f, setF] = React.useState({
+    title: form?.title ?? "",
+    category: form?.category ?? "",
+    season: form?.season ?? "",
+    status: form?.status ?? "Active",
+    retailPrice: form?.retailPrice ?? ("" as number | ""),
+    wholesalePrice: form?.wholesalePrice ?? ("" as number | ""),
+    onlinePrice: form?.onlinePrice ?? ("" as number | ""),
+    imageUrl: form?.imageUrl ?? "",
+    composition: form?.composition ?? "",
+    gauge: form?.gauge ?? "",
+    care: form?.care ?? "",
+    origin: form?.origin ?? "",
+    hsCode: form?.hsCode ?? "",
+    weight: form?.weight ?? "",
+  });
+  const [rows, setRows] = React.useState<EditRow[]>(
+    stockShape.colors.map((c) => ({
+      name: c.name,
+      hex: /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(c.hex) ? c.hex : "#CBD1DC",
+      cells: sizes.map((_, i) => c.cells[i] ?? 0),
+    }))
+  );
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const set = (k: keyof typeof f, v: string | number) => setF((p) => ({ ...p, [k]: v }));
+  const opts = (list: string[], cur: string) =>
+    (cur && !list.includes(cur) ? [cur, ...list] : list);
+
+  const num = (v: number | "") => (v === "" ? null : Number(v));
+  const save = async () => {
+    // Validate the colour matrix (unique colour names) before saving.
+    const named = rows.filter((r) => r.name.trim());
+    if (named.some((r, i) => named.findIndex((o) =>
+        o.name.trim().toLowerCase() === r.name.trim().toLowerCase()) !== i)) {
+      setError("Two colours use the same name. Please make them unique.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      // 1) Product details + specs + image.
+      await apiPut(`/catalog/products/${recordId}`, {
+        title: f.title.trim(),
+        category: f.category || null,
+        season: f.season || null,
+        status: f.status,
+        retailPrice: num(f.retailPrice),
+        wholesalePrice: num(f.wholesalePrice),
+        onlinePrice: num(f.onlinePrice),
+        imageUrl: f.imageUrl,
+        composition: f.composition.trim() || null,
+        gauge: f.gauge.trim() || null,
+        care: f.care.trim() || null,
+        origin: f.origin.trim() || null,
+        hsCode: f.hsCode.trim() || null,
+        weight: f.weight.trim() || null,
+      });
+      // 2) Colour × size matrix.
+      await apiPut(`/catalog/products/${recordId}/matrix`, {
+        colors: named.map((r) => ({
+          color: r.name.trim(),
+          hex: r.hex,
+          cells: sizes.map((s, i) => ({ size: s, qty: Number(r.cells[i]) || 0 })),
+        })),
+      });
+      onSaved();
+    } catch {
+      setError("Could not save changes. Please try again.");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <Panel title="Edit product" sub="Update details, pricing, specifications & image">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <label className={_PF_LBL}>Title</label>
+          <input className={_PF_INPUT} value={f.title} onChange={(e) => set("title", e.target.value)} />
+        </div>
+        <div>
+          <label className={_PF_LBL}>Category</label>
+          <select className={_PF_INPUT} value={f.category} onChange={(e) => set("category", e.target.value)}>
+            <option value="">—</option>
+            {opts(_PF_CATEGORIES, f.category).map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={_PF_LBL}>Season</label>
+          <select className={_PF_INPUT} value={f.season} onChange={(e) => set("season", e.target.value)}>
+            <option value="">—</option>
+            {opts(_PF_SEASONS, f.season).map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={_PF_LBL}>Status</label>
+          <select className={_PF_INPUT} value={f.status} onChange={(e) => set("status", e.target.value)}>
+            {opts(_PF_STATUSES, f.status).map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={_PF_LBL}>Retail price (€)</label>
+          <input type="number" min={0} step="any" className={_PF_INPUT} value={f.retailPrice}
+                 onChange={(e) => set("retailPrice", e.target.value === "" ? "" : Number(e.target.value))} />
+        </div>
+        <div>
+          <label className={_PF_LBL}>Wholesale price (€)</label>
+          <input type="number" min={0} step="any" className={_PF_INPUT} value={f.wholesalePrice}
+                 onChange={(e) => set("wholesalePrice", e.target.value === "" ? "" : Number(e.target.value))} />
+        </div>
+        <div>
+          <label className={_PF_LBL}>Online price (€)</label>
+          <input type="number" min={0} step="any" className={_PF_INPUT} value={f.onlinePrice}
+                 onChange={(e) => set("onlinePrice", e.target.value === "" ? "" : Number(e.target.value))} />
+        </div>
+        <div className="sm:col-span-2">
+          <label className={_PF_LBL}>Product image</label>
+          <ImageField value={f.imageUrl} onChange={(v) => set("imageUrl", v)} />
+        </div>
+
+        <div className="sm:col-span-2 mt-1 border-t border-border/50 pt-3 text-[12px] font-bold uppercase tracking-[0.06em] text-muted-foreground">
+          Specifications
+        </div>
+        <div>
+          <label className={_PF_LBL}>Composition</label>
+          <input className={_PF_INPUT} value={f.composition} onChange={(e) => set("composition", e.target.value)} />
+        </div>
+        <div>
+          <label className={_PF_LBL}>Gauge</label>
+          <input className={_PF_INPUT} value={f.gauge} onChange={(e) => set("gauge", e.target.value)} />
+        </div>
+        <div>
+          <label className={_PF_LBL}>Care</label>
+          <input className={_PF_INPUT} value={f.care} onChange={(e) => set("care", e.target.value)} />
+        </div>
+        <div>
+          <label className={_PF_LBL}>Origin</label>
+          <input className={_PF_INPUT} value={f.origin} onChange={(e) => set("origin", e.target.value)} />
+        </div>
+        <div>
+          <label className={_PF_LBL}>HS code</label>
+          <input className={_PF_INPUT} value={f.hsCode} onChange={(e) => set("hsCode", e.target.value)} />
+        </div>
+        <div>
+          <label className={_PF_LBL}>Weight</label>
+          <input className={_PF_INPUT} value={f.weight} onChange={(e) => set("weight", e.target.value)} />
+        </div>
+      </div>
+      </Panel>
+
+      <StockMatrixEditor
+        stock={stockShape}
+        recordId={recordId}
+        endpoint={`/catalog/products/${recordId}/matrix`}
+        hideActions
+        title="Colours & sizes"
+        sub="Update units, rename colours, or add a colour"
+        onRowsChange={setRows}
+      />
+
+      {error && (
+        <div className="rounded-md bg-[#FBEAEA] p-3 text-sm font-semibold text-[#C0392B]">{error}</div>
+      )}
+
+      <div className="flex items-center justify-end gap-2.5 border-t border-border/60 pt-4">
+        <Button variant="outline" size="sm" onClick={onCancel} disabled={saving}>
+          Cancel
+        </Button>
+        <Button variant="navy" size="sm" onClick={save} disabled={saving || !f.title.trim()}>
+          {saving ? "Saving…" : "Save changes"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function Specs({ specs }: { specs: MetaItem[] }) {
   return (
     <div className="space-y-3">
@@ -382,13 +589,23 @@ function StockMatrixEditor({
   endpoint,
   onCancel,
   onSaved,
+  hideActions,
+  onRowsChange,
+  title,
+  sub,
 }: {
   stock: NonNullable<DetailModel["stock"]>;
   recordId: string;
   /** PUT target; defaults to the inventory stock matrix. */
   endpoint?: string;
-  onCancel: () => void;
-  onSaved: () => void;
+  onCancel?: () => void;
+  onSaved?: () => void;
+  /** Embedded mode: hide the built-in Save/Cancel footer (parent saves). */
+  hideActions?: boolean;
+  /** Report the current rows up so a parent can save them with its own button. */
+  onRowsChange?: (rows: EditRow[]) => void;
+  title?: string;
+  sub?: string;
 }) {
   const sizes = stock.sizes;
   const [rows, setRows] = React.useState<EditRow[]>(() =>
@@ -400,6 +617,9 @@ function StockMatrixEditor({
   );
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  // Keep the parent in sync when embedded (stable setter → no loop).
+  React.useEffect(() => { onRowsChange?.(rows); }, [rows, onRowsChange]);
 
   const patch = (ri: number, next: Partial<EditRow>) =>
     setRows((rs) => rs.map((r, i) => (i === ri ? { ...r, ...next } : r)));
@@ -431,7 +651,7 @@ function StockMatrixEditor({
           cells: sizes.map((s, i) => ({ size: s, qty: Number(r.cells[i]) || 0 })),
         })),
       });
-      onSaved();
+      onSaved?.();
     } catch {
       setError("Could not save changes. Please try again.");
       setSaving(false);
@@ -439,7 +659,7 @@ function StockMatrixEditor({
   };
 
   return (
-    <Panel title="Edit stock by color & size" sub="Update counts, rename colors, or add a new color">
+    <Panel title={title ?? "Edit stock by color & size"} sub={sub ?? "Update counts, rename colors, or add a new color"}>
       <div className="overflow-x-auto">
         <table className="w-full text-[13px]">
           <thead>
@@ -522,14 +742,16 @@ function StockMatrixEditor({
         </div>
       )}
 
-      <div className="mt-5 flex items-center justify-end gap-2.5 border-t border-border/60 pt-4">
-        <Button variant="outline" size="sm" onClick={onCancel} disabled={saving}>
-          Cancel
-        </Button>
-        <Button variant="navy" size="sm" onClick={save} disabled={saving}>
-          {saving ? "Saving…" : "Save changes"}
-        </Button>
-      </div>
+      {!hideActions && (
+        <div className="mt-5 flex items-center justify-end gap-2.5 border-t border-border/60 pt-4">
+          <Button variant="outline" size="sm" onClick={onCancel} disabled={saving}>
+            Cancel
+          </Button>
+          <Button variant="navy" size="sm" onClick={save} disabled={saving}>
+            {saving ? "Saving…" : "Save changes"}
+          </Button>
+        </div>
+      )}
     </Panel>
   );
 }
@@ -1144,35 +1366,17 @@ export function RecordDetailPage({
 
   if (canEditProduct && editing) {
     const p = d.product!;
-    // Map the product's variant matrix into the shared editor's shape.
-    const stockShape: NonNullable<DetailModel["stock"]> = {
-      sizes: p.sizes,
-      colors: p.matrix.map((c) => ({
-        name: c.name,
-        hex: c.hex,
-        total: c.cells.reduce((s, x) => s + x.q, 0),
-        cells: c.cells.map((x) => x.q),
-      })),
-      locations: [],
-    };
+    // One combined editor: details + specs + image + colour/size matrix, saved
+    // together by a single "Save changes" button.
     const editor = (
-      <StockMatrixEditor
-        stock={stockShape}
+      <ProductDetailsEditor
+        product={p}
         recordId={recordId!}
-        endpoint={`/catalog/products/${recordId}/matrix`}
         onCancel={() => setEditing(false)}
-        onSaved={() => {
-          setEditing(false);
-          router.refresh();
-        }}
+        onSaved={() => { setEditing(false); router.refresh(); }}
       />
     );
-    content["Overview"] = (
-      <div className="space-y-4">
-        <ProductImageEditor recordId={recordId!} initial={p.image ?? ""} onSaved={() => router.refresh()} />
-        {editor}
-      </div>
-    );
+    content["Overview"] = editor;
     content["Variant matrix"] = editor;
   }
 

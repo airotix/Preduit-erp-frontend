@@ -42,7 +42,7 @@ export function Topbar() {
           return (
             <Link
               key={t.id}
-              href={`/${mod.id}/${t.id}`}
+              href={`/${mod?.id ?? "dashboard"}/${t.id}`}
               className={cn(
                 "whitespace-nowrap rounded-lg px-3.5 py-2 text-[13px] font-semibold transition-colors",
                 active

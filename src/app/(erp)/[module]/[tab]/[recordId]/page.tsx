@@ -1,3 +1,6 @@
+"use client";
+
+import * as React from "react";
 import { notFound } from "next/navigation";
 import { getModule, getTab } from "@/config/navigation";
 import { detailTypeFor } from "@/config/detail-types";
@@ -5,7 +8,7 @@ import { fetchScreen } from "@/modules/registry";
 import { RecordDetailPage } from "@/components/screens/record-detail-page";
 import { ProductionOrderDetail } from "@/components/screens/production/production-order-detail";
 import { apiGet, USE_BACKEND } from "@/lib/api-client";
-import type { Cell } from "@/lib/screen-types";
+import type { Cell, ScreenConfig } from "@/lib/screen-types";
 import type { DetailModel } from "@/modules/detail/detail-data";
 
 /** Detail types that have a real backend endpoint: type → path builder. */
@@ -27,13 +30,12 @@ const BACKEND_DETAILS: Record<string, (id: string) => string> = {
 
 /**
  * Full-page record detail — the drill-down a clicked list row opens.
- * Ported to behave like the original Apparel ERP HTML, which navigates to a
- * dedicated page with its own sub-tabs (Overview, Variant matrix, …) instead
- * of a slide-over. Lives under the same (erp) shell, so the rail + topbar stay.
+ * Fetches client-side so the app JWT (in the browser) authenticates the calls;
+ * a server component can't see the token. Lives under the (erp) shell.
  *
  * Route: /<module>/<tab>/<recordId>  (recordId = row index in the store)
  */
-export default async function RecordPage({
+export default function RecordPage({
   params,
 }: {
   params: { module: string; tab: string; recordId: string };
@@ -41,50 +43,77 @@ export default async function RecordPage({
   const mod = getModule(params.module);
   const tab = getTab(params.module, params.tab);
   const type = detailTypeFor(params.module, params.tab);
-  if (!mod || !tab || !type) notFound();
-
   const index = Number.parseInt(params.recordId, 10);
-  if (Number.isNaN(index)) notFound();
+  const valid = !!mod && !!tab && !!type && !Number.isNaN(index);
 
-  const screen = await fetchScreen(params.module, params.tab);
-  if (screen.kind !== "list") notFound();
+  const [loading, setLoading] = React.useState(true);
+  const [missing, setMissing] = React.useState(false);
+  const [screen, setScreen] = React.useState<ScreenConfig | null>(null);
+  const [model, setModel] = React.useState<DetailModel | undefined>(undefined);
+  const [recordId, setRecordId] = React.useState<string | undefined>(undefined);
 
-  const row = screen.rows[index] as Cell[] | undefined;
-  if (!row) notFound();
+  React.useEffect(() => {
+    if (!valid) { setLoading(false); setMissing(true); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const scr = await fetchScreen(params.module, params.tab);
+        if (cancelled) return;
+        if (scr.kind !== "list" || !scr.rows[index]) { setMissing(true); return; }
+        setScreen(scr);
+        const rid = scr.ids?.[index];
+        setRecordId(rid);
+        const detailPath = type ? BACKEND_DETAILS[type] : undefined;
+        if (USE_BACKEND && rid && detailPath) {
+          try {
+            const m = await apiGet<DetailModel>(detailPath(rid));
+            if (!cancelled) setModel(m);
+          } catch {
+            /* fall back to the mock builder */
+          }
+        }
+      } catch {
+        if (!cancelled) setMissing(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.module, params.tab, params.recordId]);
 
-  const recordId = screen.ids?.[index];
+  if (!valid || missing) notFound();
 
-  // Production orders use a bespoke stage-timeline drill-down.
-  if (mod.id === "production" && tab.id === "porders" && recordId) {
+  if (loading || !screen) {
     return (
-      <div className="erp-scroll flex-1 overflow-y-auto px-[26px] pb-7 pt-[18px]">
-        <ProductionOrderDetail publicId={recordId} backHref={`/${mod.id}/${tab.id}`} />
+      <div className="flex flex-1 items-center justify-center text-[13px] font-semibold text-muted-foreground">
+        Loading…
       </div>
     );
   }
 
-  // If this row has a real backend id and the type has a detail endpoint,
-  // fetch the live detail model; otherwise fall back to the mock builder.
-  let model: DetailModel | undefined;
-  const detailPath = BACKEND_DETAILS[type];
-  if (USE_BACKEND && recordId && detailPath) {
-    try {
-      model = await apiGet<DetailModel>(detailPath(recordId));
-    } catch {
-      model = undefined; // fall back to mock on any error
-    }
+  const row = (screen.kind === "list" ? screen.rows[index] : undefined) as Cell[] | undefined;
+  if (!row) notFound();
+
+  // Production orders use a bespoke stage-timeline drill-down.
+  if (mod!.id === "production" && tab!.id === "porders" && recordId) {
+    return (
+      <div className="erp-scroll flex-1 overflow-y-auto px-[26px] pb-7 pt-[18px]">
+        <ProductionOrderDetail publicId={recordId} backHref={`/${mod!.id}/${tab!.id}`} />
+      </div>
+    );
   }
 
   return (
     <div className="erp-scroll flex-1 overflow-y-auto px-[26px] pb-7 pt-[18px]">
       <RecordDetailPage
-        type={type}
+        type={type!}
         row={row}
-        columns={screen.columns}
-        backHref={`/${mod.id}/${tab.id}`}
-        backLabel={tab.label}
+        columns={screen.kind === "list" ? screen.columns : []}
+        backHref={`/${mod!.id}/${tab!.id}`}
+        backLabel={tab!.label}
         model={model}
-        module={mod.id}
+        module={mod!.id}
         recordId={recordId}
       />
     </div>

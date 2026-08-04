@@ -10,7 +10,10 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   React.useEffect(() => {
-    if (!loading && !user) router.replace("/login");
+    if (loading) return;
+    if (!user) { router.replace("/login"); return; }
+    // Owner hasn't finished the setup wizard yet — force it before the app.
+    if (user.company && user.company.setupComplete === false) router.replace("/setup");
   }, [loading, user, router]);
 
   if (loading) {

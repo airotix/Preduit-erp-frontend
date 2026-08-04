@@ -137,12 +137,23 @@ export function SidebarRail() {
           expanded ? "flex items-center justify-between px-1" : "flex w-[46px] flex-col items-center gap-3.5"
         )}
       >
-        <div className={cn("flex items-center", expanded && "gap-2.5")}>
-          <div className="flex h-[34px] w-[34px] items-center justify-center rounded-full bg-gradient-to-br from-[#5B6478] to-[#3A4256] text-xs font-bold text-white">
-            AK
+        <Link
+          href="/company-profile"
+          title="Company profile"
+          className={cn(
+            "flex items-center rounded-lg transition-colors hover:bg-white/[0.08]",
+            expanded ? "min-w-0 flex-1 gap-2.5 px-1 py-1" : "justify-center"
+          )}
+        >
+          <div className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#5B6478] to-[#3A4256] text-xs font-bold text-white">
+            {initials(user?.name || user?.email || "User")}
           </div>
-          {expanded && <span className="text-[12px] font-semibold text-white/70">Account</span>}
-        </div>
+          {expanded && (
+            <span className="min-w-0 truncate text-[12px] font-semibold text-white/70">
+              {user?.name || user?.email || "Account"}
+            </span>
+          )}
+        </Link>
         <button
           type="button"
           title="Sign out"

@@ -36,17 +36,19 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
               >
                 <Icon name={pascal(m.icon)} size={20} strokeWidth={1.9} />
               </div>
-              <span
-                className="flex items-center gap-1 text-[13px] font-bold"
-                style={{ color: m.up ? "#1F7A53" : "#C0392B" }}
-              >
-                <Icon
-                  name={m.up ? "TrendingUp" : "TrendingDown"}
-                  size={15}
-                  strokeWidth={2.2}
-                />
-                {m.delta}
-              </span>
+              {m.delta ? (
+                <span
+                  className="flex items-center gap-1 text-[13px] font-bold"
+                  style={{ color: m.up ? "#1F7A53" : "#C0392B" }}
+                >
+                  <Icon
+                    name={m.up ? "TrendingUp" : "TrendingDown"}
+                    size={15}
+                    strokeWidth={2.2}
+                  />
+                  {m.delta}
+                </span>
+              ) : null}
             </div>
             <div className="mt-4 text-[27px] font-extrabold tracking-tight text-foreground">
               {m.value}
@@ -206,7 +208,7 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
 
         <Card className="p-5">
           <div className="mb-4 text-base font-extrabold text-foreground">
-            Recent activity
+            {config.activityTitle ?? "Recent activity"}
           </div>
           <div className="space-y-3.5">
             {config.activity.map((a, i) => (

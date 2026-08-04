@@ -39,6 +39,23 @@ export interface DetailModel {
     specs: MetaItem[];
     prices?: { retail: string; wholesale: string; online: string };
     image?: string | null;
+    /** Raw values to prefill the in-place edit form. */
+    form?: {
+      title: string;
+      category: string;
+      season: string;
+      status: string;
+      retailPrice: number | null;
+      wholesalePrice: number | null;
+      onlinePrice: number | null;
+      imageUrl: string;
+      composition: string;
+      gauge: string;
+      care: string;
+      origin: string;
+      hsCode: string;
+      weight: string;
+    };
   };
   doc?: {
     lines: { name: string; sku: string; qty: number; price: string; total: string }[];

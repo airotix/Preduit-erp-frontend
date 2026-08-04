@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, MailOpen } from "lucide-react";
-import { useAuth } from "@/lib/auth";
+import { useAuth, postAuthPath } from "@/lib/auth";
 
 export default function VerifyPage() {
   const router = useRouter();
@@ -50,8 +50,8 @@ export default function VerifyPage() {
     if (code.length !== 6) { setError("Enter all six digits."); return; }
     setBusy(true); setError(null);
     try {
-      await verifyEmail(email, code);
-      router.push("/dashboard/overview");
+      const user = await verifyEmail(email, code);
+      router.push(postAuthPath(user));
     } catch (err) {
       setError(err instanceof Error ? err.message : "That code doesn't match.");
       setBusy(false);
