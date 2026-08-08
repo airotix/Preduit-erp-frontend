@@ -1325,6 +1325,7 @@ export function RecordDetailPage({
   model,
   module,
   recordId,
+  reload,
 }: {
   type: string;
   row: Cell[];
@@ -1337,8 +1338,13 @@ export function RecordDetailPage({
   module?: string;
   /** Backend public id of this record — enables in-place editing. */
   recordId?: string;
+  /** Re-fetch this record's data client-side (after an in-place save). */
+  reload?: () => void;
 }) {
   const router = useRouter();
+  // Re-fetch the record's data on the client; router.refresh() alone can't
+  // re-run this client page's useEffect fetch.
+  const afterSave = () => { setEditing(false); reload?.(); router.refresh(); };
   const [editing, setEditing] = React.useState(false);
   const d = model ?? buildDetail(type, row, columns);
   const content: Record<string, React.ReactNode> = { ...tabContentFor(d) };
@@ -1356,10 +1362,7 @@ export function RecordDetailPage({
         stock={d.stock!}
         recordId={recordId!}
         onCancel={() => setEditing(false)}
-        onSaved={() => {
-          setEditing(false);
-          router.refresh();
-        }}
+        onSaved={afterSave}
       />
     );
   }
@@ -1373,7 +1376,7 @@ export function RecordDetailPage({
         product={p}
         recordId={recordId!}
         onCancel={() => setEditing(false)}
-        onSaved={() => { setEditing(false); router.refresh(); }}
+        onSaved={afterSave}
       />
     );
     content["Overview"] = editor;

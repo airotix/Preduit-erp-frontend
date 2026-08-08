@@ -25,8 +25,13 @@ export default function ScreenPage({
   const tab = getTab(params.module, params.tab);
   if (!mod || !tab) notFound();
 
-  // Finance is a bespoke redesign — it renders its own headers/layout.
-  if (mod.id === "finance") {
+  // Finance dashboards/ledgers are a bespoke redesign; the ledger/accounting
+  // list tabs (Chart of Accounts, Journals, Payments, Bills, AR/AP aging) use
+  // the generic list renderer below.
+  const FINANCE_BESPOKE = new Set([
+    "overview", "customerledger", "supplierledger", "profitability", "reports", "banking",
+  ]);
+  if (mod.id === "finance" && FINANCE_BESPOKE.has(tab.id)) {
     return (
       <div className="erp-scroll flex-1 overflow-y-auto px-[26px] pb-7 pt-[22px]">
         <FinanceScreen tab={tab.id} />

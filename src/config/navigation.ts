@@ -85,7 +85,6 @@ export const MODULES: ModuleDef[] = [
       { id: "supplierledger", label: "Supplier ledger", kind: "list" },
       { id: "profitability", label: "Profitability", kind: "dashboard" },
       { id: "reports", label: "Reports", kind: "dashboard" },
-      { id: "banking", label: "Banking", kind: "dashboard" },
     ],
   },
   {

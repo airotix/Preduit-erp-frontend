@@ -51,6 +51,9 @@ export default function RecordPage({
   const [screen, setScreen] = React.useState<ScreenConfig | null>(null);
   const [model, setModel] = React.useState<DetailModel | undefined>(undefined);
   const [recordId, setRecordId] = React.useState<string | undefined>(undefined);
+  // Bumped after an in-place save to re-fetch the record client-side.
+  const [nonce, setNonce] = React.useState(0);
+  const reload = React.useCallback(() => setNonce((n) => n + 1), []);
 
   React.useEffect(() => {
     if (!valid) { setLoading(false); setMissing(true); return; }
@@ -80,7 +83,7 @@ export default function RecordPage({
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.module, params.tab, params.recordId]);
+  }, [params.module, params.tab, params.recordId, nonce]);
 
   if (!valid || missing) notFound();
 
@@ -115,6 +118,7 @@ export default function RecordPage({
         model={model}
         module={mod!.id}
         recordId={recordId}
+        reload={reload}
       />
     </div>
   );

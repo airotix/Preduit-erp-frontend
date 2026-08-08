@@ -19,12 +19,17 @@ interface Stage {
   public_id: string; seq: number; name: string; duration_days: number;
   status: string; overdue: boolean; start: string; end: string; worker: string; notes: string;
 }
+interface OrderLine {
+  item: string; color: string; size: string; qty: number; price: string; total: string;
+}
 interface Detail {
   ref: string; title: string; statusLabel: string; statusTone: Tone;
   meta: { k: string; v: string }[];
   started: boolean; progress: number; stageNames: string[];
   alert: { type: string; message: string } | null;
   stages: Stage[]; materials: { component: string; material: string; qty: string; cost: string }[];
+  orderLines?: OrderLine[];
+  orderTotal?: string;
 }
 
 const STATUS_TONE: Record<string, Tone> = {
@@ -106,6 +111,41 @@ export function ProductionOrderDetail({
               ))}
             </div>
           </Card>
+
+          {/* Order summary — the complete order this work order fulfils. */}
+          {data.orderLines && data.orderLines.length > 0 && (
+            <Card className="mt-4 p-6">
+              <div className="mb-4 text-base font-extrabold text-foreground">Order line items</div>
+              <table className="w-full text-[13px]">
+                <thead>
+                  <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <th className="pb-2 text-left font-bold">Item</th>
+                    <th className="pb-2 text-left font-bold">Size</th>
+                    <th className="pb-2 text-right font-bold">Qty</th>
+                    <th className="pb-2 text-right font-bold">Price</th>
+                    <th className="pb-2 text-right font-bold">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.orderLines.map((l, i) => (
+                    <tr key={i} className="border-t border-border/50">
+                      <td className="py-2.5 font-semibold text-foreground">
+                        {l.item}{l.color ? ` · ${l.color}` : ""}
+                      </td>
+                      <td className="py-2.5 text-left uppercase">{l.size}</td>
+                      <td className="py-2.5 text-right tabular">{l.qty}</td>
+                      <td className="py-2.5 text-right tabular">{l.price}</td>
+                      <td className="py-2.5 text-right tabular font-bold text-foreground">{l.total}</td>
+                    </tr>
+                  ))}
+                  <tr className="border-t-2 border-border font-extrabold text-foreground">
+                    <td className="py-2.5" colSpan={4}>Total</td>
+                    <td className="py-2.5 text-right tabular">{data.orderTotal}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </Card>
+          )}
 
           {!data.started ? (
             <Card className="mt-4 flex flex-col items-center gap-3 p-14 text-center">

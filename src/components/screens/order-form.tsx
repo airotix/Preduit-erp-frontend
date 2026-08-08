@@ -15,13 +15,28 @@ import {
 import { SheetFooter, SheetClose } from "@/components/ui/sheet";
 import { apiGet, USE_BACKEND } from "@/lib/api-client";
 
-const CHANNELS = ["Wholesale", "Online", "Marketplace", "Retail"] as const;
+const CHANNELS = ["Wholesale", "Online", "Retail"] as const;
+
+export interface ChannelPrices {
+  retail: number;
+  online: number;
+  wholesale: number;
+}
 
 export interface Suggestion {
   name: string;
   price: number;
   currency: string;
   colors?: { name: string; hex: string }[];
+  prices?: ChannelPrices;
+}
+
+/** Pick the catalog unit price for the selected sales channel. */
+export function priceForChannel(prices: ChannelPrices | undefined, channel: string, base: number): number {
+  if (!prices) return base;
+  if (channel === "Wholesale") return prices.wholesale;
+  if (channel === "Retail") return prices.retail;
+  return prices.online; // Online / Marketplace → online price
 }
 
 export const money = (n: number) =>
@@ -37,6 +52,8 @@ interface OrderLine {
   color: string;
   sku: string | null;
   price: number;
+  /** Catalog per-channel prices for this product (drives channel-aware pricing). */
+  prices?: ChannelPrices;
   /** Colors specific to the picked product (empty until an item is chosen). */
   colorOptions: ColorOption[];
   /** Per-size quantity breakdown: size label → units. */
@@ -172,11 +189,9 @@ export function OrderForm({
   const removeLine = (i: number) =>
     setLines((ls) => (ls.length === 1 ? ls : ls.filter((_, j) => j !== i)));
 
-  // Picking a product loads its own colors and drops a stale colour pick.
-  const pickProduct = (
-    i: number,
-    s: { name: string; price: number; colors?: ColorOption[] }
-  ) => {
+  // Picking a product loads its own colors + per-channel prices, and drops a
+  // stale colour pick. The unit price follows the currently selected channel.
+  const pickProduct = (i: number, s: Suggestion) => {
     const opts = s.colors ?? [];
     setLines((ls) =>
       ls.map((l, j) =>
@@ -184,13 +199,22 @@ export function OrderForm({
           ? {
               ...l,
               name: s.name,
-              price: s.price,
+              prices: s.prices,
+              price: priceForChannel(s.prices, channel, s.price),
               sku: null,
               colorOptions: opts,
               color: opts.some((c) => c.name === l.color) ? l.color : "",
             }
           : l
       )
+    );
+  };
+
+  // Switching channel re-prices every line from its catalog per-channel prices.
+  const changeChannel = (v: string) => {
+    setChannel(v);
+    setLines((ls) =>
+      ls.map((l) => (l.prices ? { ...l, price: priceForChannel(l.prices, v, l.price) } : l))
     );
   };
 
@@ -240,7 +264,7 @@ export function OrderForm({
           <Label htmlFor="channel">
             Channel<span className="ml-0.5 text-brand-orange">*</span>
           </Label>
-          <Select value={channel} onValueChange={setChannel}>
+          <Select value={channel} onValueChange={changeChannel}>
             <SelectTrigger id="channel">
               <SelectValue placeholder="Select channel" />
             </SelectTrigger>
