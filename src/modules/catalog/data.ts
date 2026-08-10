@@ -32,6 +32,10 @@ export const screens: Record<string, ScreenConfig> = {
         "align": "right"
       },
       {
+        "label": "Supplier Price",
+        "align": "right"
+      },
+      {
         "label": "Variants",
         "align": "center"
       },

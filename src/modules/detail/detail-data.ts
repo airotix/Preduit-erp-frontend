@@ -37,7 +37,7 @@ export interface DetailModel {
     sizes: string[];
     matrix: { name: string; hex: string; cells: { q: number; tone: "red" | "amber" | "neutral" }[] }[];
     specs: MetaItem[];
-    prices?: { retail: string; wholesale: string; online: string };
+    prices?: { retail: string; wholesale: string; online: string; supplier: string };
     image?: string | null;
     /** Raw values to prefill the in-place edit form. */
     form?: {
@@ -48,6 +48,7 @@ export interface DetailModel {
       retailPrice: number | null;
       wholesalePrice: number | null;
       onlinePrice: number | null;
+      supplierPrice: number | null;
       imageUrl: string;
       composition: string;
       gauge: string;

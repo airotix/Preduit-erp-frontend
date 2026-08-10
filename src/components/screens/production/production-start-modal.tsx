@@ -19,12 +19,15 @@ export function ProductionStartModal({
   open,
   onOpenChange,
   orderId,
+  lineId,
   stageNames,
   onStarted,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   orderId: string;
+  /** When set, only this production line's timeline is started. */
+  lineId?: string | null;
   stageNames?: string[];
   onStarted: () => void;
 }) {
@@ -48,6 +51,7 @@ export function ProductionStartModal({
     try {
       await apiPost(`/production/porders/${orderId}/start`, {
         stages: names.map((n) => ({ name: n, days: Math.max(0, Math.floor(Number(days[n]) || 0)) })),
+        ...(lineId ? { line_id: lineId } : {}),
       });
       onStarted();
     } catch {

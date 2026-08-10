@@ -21,6 +21,7 @@ export interface ChannelPrices {
   retail: number;
   online: number;
   wholesale: number;
+  supplier: number;
 }
 
 export interface Suggestion {

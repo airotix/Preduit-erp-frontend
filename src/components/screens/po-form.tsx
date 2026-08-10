@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import { SheetFooter, SheetClose } from "@/components/ui/sheet";
 import { apiGet, USE_BACKEND } from "@/lib/api-client";
-import { ProductNameInput, money } from "@/components/screens/order-form";
+import { ProductNameInput, money, type Suggestion } from "@/components/screens/order-form";
 
 interface ColorOption {
   name: string;
@@ -92,18 +92,17 @@ export function PurchaseOrderForm({
     setLines((ls) => (ls.length === 1 ? ls : ls.filter((_, j) => j !== i)));
 
   // Picking a product loads its own colors and drops a stale colour pick.
-  const pickProduct = (
-    i: number,
-    s: { name: string; price: number; colors?: ColorOption[] }
-  ) => {
+  // Procurement always prices at the SUPPLIER price (falls back to base price).
+  const pickProduct = (i: number, s: Suggestion) => {
     const opts = s.colors ?? [];
+    const supplierPrice = s.prices?.supplier ?? s.price;
     setLines((ls) =>
       ls.map((l, j) =>
         j === i
           ? {
               ...l,
               name: s.name,
-              price: s.price,
+              price: supplierPrice,
               sku: null,
               colorOptions: opts,
               color: opts.some((c) => c.name === l.color) ? l.color : "",
@@ -226,7 +225,7 @@ export function PurchaseOrderForm({
                     </div>
                     <div className="space-y-1">
                       <span className="text-[11px] font-semibold uppercase text-muted-foreground">
-                        Unit price (€)
+                        Supplier price (€)
                       </span>
                       <Input
                         type="number"

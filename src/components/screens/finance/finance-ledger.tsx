@@ -2,14 +2,15 @@
 
 import * as React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Search } from "lucide-react";
+import { Search, Check, X, Pencil } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { ToneBadge } from "@/components/tone-badge";
 import { avatarColor } from "@/lib/tone";
-import { apiGet, apiPost, USE_BACKEND } from "@/lib/api-client";
+import { apiGet, apiPost, apiPut, USE_BACKEND } from "@/lib/api-client";
 import { useCurrency, money } from "@/lib/currency";
 import { FinanceHeader } from "@/components/screens/finance/finance-header";
 import { FinanceFormSheet } from "@/components/screens/finance/finance-form-sheet";
+import { OrderPaymentModal } from "@/components/screens/sales/order-payment-modal";
 import { downloadCsv } from "@/lib/export-csv";
 import type { Tone } from "@/lib/tone";
 
@@ -21,6 +22,60 @@ interface ListData { variant: "customer" | "supplier"; parties: Party[] }
 interface StatementRow {
   date: string; ref: string; desc: string;
   debit: number | null; credit: number | null; balance: number;
+  // Present on unpaid customer invoice rows → enables the per-row Record payment.
+  invoicePublicId?: string | null; baseAmount?: number | null;
+  // Handle to inline-edit this row's description (routed to its source record).
+  editType?: string | null; editId?: string | null;
+}
+
+/** Inline-editable description cell (click to edit → input with ✓ / ✕). */
+function EditableDesc({
+  value, editable, onSave,
+}: {
+  value: string;
+  editable: boolean;
+  onSave: (v: string) => void;
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [val, setVal] = React.useState(value);
+  React.useEffect(() => setVal(value), [value]);
+
+  if (!editable) return <span className="text-foreground">{value}</span>;
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => { setVal(value); setEditing(true); }}
+        className="group inline-flex items-center gap-1.5 text-left text-foreground hover:text-brand-orange"
+      >
+        <span>{value}</span>
+        <Pencil size={12} className="opacity-0 transition-opacity group-hover:opacity-60" />
+      </button>
+    );
+  }
+  const commit = () => { onSave(val.trim()); setEditing(false); };
+  return (
+    <span className="inline-flex items-center gap-1">
+      <input
+        autoFocus
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit();
+          if (e.key === "Escape") setEditing(false);
+        }}
+        className="w-full min-w-[160px] rounded-md border border-primary/60 px-2 py-1 text-[13px] outline-none"
+      />
+      <button type="button" onClick={commit} aria-label="Save"
+        className="rounded-md border border-border p-1 text-foreground hover:bg-muted">
+        <Check size={13} strokeWidth={2.4} />
+      </button>
+      <button type="button" onClick={() => setEditing(false)} aria-label="Cancel"
+        className="rounded-md border border-border p-1 text-muted-foreground hover:bg-muted">
+        <X size={13} strokeWidth={2.4} />
+      </button>
+    </span>
+  );
 }
 interface Statement {
   name: string; code: string; terms: string; email: string; initials: string;
@@ -56,16 +111,29 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
 
   const queryClient = useQueryClient();
   const [formOpen, setFormOpen] = React.useState(false);
+  // Per-row "Record payment" target (unpaid customer invoice).
+  const [settle, setSettle] = React.useState<{ invoicePublicId: string; total: number; ref: string } | null>(null);
 
   const create = useMutation({
     mutationFn: (v: Record<string, string | number>) =>
       isCustomer
-        ? apiPost("/sales/invoices", { customer: v.customer, amount: v.amount, dueDate: v.dueDate })
+        ? apiPost(`/finance/customer-ledger/${activeId}/entries`, {
+            description: v.description,
+            debit: Number(v.debit) || 0,
+            credit: Number(v.credit) || 0,
+          })
         : apiPost("/finance/bills", { supplier: v.supplier, poRef: v.poRef || null, amount: v.amount, dueDate: v.dueDate, status: "Open" }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["finance", "ledger", variant] });
+      queryClient.invalidateQueries({ queryKey: ["finance", "ledger"] });
       setFormOpen(false);
     },
+  });
+
+  // Inline description edits (invoice memo / manual entry / payment note / credit note).
+  const saveDesc = useMutation({
+    mutationFn: (b: { type: string; publicId: string; description: string }) =>
+      apiPut("/finance/ledger-entries/description", b),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["finance", "ledger"] }),
   });
 
   const exportCsv = () => {
@@ -85,7 +153,7 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
       <FinanceHeader
         title={isCustomer ? "Customer ledger" : "Supplier ledger"}
         subtitle={isCustomer ? "Receivables by customer with running balance" : "Payables by supplier with running balance"}
-        action={isCustomer ? "New invoice" : "New bill"}
+        action={isCustomer ? "New entry" : "New bill"}
         onAction={() => setFormOpen(true)}
         onExport={exportCsv}
       />
@@ -93,17 +161,17 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
       <FinanceFormSheet
         open={formOpen}
         onOpenChange={setFormOpen}
-        title={isCustomer ? "New invoice" : "New bill"}
-        description={isCustomer ? "Raise a customer invoice." : "Record a supplier bill."}
-        submitLabel={isCustomer ? "Create invoice" : "Create bill"}
+        title={isCustomer ? `New entry${stmt?.name ? ` · ${stmt.name}` : ""}` : "New bill"}
+        description={isCustomer ? "Add a manual ledger entry — a debit and/or credit with a description." : "Record a supplier bill."}
+        submitLabel={isCustomer ? "Add entry" : "Create bill"}
         pending={create.isPending}
         onSubmit={(v) => create.mutate(v)}
         fields={
           isCustomer
             ? [
-                { name: "customer", label: "Customer", required: true, defaultValue: stmt?.name },
-                { name: "amount", label: "Amount", type: "number", required: true },
-                { name: "dueDate", label: "Due date", type: "date" },
+                { name: "description", label: "Description", required: true },
+                { name: "debit", label: "Debit amount", type: "number" },
+                { name: "credit", label: "Credit amount", type: "number" },
               ]
             : [
                 { name: "supplier", label: "Supplier", required: true, defaultValue: stmt?.name },
@@ -113,6 +181,22 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
               ]
         }
       />
+
+      {settle && (
+        <OrderPaymentModal
+          open={!!settle}
+          onOpenChange={(o) => { if (!o) setSettle(null); }}
+          invoicePublicId={settle.invoicePublicId}
+          total={settle.total}
+          reference={settle.ref}
+          customer={stmt?.name ?? ""}
+          format={(n) => money(n, currency)}
+          onDone={() => {
+            queryClient.invalidateQueries({ queryKey: ["finance", "ledger"] });
+            setSettle(null);
+          }}
+        />
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
         {/* Party list */}
@@ -212,21 +296,46 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
                       <th className="pb-2 text-right font-bold">Debit</th>
                       <th className="pb-2 text-right font-bold">Credit</th>
                       <th className="pb-2 text-right font-bold">Balance</th>
+                      <th className="pb-2" />
                     </tr>
                   </thead>
                   <tbody>
                     <tr className="border-t border-border/50">
                       <td className="py-2.5 font-semibold text-muted-foreground" colSpan={5}>Opening balance</td>
                       <td className="py-2.5 text-right tabular text-foreground">{money(stmt.opening, currency)}</td>
+                      <td />
                     </tr>
                     {stmt.rows.map((r, i) => (
                       <tr key={i} className="border-t border-border/50">
                         <td className="py-2.5 whitespace-nowrap text-muted-foreground">{r.date}</td>
                         <td className="py-2.5 font-bold tabular text-foreground">{r.ref}</td>
-                        <td className="py-2.5 text-foreground">{r.desc}</td>
+                        <td className="py-2.5 text-foreground">
+                          <EditableDesc
+                            value={r.desc}
+                            editable={!!r.editId}
+                            onSave={(v) =>
+                              saveDesc.mutate({ type: r.editType as string, publicId: r.editId as string, description: v })
+                            }
+                          />
+                        </td>
                         <td className="py-2.5 text-right tabular text-foreground">{r.debit ? money(r.debit, currency) : "—"}</td>
                         <td className="py-2.5 text-right tabular text-[#2E9E6B]">{r.credit ? money(r.credit, currency) : "—"}</td>
                         <td className="py-2.5 text-right tabular font-semibold text-foreground">{money(r.balance, currency)}</td>
+                        <td className="py-2.5 pl-3 text-right">
+                          {r.invoicePublicId && (
+                            <button
+                              type="button"
+                              onClick={() => setSettle({
+                                invoicePublicId: r.invoicePublicId as string,
+                                total: r.baseAmount ?? r.debit ?? 0,
+                                ref: r.ref,
+                              })}
+                              className="whitespace-nowrap rounded-lg border border-border/70 px-2.5 py-1 text-[12px] font-semibold text-foreground transition-colors hover:border-brand-orange hover:text-brand-orange"
+                            >
+                              Record payment
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                     <tr className="border-t-2 border-border bg-muted/40 font-extrabold text-foreground">
@@ -234,6 +343,7 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
                       <td className="py-2.5 text-right tabular">{money(stmt.totalDebit, currency)}</td>
                       <td className="py-2.5 text-right tabular text-[#2E9E6B]">{money(stmt.totalCredit, currency)}</td>
                       <td className="py-2.5 text-right tabular" style={{ color: stmt.balanceTone === "accent" ? "#7C3AED" : "#EA6C18" }}>{money(stmt.closing, currency)}</td>
+                      <td />
                     </tr>
                   </tbody>
                 </table>

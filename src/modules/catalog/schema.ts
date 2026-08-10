@@ -5,10 +5,11 @@ export const productSchema = z.object({
   category: z.enum(["Knitwear", "Bottoms", "Shirts", "Outerwear", "Accessories"]),
   season: z.enum(["Core", "Spring '26", "Fall '26", "Winter '26"]),
   status: z.enum(["Active", "Draft", "Discontinued"]),
-  // SKU is auto-generated (SKU-000001…). Three price types seed the first variant.
+  // SKU is auto-generated (SKU-000001…). Four price types seed the first variant.
   retailPrice: z.number({ invalid_type_error: "Must be a number" }).positive("Must be greater than 0").optional(),
   wholesalePrice: z.number({ invalid_type_error: "Must be a number" }).positive("Must be greater than 0").optional(),
   onlinePrice: z.number({ invalid_type_error: "Must be a number" }).positive("Must be greater than 0").optional(),
+  supplierPrice: z.number({ invalid_type_error: "Must be a number" }).positive("Must be greater than 0").optional(),
   imageUrl: z.string().optional(),
 });
 

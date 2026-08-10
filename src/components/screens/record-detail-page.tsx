@@ -299,6 +299,7 @@ function ProductDetailsEditor({
     retailPrice: form?.retailPrice ?? ("" as number | ""),
     wholesalePrice: form?.wholesalePrice ?? ("" as number | ""),
     onlinePrice: form?.onlinePrice ?? ("" as number | ""),
+    supplierPrice: form?.supplierPrice ?? ("" as number | ""),
     imageUrl: form?.imageUrl ?? "",
     composition: form?.composition ?? "",
     gauge: form?.gauge ?? "",
@@ -341,6 +342,7 @@ function ProductDetailsEditor({
         retailPrice: num(f.retailPrice),
         wholesalePrice: num(f.wholesalePrice),
         onlinePrice: num(f.onlinePrice),
+        supplierPrice: num(f.supplierPrice),
         imageUrl: f.imageUrl,
         composition: f.composition.trim() || null,
         gauge: f.gauge.trim() || null,
@@ -406,6 +408,11 @@ function ProductDetailsEditor({
           <label className={_PF_LBL}>Online price (€)</label>
           <input type="number" min={0} step="any" className={_PF_INPUT} value={f.onlinePrice}
                  onChange={(e) => set("onlinePrice", e.target.value === "" ? "" : Number(e.target.value))} />
+        </div>
+        <div>
+          <label className={_PF_LBL}>Supplier price (€)</label>
+          <input type="number" min={0} step="any" className={_PF_INPUT} value={f.supplierPrice}
+                 onChange={(e) => set("supplierPrice", e.target.value === "" ? "" : Number(e.target.value))} />
         </div>
         <div className="sm:col-span-2">
           <label className={_PF_LBL}>Product image</label>
@@ -840,6 +847,7 @@ function tabContentFor(d: DetailModel): Record<string, React.ReactNode> {
               { k: "Retail price", v: p.prices?.retail ?? d.meta.find((m) => m.k === "Retail price")?.v ?? "—" },
               { k: "Wholesale price", v: p.prices?.wholesale ?? "—" },
               { k: "Online price", v: p.prices?.online ?? "—" },
+              { k: "Supplier price", v: p.prices?.supplier ?? "—" },
               ...p.specs.filter((s) =>
                 ["HS code", "Origin", "Weight", "Composition"].includes(s.k)
               ),
