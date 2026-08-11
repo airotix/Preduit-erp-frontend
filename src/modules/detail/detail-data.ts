@@ -66,6 +66,10 @@ export interface DetailModel {
     partyTitle: string;
     timeline: TimelineItem[];
     party: { name: string; email: string; phone: string; addr: string };
+    orderInvoices?: {
+      publicId: string; invoiceNo: string; invoiceType: string;
+      currency: string; total: string; status: string; createdAt: string;
+    }[];
   };
   journal?: {
     ledger: { acct: string; desc: string; debit: string; credit: string }[];
@@ -82,7 +86,30 @@ export interface DetailModel {
     scorecard: { label: string; value: string; sub: string; tone: Tone }[];
     relatedTitle: string;
     related: { a: string; b: string; c: string; tone: Tone; s: string }[];
-    contact: { name: string; email: string; phone: string; addr: string };
+    contactTitle?: string;
+    contact: {
+      name: string; email: string; phone: string; addr: string;
+      vat?: string; contact?: string; bank?: string;
+    };
+    supplierCard?: {
+      name: string; status: string; code: string; location: string;
+      email: string; phone: string; contactId: string; vat: string; bank: string;
+    };
+    supplierForm?: {
+      name: string; region: string; leadTime: string; category: string;
+      email: string; phone: string; address: string; contactPerson: string;
+      vatNumber: string; bankDetails: string;
+    };
+    customerCard?: {
+      name: string; kind: string; code: string; title: string; location: string;
+      email: string; phone: string; address: string;
+      terms: string; currency: string; taxId: string; bank: string; account: string;
+    };
+    customerForm?: {
+      name: string; type: string; region: string; email: string; phone: string; address: string;
+      code: string; terms: string; currency: string; taxId: string; bankName: string;
+      bankAccount: string; contactTitle: string;
+    };
     timeline: TimelineItem[];
   };
   report?: {

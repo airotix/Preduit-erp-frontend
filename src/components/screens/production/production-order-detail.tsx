@@ -31,6 +31,7 @@ interface Detail {
   ref: string; title: string; statusLabel: string; statusTone: Tone;
   meta: { k: string; v: string }[];
   started: boolean; progress: number; stageNames: string[];
+  canInspect?: boolean; inspected?: boolean;
   alert: { type: string; message: string } | null;
   stages: Stage[]; materials: { component: string; material: string; qty: string; cost: string }[];
   orderLines?: OrderLine[];
@@ -206,6 +207,15 @@ export function ProductionOrderDetail({
   const onAct = (id: string, action: string, body?: Record<string, unknown>) =>
     act.mutate({ id, action, body });
 
+  // Production complete → open a QC inspection (order flows to Quality).
+  const inspect = useMutation({
+    mutationFn: () => apiPost(`/production/porders/${publicId}/inspect`, {}),
+    onSuccess: () => {
+      refresh();
+      qc.invalidateQueries({ queryKey: ["screen", "quality", "inspections"] });
+    },
+  });
+
   const modalFields: FinanceField[] =
     modal?.kind === "assign" ? [{ name: "worker", label: "Worker", required: true }]
     : modal?.kind === "notes" ? [{ name: "notes", label: "Notes", required: false }]
@@ -237,6 +247,16 @@ export function ProductionOrderDetail({
                 <Button variant="navy" size="sm" onClick={() => { setStartLineId(null); setStartOpen(true); }}>
                   <Play size={15} strokeWidth={2} /> Start production
                 </Button>
+              )}
+              {data.canInspect && (
+                <Button variant="navy" size="sm" disabled={inspect.isPending}
+                        onClick={() => inspect.mutate()}>
+                  <CheckCircle2 size={15} strokeWidth={2} />
+                  {inspect.isPending ? "Sending…" : "Send for inspection"}
+                </Button>
+              )}
+              {data.inspected && (
+                <ToneBadge tone="navy" dot={false}>Sent for inspection</ToneBadge>
               )}
             </div>
             <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">

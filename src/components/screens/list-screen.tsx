@@ -80,7 +80,7 @@ const STATUS_ENDPOINTS: Record<string, (id: string) => string> = {
   "sales/orders": (id) => `/sales/orders/${id}/status`,
   "sales/invoices": (id) => `/sales/invoices/${id}/status`,
   "sales/returns": (id) => `/sales/returns/${id}/status`,
-  "procurement/pos": (id) => `/procurement/pos/${id}/status`,
+  // PO status changes happen in the Approval queue, not the main list.
   "procurement/receipts": (id) => `/procurement/receipts/${id}/status`,
   "inventory/transfers": (id) => `/inventory/transfers/${id}/status`,
   "quality/inspections": (id) => `/quality/inspections/${id}/status`,
@@ -90,7 +90,6 @@ const STATUS_OPTIONS: Record<string, string[]> = {
   "sales/orders": ["New", "Picking", "Packed", "Shipped", "Cancelled"],
   "sales/invoices": ["Open", "Paid", "Overdue", "Void"],
   "sales/returns": ["Inspecting", "Refunded", "Rejected"],
-  "procurement/pos": ["Pending approval", "Approved", "Rejected", "Received"],
   "procurement/receipts": ["Expected", "Partial", "Complete"],
   "inventory/transfers": ["Draft", "In transit", "Received", "Cancelled"],
   "quality/inspections": ["Pending", "Pass", "Fail"],
@@ -232,6 +231,18 @@ export function ListScreen({
   const isPOCreate = !isEdit && module === "procurement" && tab === "pos";
   // Production orders get a per-row "Start production" button + modal.
   const isProductionOrders = module === "production" && tab === "porders";
+  // Passing a QC inspection opens a carrier/destination modal → creates a shipment.
+  const isInspections = module === "quality" && tab === "inspections";
+  const [passId, setPassId] = React.useState<string | null>(null);
+  const passInspection = useMutation({
+    mutationFn: (v: Record<string, string | number>) =>
+      apiPost(`/quality/inspections/${passId}/pass`, { carrier: v.carrier, destination: v.destination }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["screen", "quality", "inspections"] });
+      queryClient.invalidateQueries({ queryKey: ["screen", "shipments"] });
+      setPassId(null);
+    },
+  });
   const [startOrderId, setStartOrderId] = React.useState<string | null>(null);
   const [shipOrderId, setShipOrderId] = React.useState<string | null>(null);
   const shipOrder = useMutation({
@@ -295,7 +306,17 @@ export function ListScreen({
         statusOptions={canStatus ? statusOpts : undefined}
         rowStatuses={canStatus ? rowStatuses : undefined}
         onStatusChange={
-          canStatus ? (i, s) => setStatus.mutate({ index: i, status: s }) : undefined
+          canStatus
+            ? (i, s) => {
+                // Passing an inspection needs shipment details → open the modal
+                // instead of a plain status update.
+                if (isInspections && s === "Pass") {
+                  setPassId(config.ids?.[i] ?? null);
+                  return;
+                }
+                setStatus.mutate({ index: i, status: s });
+              }
+            : undefined
         }
       />
 
@@ -358,6 +379,22 @@ export function ListScreen({
           )}
         </SheetContent>
       </Sheet>
+
+      {isInspections && (
+        <FinanceFormSheet
+          open={!!passId}
+          onOpenChange={(o) => { if (!o) setPassId(null); }}
+          title="Pass inspection & ship"
+          description="Inspection passed — enter shipment details to send it out."
+          submitLabel="Pass & create shipment"
+          pending={passInspection.isPending}
+          onSubmit={(v) => passInspection.mutate(v)}
+          fields={[
+            { name: "carrier", label: "Carrier", required: true, placeholder: "DHL Express" },
+            { name: "destination", label: "Destination", required: true, placeholder: "Paris, FR" },
+          ]}
+        />
+      )}
 
       {isProductionOrders && (
         <ProductionStartModal

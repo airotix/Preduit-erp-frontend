@@ -20,7 +20,7 @@ type PayStatus = "paid" | "partial" | "unpaid";
 export function OrderPaymentModal({
   open,
   onOpenChange,
-  invoicePublicId,
+  settleUrl,
   total,
   reference,
   customer,
@@ -29,7 +29,9 @@ export function OrderPaymentModal({
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  invoicePublicId: string | null;
+  /** Endpoint that records the payment, e.g. /sales/invoices/{id}/settle or
+   *  /finance/bills/{id}/settle. */
+  settleUrl: string | null;
   total: number;
   reference: string;
   customer: string;
@@ -58,13 +60,13 @@ export function OrderPaymentModal({
   };
 
   const submit = async () => {
-    if (!invoicePublicId) return onDone();
+    if (!settleUrl) return onDone();
     const paid = status === "paid";
     const amt = status === "unpaid" ? 0 : Math.max(0, Math.min(Number(amount) || 0, total));
     setSaving(true);
     setError(null);
     try {
-      await apiPost(`/sales/invoices/${invoicePublicId}/settle`, { amountPaid: amt, paid });
+      await apiPost(settleUrl, { amountPaid: amt, paid });
       onDone();
     } catch {
       setError("Could not record the payment. Please try again.");

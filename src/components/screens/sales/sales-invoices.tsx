@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileText, Plus, ArrowLeft, Save, Printer, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -60,6 +61,21 @@ function computeTotals(doc: Doc) {
 // ============================================================================
 export function SalesInvoices() {
   const [editor, setEditor] = React.useState<{ doc: Doc; publicId: string | null } | null>(null);
+  const params = useSearchParams();
+  const docParam = params.get("doc");
+  // Deep-link: /sales/invoices?doc=<id> opens that invoice directly (used by the
+  // "Open" links on an order's Invoices tab).
+  React.useEffect(() => {
+    if (!docParam) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const full = await apiGet<{ data: Doc }>(`/sales/invoice-docs/${docParam}`);
+        if (!cancelled) setEditor({ doc: full.data, publicId: docParam });
+      } catch { /* ignore — fall back to the list */ }
+    })();
+    return () => { cancelled = true; };
+  }, [docParam]);
   if (editor) return <InvoiceEditor doc={editor.doc} publicId={editor.publicId} onBack={() => setEditor(null)} />;
   return <InvoiceList onOpen={(doc, publicId) => setEditor({ doc, publicId })} />;
 }
@@ -285,6 +301,8 @@ function TotalsBox({ doc, ccy, totals, update, freight }: {
 // ============================================================================
 // RETAIL / ONLINE — flat receipt
 // ============================================================================
+const REMIT_ROWS: [string, string][] = [["Title", "title"], ["Bank", "bank"], ["Account", "account"]];
+
 function RetailPaper({ doc, ccy, totals, update }: {
   doc: Doc; ccy: string; totals: ReturnType<typeof computeTotals>; update: (p: (d: Doc) => void) => void;
 }) {
@@ -368,12 +386,26 @@ function RetailPaper({ doc, ccy, totals, update }: {
         </tbody>
       </table>
 
-      {/* note + totals */}
+      {/* note + bank details | totals */}
       <div className="mt-4 grid grid-cols-[1.4fr_1fr] gap-4">
-        <div>
-          <span className={LBL}>Note</span>
-          <textarea className={cn(BOX, "mt-1 h-[76px] w-full resize-none bg-white p-2 text-[12px] text-[#111] outline-none")}
-                    value={doc.note || ""} onChange={(e) => update((d) => { d.note = e.target.value; })} />
+        <div className="space-y-3">
+          <div>
+            <span className={LBL}>Note</span>
+            <textarea className={cn(BOX, "mt-1 h-[76px] w-full resize-none bg-white p-2 text-[12px] text-[#111] outline-none")}
+                      value={doc.note || ""} onChange={(e) => update((d) => { d.note = e.target.value; })} />
+          </div>
+          <div>
+            <div className="mb-1 text-[11px] font-bold text-[#111]">Bank details</div>
+            <div className={cn(BOX, "divide-y divide-[#c9c9c9]")}>
+              {(REMIT_ROWS).map(([label, key]) => (
+                <div key={key} className="grid grid-cols-[0.6fr_1.4fr]">
+                  <div className="border-r border-[#c9c9c9] bg-[#f6f6f6] px-2 py-2 text-[10px] italic text-[#555]">{label}</div>
+                  <input className="px-2 py-2 text-[12px] text-[#111] outline-none focus:bg-[#f0f0f0]"
+                         value={doc.remit?.[key] || ""} onChange={(e) => update((d) => { d.remit[key] = e.target.value; })} />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
         <TotalsBox doc={doc} ccy={ccy} totals={totals} update={update} freight={false} />
       </div>

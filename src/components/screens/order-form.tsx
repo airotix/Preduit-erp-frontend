@@ -146,6 +146,63 @@ export function ProductNameInput({
   );
 }
 
+/** Type-ahead customer name input backed by /sales/customers/search. */
+function CustomerNameInput({
+  value, onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [items, setItems] = React.useState<{ name: string; region: string }[]>([]);
+  const [open, setOpen] = React.useState(false);
+  const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const query = (q: string) => {
+    if (timer.current) clearTimeout(timer.current);
+    if (!USE_BACKEND || q.trim().length < 1) { setItems([]); return; }
+    timer.current = setTimeout(async () => {
+      try {
+        const res = await apiGet<{ name: string; region: string }[]>(
+          `/sales/customers/search?q=${encodeURIComponent(q.trim())}`
+        );
+        setItems(res);
+        setOpen(res.length > 0);
+      } catch { setItems([]); }
+    }, 200);
+  };
+
+  return (
+    <div className="relative">
+      <Input
+        id="customer"
+        placeholder="Customer name"
+        value={value}
+        autoComplete="off"
+        onChange={(e) => { onChange(e.target.value); query(e.target.value); }}
+        onFocus={() => items.length && setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 120)}
+      />
+      {open && items.length > 0 && (
+        <ul className="absolute z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-border bg-white py-1 shadow-lg">
+          {items.map((c) => (
+            <li key={c.name}>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { onChange(c.name); setOpen(false); }}
+                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-[13px] hover:bg-muted"
+              >
+                <span className="font-semibold text-foreground">{c.name}</span>
+                {c.region && <span className="truncate text-muted-foreground">{c.region}</span>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 const newLine = (): OrderLine => ({
   name: "",
   color: "",
@@ -253,12 +310,7 @@ export function OrderForm({
           <Label htmlFor="customer">
             Customer<span className="ml-0.5 text-brand-orange">*</span>
           </Label>
-          <Input
-            id="customer"
-            placeholder="Customer name"
-            value={customer}
-            onChange={(e) => setCustomer(e.target.value)}
-          />
+          <CustomerNameInput value={customer} onChange={setCustomer} />
         </div>
 
         <div className="space-y-1.5">

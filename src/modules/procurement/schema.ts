@@ -18,6 +18,9 @@ export const supplierSchema = z.object({
   region: z.string().min(1, "Required"),
   leadTime: z.string().min(1, "Required"),
   category: z.string().min(1, "Required"),
+  vatNumber: z.string().optional(),
+  contactPerson: z.string().optional(),
+  bankDetails: z.string().optional(),
 });
 
 export const SCHEMAS = {

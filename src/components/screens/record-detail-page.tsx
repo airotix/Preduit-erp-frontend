@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Printer, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Printer, Pencil, Plus, Trash2, Mail, Copy, MapPin } from "lucide-react";
 import { Icon } from "@/components/icon";
 import { ToneBadge } from "@/components/tone-badge";
 import { Button } from "@/components/ui/button";
@@ -112,9 +112,19 @@ function PartyCard({
   party,
   title,
 }: {
-  party: { name: string; email: string; phone: string; addr: string };
+  party: {
+    name: string; email: string; phone: string; addr: string;
+    vat?: string; contact?: string; bank?: string;
+  };
   title: string;
 }) {
+  const Field = ({ label, value }: { label: string; value?: string }) =>
+    value ? (
+      <div>
+        <span className="font-semibold text-foreground">{label}: </span>
+        {value}
+      </div>
+    ) : null;
   return (
     <div>
       <SectionTitle>{title}</SectionTitle>
@@ -132,7 +142,178 @@ function PartyCard({
           <div>{party.email}</div>
           <div>{party.phone}</div>
           <div>{party.addr}</div>
+          <Field label="VAT number" value={party.vat} />
+          <Field label="Contact" value={party.contact} />
+          <Field label="Bank details" value={party.bank} />
         </div>
+      </div>
+    </div>
+  );
+}
+
+type SupplierCardData = {
+  name: string; status: string; code: string; location: string;
+  email: string; phone: string; contactId: string; vat: string; bank: string;
+};
+type SupplierFormData = {
+  name: string; region: string; leadTime: string; category: string;
+  email: string; phone: string; address: string; contactPerson: string;
+  vatNumber: string; bankDetails: string;
+};
+
+/** Read-only labelled row for the supplier card. Module-level so it stays stable. */
+function CardRow({ label, value, children }: { label: string; value?: string; children?: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-[104px_1fr] items-center gap-2 py-1.5 text-[13px]">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium text-foreground break-words">{children ?? (value || "—")}</span>
+    </div>
+  );
+}
+
+/** In-place editor for the supplier details card. */
+function SupplierDetailsEditor({
+  form, recordId, onCancel, onSaved,
+}: { form: SupplierFormData; recordId: string; onCancel: () => void; onSaved: () => void }) {
+  const [f, setF] = React.useState<SupplierFormData>(form);
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const set = (k: keyof SupplierFormData, v: string) => setF((p) => ({ ...p, [k]: v }));
+  const save = async () => {
+    if (!f.name.trim()) { setError("Name is required."); return; }
+    setSaving(true); setError(null);
+    try {
+      await apiPut(`/procurement/suppliers/${recordId}`, {
+        name: f.name.trim(), region: f.region || null, leadTime: f.leadTime || null,
+        category: f.category || null, email: f.email || null, phone: f.phone || null,
+        address: f.address || null, contactPerson: f.contactPerson || null,
+        vatNumber: f.vatNumber || null, bankDetails: f.bankDetails || null,
+      });
+      onSaved();
+    } catch { setError("Could not save changes. Please try again."); setSaving(false); }
+  };
+  return (
+    <div className="rounded-2xl border border-border/60 p-5">
+      <SectionTitle>Edit details</SectionTitle>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <label className={_PF_LBL}>Name</label>
+          <input className={_PF_INPUT} value={f.name} onChange={(e) => set("name", e.target.value)} />
+        </div>
+        <div>
+          <label className={_PF_LBL}>Email</label>
+          <input className={_PF_INPUT} value={f.email} onChange={(e) => set("email", e.target.value)} />
+        </div>
+        <div>
+          <label className={_PF_LBL}>Phone</label>
+          <input className={_PF_INPUT} value={f.phone} onChange={(e) => set("phone", e.target.value)} />
+        </div>
+        <div>
+          <label className={_PF_LBL}>Contact ID</label>
+          <input className={_PF_INPUT} value={f.contactPerson} onChange={(e) => set("contactPerson", e.target.value)} />
+        </div>
+        <div>
+          <label className={_PF_LBL}>VAT number</label>
+          <input className={_PF_INPUT} value={f.vatNumber} onChange={(e) => set("vatNumber", e.target.value)} />
+        </div>
+        <div className="sm:col-span-2">
+          <label className={_PF_LBL}>Bank details</label>
+          <input className={_PF_INPUT} value={f.bankDetails} placeholder="e.g. Meezan Bank •••• 4471"
+                 onChange={(e) => set("bankDetails", e.target.value)} />
+        </div>
+        <div className="sm:col-span-2">
+          <label className={_PF_LBL}>Location / region</label>
+          <input className={_PF_INPUT} value={f.region} onChange={(e) => set("region", e.target.value)} />
+        </div>
+      </div>
+      {error && <div className="mt-3 rounded-md bg-[#FBEAEA] p-3 text-sm font-semibold text-[#C0392B]">{error}</div>}
+      <div className="mt-4 flex justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
+        <Button size="sm" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save changes"}</Button>
+      </div>
+    </div>
+  );
+}
+
+/** Redesigned supplier details card: header + CONTACT + FINANCE + actions. */
+function SupplierCard({
+  card, form, recordId, onSaved,
+}: { card: SupplierCardData; form?: SupplierFormData; recordId?: string; onSaved?: () => void }) {
+  const [editing, setEditing] = React.useState(false);
+  if (editing && form && recordId) {
+    return (
+      <SupplierDetailsEditor
+        form={form} recordId={recordId}
+        onCancel={() => setEditing(false)}
+        onSaved={() => { setEditing(false); onSaved?.(); }}
+      />
+    );
+  }
+  const statusTone = /active|preferred|approved/i.test(card.status) ? "green" : "neutral";
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border/60">
+      <div className="p-5">
+        <div className="flex items-start gap-3">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl text-[13px] font-bold text-white"
+                style={{ background: avatarColor(card.name) }}>
+            {initials(card.name)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[16px] font-extrabold text-foreground">{card.name}</span>
+              <ToneBadge tone={statusTone} dot>{card.status}</ToneBadge>
+            </div>
+            <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
+              {card.code && <span>{card.code}</span>}
+              {card.code && card.location && <span>·</span>}
+              {card.location && (
+                <span className="inline-flex items-center gap-1"><MapPin size={12} strokeWidth={2} />{card.location}</span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t border-border/60 px-5 py-4">
+        <SectionTitle>Contact</SectionTitle>
+        <CardRow label="Email" value={card.email} />
+        <CardRow label="Phone" value={card.phone} />
+        <CardRow label="Contact ID" value={card.contactId} />
+      </div>
+
+      <div className="border-t border-border/60 px-5 py-4">
+        <SectionTitle>Finance</SectionTitle>
+        <CardRow label="VAT number">
+          <span className="inline-flex items-center gap-2">
+            {card.vat || "—"}
+            {card.vat && (
+              <button type="button" aria-label="Copy VAT number"
+                      onClick={() => navigator.clipboard?.writeText(card.vat)}
+                      className="rounded-md border border-border/70 p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+                <Copy size={12} strokeWidth={2} />
+              </button>
+            )}
+          </span>
+        </CardRow>
+        <CardRow label="Bank" value={card.bank} />
+      </div>
+
+      <div className="flex items-center gap-2 border-t border-border/60 bg-muted/30 p-4">
+        <a
+          href={card.email ? `mailto:${card.email}` : undefined}
+          className={
+            "inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-bold text-white transition-opacity " +
+            (card.email ? "bg-brand-orange hover:opacity-90" : "pointer-events-none bg-muted-foreground/40")
+          }
+        >
+          <Mail size={15} strokeWidth={2} /> Email supplier
+        </a>
+        {recordId && form && (
+          <button type="button" onClick={() => setEditing(true)}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-border px-4 py-2.5 text-[13px] font-bold text-foreground transition-colors hover:bg-muted">
+            <Pencil size={14} strokeWidth={2} /> Edit details
+          </button>
+        )}
       </div>
     </div>
   );
@@ -768,7 +949,171 @@ function StockMatrixEditor({
  * model's own `tabs` labels so the sub-tab bar always matches the data.
  * ------------------------------------------------------------------ */
 
-function tabContentFor(d: DetailModel): Record<string, React.ReactNode> {
+type CustomerCardData = {
+  name: string; kind: string; code: string; title: string; location: string;
+  email: string; phone: string; address: string;
+  terms: string; currency: string; taxId: string; bank: string; account: string;
+};
+type CustomerFormData = {
+  name: string; type: string; region: string; email: string; phone: string; address: string;
+  code: string; terms: string; currency: string; taxId: string; bankName: string;
+  bankAccount: string; contactTitle: string;
+};
+
+function CustomerDetailsEditor({
+  form, recordId, onCancel, onSaved,
+}: { form: CustomerFormData; recordId: string; onCancel: () => void; onSaved: () => void }) {
+  const [f, setF] = React.useState<CustomerFormData>(form);
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const set = (k: keyof CustomerFormData, v: string) => setF((p) => ({ ...p, [k]: v }));
+  const save = async () => {
+    if (!f.name.trim()) { setError("Name is required."); return; }
+    setSaving(true); setError(null);
+    try {
+      await apiPut(`/sales/customers/${recordId}`, {
+        name: f.name.trim(), type: f.type || "Retail", region: f.region || null,
+        email: f.email || null, phone: f.phone || null, address: f.address || null,
+        code: f.code || null, terms: f.terms || null, currency: f.currency || null,
+        taxId: f.taxId || null, bankName: f.bankName || null,
+        bankAccount: f.bankAccount || null, contactTitle: f.contactTitle || null,
+      });
+      onSaved();
+    } catch { setError("Could not save changes. Please try again."); setSaving(false); }
+  };
+  const fld = (label: string, k: keyof CustomerFormData, ph?: string) => (
+    <div>
+      <label className={_PF_LBL}>{label}</label>
+      <input className={_PF_INPUT} value={f[k]} placeholder={ph}
+             onChange={(e) => set(k, e.target.value)} />
+    </div>
+  );
+  return (
+    <div className="rounded-2xl border border-border/60 p-5">
+      <SectionTitle>Edit contact</SectionTitle>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <label className={_PF_LBL}>Name</label>
+          <input className={_PF_INPUT} value={f.name} onChange={(e) => set("name", e.target.value)} />
+        </div>
+        {fld("Contact title", "contactTitle", "e.g. Procurement lead")}
+        {fld("Location / region", "region")}
+        {fld("Email", "email")}
+        {fld("Phone", "phone")}
+        <div className="sm:col-span-2">
+          <label className={_PF_LBL}>Address</label>
+          <input className={_PF_INPUT} value={f.address} onChange={(e) => set("address", e.target.value)} />
+        </div>
+        {fld("Customer ID", "code")}
+        {fld("Terms", "terms", "e.g. Net 30")}
+        {fld("Currency", "currency", "e.g. SGD")}
+        {fld("Tax ID", "taxId")}
+        {fld("Bank", "bankName")}
+        {fld("Account no.", "bankAccount")}
+      </div>
+      {error && <div className="mt-3 rounded-md bg-[#FBEAEA] p-3 text-sm font-semibold text-[#C0392B]">{error}</div>}
+      <div className="mt-4 flex justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
+        <Button size="sm" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save changes"}</Button>
+      </div>
+    </div>
+  );
+}
+
+/** Redesigned customer contact card: header + REACH + ACCOUNT + FINANCE + actions. */
+function CustomerCard({
+  card, form, recordId, onSaved,
+}: { card: CustomerCardData; form?: CustomerFormData; recordId?: string; onSaved?: () => void }) {
+  const [editing, setEditing] = React.useState(false);
+  if (editing && form && recordId) {
+    return (
+      <CustomerDetailsEditor
+        form={form} recordId={recordId}
+        onCancel={() => setEditing(false)}
+        onSaved={() => { setEditing(false); onSaved?.(); }}
+      />
+    );
+  }
+  const termsLine = [card.terms, card.currency].filter(Boolean).join(" · ");
+  const copyBtn = (v: string) => (
+    <button type="button" aria-label="Copy" onClick={() => navigator.clipboard?.writeText(v)}
+            className="rounded-md border border-border/70 p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+      <Copy size={12} strokeWidth={2} />
+    </button>
+  );
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border/60">
+      <div className="p-5">
+        <div className="flex items-start gap-3">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl text-[13px] font-bold text-white"
+                style={{ background: avatarColor(card.name) }}>
+            {initials(card.name)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[16px] font-extrabold text-foreground">{card.name}</span>
+              {card.kind && <ToneBadge tone="green" dot>{card.kind}</ToneBadge>}
+            </div>
+            <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
+              {card.title && <span>{card.title}</span>}
+              {card.title && card.location && <span>·</span>}
+              {card.location && (
+                <span className="inline-flex items-center gap-1"><MapPin size={12} strokeWidth={2} />{card.location}</span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t border-border/60 px-5 py-4">
+        <SectionTitle>Reach</SectionTitle>
+        <CardRow label="Email" value={card.email} />
+        <CardRow label="Phone" value={card.phone} />
+        <CardRow label="Address" value={card.address} />
+      </div>
+
+      <div className="border-t border-border/60 px-5 py-4">
+        <SectionTitle>Account</SectionTitle>
+        <CardRow label="Customer ID" value={card.code} />
+        <CardRow label="Terms" value={termsLine} />
+      </div>
+
+      <div className="border-t border-border/60 px-5 py-4">
+        <SectionTitle>Finance</SectionTitle>
+        <CardRow label="Tax ID">
+          <span className="inline-flex items-center gap-2">{card.taxId || "—"}{card.taxId && copyBtn(card.taxId)}</span>
+        </CardRow>
+        <CardRow label="Bank" value={card.bank} />
+        <CardRow label="Account no.">
+          <span className="inline-flex items-center gap-2">{card.account || "—"}{card.account && copyBtn(card.account)}</span>
+        </CardRow>
+      </div>
+
+      <div className="flex items-center gap-2 border-t border-border/60 bg-muted/30 p-4">
+        <a
+          href={card.email ? `mailto:${card.email}` : undefined}
+          className={
+            "inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-bold text-white transition-opacity " +
+            (card.email ? "bg-brand-orange hover:opacity-90" : "pointer-events-none bg-muted-foreground/40")
+          }
+        >
+          <Mail size={15} strokeWidth={2} /> Email customer
+        </a>
+        {recordId && form && (
+          <button type="button" onClick={() => setEditing(true)}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-border px-4 py-2.5 text-[13px] font-bold text-foreground transition-colors hover:bg-muted">
+            <Pencil size={14} strokeWidth={2} /> Edit contact
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function tabContentFor(
+  d: DetailModel,
+  ctx: { recordId?: string; onSaved?: () => void } = {},
+): Record<string, React.ReactNode> {
   /* PRODUCT — mirrors the original HTML product page (the screenshot). */
   if (d.variant === "product" && d.product) {
     const p = d.product;
@@ -923,9 +1268,49 @@ function tabContentFor(d: DetailModel): Record<string, React.ReactNode> {
         <Lines {...doc} />
       </Panel>
     );
+    const invoicesPanel = (
+      <Panel title="Invoices" sub="Commercial invoices generated for this order">
+        {doc.orderInvoices && doc.orderInvoices.length > 0 ? (
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                <th className="pb-2 text-left font-bold">Invoice</th>
+                <th className="pb-2 text-left font-bold">Type</th>
+                <th className="pb-2 text-left font-bold">Date</th>
+                <th className="pb-2 text-right font-bold">Total</th>
+                <th className="pb-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {doc.orderInvoices.map((inv) => (
+                <tr key={inv.publicId} className="border-t border-border/50">
+                  <td className="py-2.5 font-bold text-foreground">{inv.invoiceNo}</td>
+                  <td className="py-2.5">{inv.invoiceType}</td>
+                  <td className="py-2.5 text-muted-foreground">{inv.createdAt}</td>
+                  <td className="py-2.5 text-right tabular font-semibold text-foreground">{inv.total}</td>
+                  <td className="py-2.5 text-right">
+                    <Link
+                      href={`/sales/invoices?doc=${inv.publicId}`}
+                      className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-[12px] font-semibold text-foreground transition-colors hover:border-primary hover:text-primary"
+                    >
+                      Open
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <div className="py-8 text-center text-[13px] text-muted-foreground">
+            No invoices generated for this order yet.
+          </div>
+        )}
+      </Panel>
+    );
     const map: Record<string, React.ReactNode> = {};
     d.tabs.forEach((t, i) => {
       if (i === 0) map[t] = primary;
+      else if (/invoice/i.test(t)) map[t] = invoicesPanel;
       else if (/item|line/i.test(t)) map[t] = linesPanel;
       else if (/fulfill|payment|activity/i.test(t)) map[t] = timelinePanel;
       else map[t] = primary;
@@ -1080,9 +1465,25 @@ function tabContentFor(d: DetailModel): Record<string, React.ReactNode> {
           {scorecard}
           {related}
         </div>
-        <Panel>
-          <PartyCard party={e.contact} title="Contact" />
-        </Panel>
+        {e.customerCard ? (
+          <CustomerCard
+            card={e.customerCard}
+            form={e.customerForm}
+            recordId={ctx.recordId}
+            onSaved={ctx.onSaved}
+          />
+        ) : e.supplierCard ? (
+          <SupplierCard
+            card={e.supplierCard}
+            form={e.supplierForm}
+            recordId={ctx.recordId}
+            onSaved={ctx.onSaved}
+          />
+        ) : (
+          <Panel>
+            <PartyCard party={e.contact} title={e.contactTitle ?? "Contact"} />
+          </Panel>
+        )}
       </div>
     );
     const activity = (
@@ -1355,7 +1756,9 @@ export function RecordDetailPage({
   const afterSave = () => { setEditing(false); reload?.(); router.refresh(); };
   const [editing, setEditing] = React.useState(false);
   const d = model ?? buildDetail(type, row, columns);
-  const content: Record<string, React.ReactNode> = { ...tabContentFor(d) };
+  const content: Record<string, React.ReactNode> = {
+    ...tabContentFor(d, { recordId, onSaved: afterSave }),
+  };
   const tabs = d.tabs.length ? d.tabs : ["Overview"];
 
   // The stock article grid is editable in place via the header Edit button.
@@ -1438,7 +1841,9 @@ export function RecordDetailPage({
             </div>
           </div>
           <div className="flex items-center gap-2.5">
-            {canEdit && editing ? null : (
+            {/* Supplier/customer (entity) pages manage actions on the details
+                card itself, so the generic Print/Edit header buttons are hidden. */}
+            {d.variant === "entity" || (canEdit && editing) ? null : (
               <>
                 <Button variant="outline" size="sm">
                   <Printer size={15} strokeWidth={2} /> Print

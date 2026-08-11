@@ -114,15 +114,14 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
   // Per-row "Record payment" target (unpaid customer invoice).
   const [settle, setSettle] = React.useState<{ invoicePublicId: string; total: number; ref: string } | null>(null);
 
+  const entriesBase = isCustomer ? "/finance/customer-ledger" : "/finance/supplier-ledger";
   const create = useMutation({
     mutationFn: (v: Record<string, string | number>) =>
-      isCustomer
-        ? apiPost(`/finance/customer-ledger/${activeId}/entries`, {
-            description: v.description,
-            debit: Number(v.debit) || 0,
-            credit: Number(v.credit) || 0,
-          })
-        : apiPost("/finance/bills", { supplier: v.supplier, poRef: v.poRef || null, amount: v.amount, dueDate: v.dueDate, status: "Open" }),
+      apiPost(`${entriesBase}/${activeId}/entries`, {
+        description: v.description,
+        debit: Number(v.debit) || 0,
+        credit: Number(v.credit) || 0,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["finance", "ledger"] });
       setFormOpen(false);
@@ -153,7 +152,7 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
       <FinanceHeader
         title={isCustomer ? "Customer ledger" : "Supplier ledger"}
         subtitle={isCustomer ? "Receivables by customer with running balance" : "Payables by supplier with running balance"}
-        action={isCustomer ? "New entry" : "New bill"}
+        action="New entry"
         onAction={() => setFormOpen(true)}
         onExport={exportCsv}
       />
@@ -161,32 +160,25 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
       <FinanceFormSheet
         open={formOpen}
         onOpenChange={setFormOpen}
-        title={isCustomer ? `New entry${stmt?.name ? ` · ${stmt.name}` : ""}` : "New bill"}
-        description={isCustomer ? "Add a manual ledger entry — a debit and/or credit with a description." : "Record a supplier bill."}
-        submitLabel={isCustomer ? "Add entry" : "Create bill"}
+        title={`New entry${stmt?.name ? ` · ${stmt.name}` : ""}`}
+        description="Add a manual ledger entry — a debit and/or credit with a description."
+        submitLabel="Add entry"
         pending={create.isPending}
         onSubmit={(v) => create.mutate(v)}
-        fields={
-          isCustomer
-            ? [
-                { name: "description", label: "Description", required: true },
-                { name: "debit", label: "Debit amount", type: "number" },
-                { name: "credit", label: "Credit amount", type: "number" },
-              ]
-            : [
-                { name: "supplier", label: "Supplier", required: true, defaultValue: stmt?.name },
-                { name: "poRef", label: "PO reference", placeholder: "PO-5582" },
-                { name: "amount", label: "Amount", type: "number", required: true },
-                { name: "dueDate", label: "Due date", type: "date" },
-              ]
-        }
+        fields={[
+          { name: "description", label: "Description", required: true },
+          { name: "debit", label: "Debit amount", type: "number" },
+          { name: "credit", label: "Credit amount", type: "number" },
+        ]}
       />
 
       {settle && (
         <OrderPaymentModal
           open={!!settle}
           onOpenChange={(o) => { if (!o) setSettle(null); }}
-          invoicePublicId={settle.invoicePublicId}
+          settleUrl={isCustomer
+            ? `/sales/invoices/${settle.invoicePublicId}/settle`
+            : `/finance/bills/${settle.invoicePublicId}/settle`}
           total={settle.total}
           reference={settle.ref}
           customer={stmt?.name ?? ""}

@@ -170,6 +170,7 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
   const [doc, setDoc] = React.useState<Doc>(initial);
   const [saving, setSaving] = React.useState(false);
   const [savedId, setSavedId] = React.useState<string | null>(publicId);
+  const [notice, setNotice] = React.useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const ccy = doc.currency || "USD";
 
   const update = (patch: (d: Doc) => void) =>
@@ -202,18 +203,24 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
 
   const save = async () => {
     setSaving(true);
+    setNotice(null);
+    const isUpdate = !!savedId;
     try {
       const payload = finalize();
       if (savedId) await apiPut(`/procurement/invoices/${savedId}`, payload);
       else { const res = await apiPost<{ publicId: string }>("/procurement/invoices", payload); setSavedId(res.publicId); }
       qc.invalidateQueries({ queryKey: ["procurement", "invoices"] });
+      setNotice({ kind: "ok", text: isUpdate ? "Invoice updated successfully." : "Invoice saved successfully." });
+      setTimeout(() => setNotice(null), 4000);
+    } catch {
+      setNotice({ kind: "err", text: "Could not save the invoice. Please try again." });
     } finally { setSaving(false); }
   };
 
   const META: [string, string][] = [
     ["Facture n° / Invoice no", "invoiceNo"], ["Date facture / date", "invoiceDate"], ["Commande n° / PO", "poNo"],
     ["Date commande / order", "orderDate"], ["Date livraison / delivery", "deliveryDate"], ["Contact", "contact"],
-    ["Incoterms 2020", "incoterms"], ["Origine / origin", "origin"], ["Devise / currency", "currency"],
+    ["Incoterms", "incoterms"], ["Origine / origin", "origin"], ["Devise / currency", "currency"],
     ["Paiement / terms", "terms"], ["Port chargement / loading", "portLoading"], ["Port déchargement / discharge", "portDischarge"],
   ];
   const BANK: [string, string][] = [
@@ -233,6 +240,17 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
           </Button>
         </div>
       </div>
+
+      {notice && (
+        <div
+          className="rounded-lg px-4 py-2.5 text-[13px] font-semibold print:hidden"
+          style={notice.kind === "ok"
+            ? { background: "#EAF7EF", color: "#2E9E6B" }
+            : { background: "#FBEAEA", color: "#C0392B" }}
+        >
+          {notice.text}
+        </div>
+      )}
 
       {/* ===== PAPER ===== */}
       <div className="invoice-paper mx-auto w-full max-w-[900px] border border-[#e2e2e2] bg-white p-8 text-[#111] shadow-erp-lg">
@@ -265,7 +283,7 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
               Karachi, le <span className="font-semibold">{doc.invoiceDate || "__ / __ / ____"}</span>
             </div>
             <div className={cn(BOX, "mt-1.5 p-3")}>
-              <span className={LBL}>Client / Buyer · Destinataire</span>
+              <span className={LBL}>Supplier</span>
               <input className={cn(FIELD, "font-bold")} value={doc.buyer?.name || ""} onChange={(e) => update((d) => { d.buyer.name = e.target.value; })} />
               <span className={cn(LBL, "mt-2")}>T.V.A. / VAT</span>
               <input className={FIELD} value={doc.buyer?.vat || ""} onChange={(e) => update((d) => { d.buyer.vat = e.target.value; })} />
@@ -340,11 +358,7 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
           </div>
         </div>
 
-        {/* certification + signatures */}
-        <p className="mt-4 text-[9.5px] italic leading-snug text-[#555]">
-          Nous certifions que la présente facture est exacte et sincère, qu&apos;elle indique le prix réel des marchandises et que celles-ci sont
-          entièrement d&apos;origine pakistanaise. · We certify that this invoice is true and correct and that all merchandise is wholly of Pakistan origin.
-        </p>
+        {/* signatures */}
         <div className="mt-6 grid grid-cols-2 gap-10">
           <div className="border-t border-[#111] pt-1 text-[10px] italic text-[#555]">Établi par · Prepared by — lieu &amp; date</div>
           <div className="border-t border-[#111] pt-1 text-[10px] italic text-[#555]">Signature autorisée &amp; cachet · Authorised signature &amp; stamp</div>
