@@ -83,8 +83,8 @@ export const MODULES: ModuleDef[] = [
       { id: "overview", label: "Overview", kind: "dashboard" },
       { id: "customerledger", label: "Customer ledger", kind: "list" },
       { id: "supplierledger", label: "Supplier ledger", kind: "list" },
-      { id: "profitability", label: "Profitability", kind: "dashboard" },
-      { id: "reports", label: "Reports", kind: "dashboard" },
+      { id: "cashledger", label: "Cash ledger", kind: "dashboard" },
+      { id: "bankledger", label: "Bank ledger", kind: "dashboard" },
     ],
   },
   {
@@ -114,6 +114,14 @@ export const MODULES: ModuleDef[] = [
     tabs: [
       { id: "shipments", label: "Shipments", kind: "list" },
       { id: "carriers", label: "Carriers", kind: "list" },
+    ],
+  },
+  {
+    id: "orderhistory",
+    icon: "History",
+    label: "Order History",
+    tabs: [
+      { id: "shipped", label: "Shipped Orders", kind: "list" },
     ],
   },
   {

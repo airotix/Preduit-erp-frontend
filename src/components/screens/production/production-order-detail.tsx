@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiGet, apiPost, USE_BACKEND } from "@/lib/api-client";
 import { FinanceFormSheet, type FinanceField } from "@/components/screens/finance/finance-form-sheet";
 import { ProductionStartModal } from "@/components/screens/production/production-start-modal";
+import { useModuleAccess } from "@/lib/module-access";
 import type { Tone } from "@/lib/tone";
 
 interface Stage {
@@ -59,13 +60,15 @@ const stepColor = (s: Stage) =>
 
 /** One style's production timeline (stepper + stage cards), or a start prompt. */
 function LineTimeline({
-  line, busy, onAct, onModal, onStart,
+  line, busy, onAct, onModal, onStart, canWrite, writeReason,
 }: {
   line: LineTL;
   busy: boolean;
   onAct: (id: string, action: string, body?: Record<string, unknown>) => void;
   onModal: (m: { kind: "assign" | "notes" | "extend"; id: string }) => void;
   onStart: () => void;
+  canWrite: boolean;
+  writeReason?: string | null;
 }) {
   if (!line.started) {
     return (
@@ -76,7 +79,8 @@ function LineTimeline({
           Finishing → Packed) for <span className="font-semibold">{line.name}</span>. Each item
           runs on its own timeline.
         </p>
-        <Button variant="navy" size="sm" onClick={onStart}>
+        <Button variant="navy" size="sm" onClick={canWrite ? onStart : undefined}
+          disabled={!canWrite} title={!canWrite ? writeReason ?? undefined : undefined}>
           <Play size={15} strokeWidth={2} /> Start production
         </Button>
       </Card>
@@ -132,39 +136,48 @@ function LineTimeline({
                   <ToneBadge tone={STATUS_TONE[s.status] ?? "neutral"} dot={false}>{s.status}</ToneBadge>
                   {s.overdue && <ToneBadge tone="red" dot={false}>Overdue</ToneBadge>}
                 </div>
-                <div className="mt-1 flex flex-wrap gap-x-6 gap-y-0.5 text-[13px] text-muted-foreground">
+                <div className="mt-1 flex flex-wrap gap-x-6 gap-y-0.5 text-[13px] font-bold text-foreground">
                   <span>Duration: {s.duration_days} days</span>
                   <span>Start: {s.start}</span>
                   <span>End: {s.end}</span>
                   <span>Worker: {s.worker}</span>
                 </div>
-                {s.notes && <div className="mt-1 text-[12px] italic text-muted-foreground">“{s.notes}”</div>}
+                {s.notes && <div className="mt-1 text-[12px] font-bold italic text-foreground">“{s.notes}”</div>}
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {s.status === "In Progress" && (
-                  <Button size="sm" className="h-8" disabled={busy}
+                  <Button size="sm" className="h-8" disabled={busy || !canWrite}
+                    title={!canWrite ? writeReason ?? undefined : undefined}
                     onClick={() => onAct(s.public_id, "complete")}>
                     <CheckCircle2 size={14} strokeWidth={2} /> Complete
                   </Button>
                 )}
                 {s.status === "Pending" && (
-                  <Button size="sm" className="h-8" disabled={busy}
+                  <Button size="sm" className="h-8" disabled={busy || !canWrite}
+                    title={!canWrite ? writeReason ?? undefined : undefined}
                     onClick={() => onAct(s.public_id, "start")}>
                     <Play size={14} strokeWidth={2} /> Start
                   </Button>
                 )}
                 {s.status !== "Completed" && (
                   <>
-                    <Button size="sm" variant="outline" className="h-8" onClick={() => onModal({ kind: "assign", id: s.public_id })}>
+                    <Button size="sm" variant="outline" className="h-8" disabled={!canWrite}
+                      title={!canWrite ? writeReason ?? undefined : undefined}
+                      onClick={() => onModal({ kind: "assign", id: s.public_id })}>
                       <User size={14} strokeWidth={2} /> Assign
                     </Button>
-                    <Button size="sm" variant="outline" className="h-8" onClick={() => onModal({ kind: "notes", id: s.public_id })}>
+                    <Button size="sm" variant="outline" className="h-8" disabled={!canWrite}
+                      title={!canWrite ? writeReason ?? undefined : undefined}
+                      onClick={() => onModal({ kind: "notes", id: s.public_id })}>
                       <MessageSquare size={14} strokeWidth={2} /> Notes
                     </Button>
-                    <Button size="sm" variant="outline" className="h-8" onClick={() => onModal({ kind: "extend", id: s.public_id })}>
+                    <Button size="sm" variant="outline" className="h-8" disabled={!canWrite}
+                      title={!canWrite ? writeReason ?? undefined : undefined}
+                      onClick={() => onModal({ kind: "extend", id: s.public_id })}>
                       <Clock size={14} strokeWidth={2} /> Extend
                     </Button>
-                    <Button size="sm" variant="outline" className="h-8" disabled={busy}
+                    <Button size="sm" variant="outline" className="h-8" disabled={busy || !canWrite}
+                      title={!canWrite ? writeReason ?? undefined : undefined}
                       onClick={() => onAct(s.public_id, "resolve")}>
                       <AlertCircle size={14} strokeWidth={2} /> Resolve
                     </Button>
@@ -186,6 +199,7 @@ export function ProductionOrderDetail({
   backHref: string;
 }) {
   const qc = useQueryClient();
+  const { canWrite, reason: writeReason } = useModuleAccess("production");
   const [startOpen, setStartOpen] = React.useState(false);
   // null → start the whole order (all lines); otherwise start just this line.
   const [startLineId, setStartLineId] = React.useState<string | null>(null);
@@ -243,13 +257,11 @@ export function ProductionOrderDetail({
                   <ToneBadge tone={data.statusTone}>{data.statusLabel}</ToneBadge>
                 </div>
               </div>
-              {!data.started && (
-                <Button variant="navy" size="sm" onClick={() => { setStartLineId(null); setStartOpen(true); }}>
-                  <Play size={15} strokeWidth={2} /> Start production
-                </Button>
-              )}
+              {/* Production is started per item, from each item's tab below —
+                  no order-level "Start production" here. */}
               {data.canInspect && (
-                <Button variant="navy" size="sm" disabled={inspect.isPending}
+                <Button variant="navy" size="sm" disabled={inspect.isPending || !canWrite}
+                        title={!canWrite ? writeReason ?? undefined : undefined}
                         onClick={() => inspect.mutate()}>
                   <CheckCircle2 size={15} strokeWidth={2} />
                   {inspect.isPending ? "Sending…" : "Send for inspection"}
@@ -333,6 +345,8 @@ export function ProductionOrderDetail({
                   onAct={onAct}
                   onModal={setModal}
                   onStart={() => { setStartLineId(ln.publicId); setStartOpen(true); }}
+                  canWrite={canWrite}
+                  writeReason={writeReason}
                 />
               </TabsContent>
             ))}

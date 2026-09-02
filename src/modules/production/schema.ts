@@ -10,6 +10,7 @@ export const bomLineSchema = z.object({
   component: z.string().min(1, "Required"),
   style: z.string().min(1, "Required"),
   material: z.string().min(1, "Required"),
+  qtyPerUnit: z.string().min(1, "Required"),
   cost: z.number({ invalid_type_error: "Must be a number" }).positive("Must be greater than 0"),
 });
 

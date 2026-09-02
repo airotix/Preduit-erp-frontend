@@ -7,6 +7,7 @@ import { detailTypeFor } from "@/config/detail-types";
 import { fetchScreen } from "@/modules/registry";
 import { RecordDetailPage } from "@/components/screens/record-detail-page";
 import { ProductionOrderDetail } from "@/components/screens/production/production-order-detail";
+import { OrderHistoryDetail } from "@/components/screens/order-history/order-history-detail";
 import { apiGet, USE_BACKEND } from "@/lib/api-client";
 import type { Cell, ScreenConfig } from "@/lib/screen-types";
 import type { DetailModel } from "@/modules/detail/detail-data";
@@ -103,6 +104,16 @@ export default function RecordPage({
     return (
       <div className="erp-scroll flex-1 overflow-y-auto px-[26px] pb-7 pt-[18px]">
         <ProductionOrderDetail publicId={recordId} backHref={`/${mod!.id}/${tab!.id}`} />
+      </div>
+    );
+  }
+
+  // Order History rows open a cross-module drill-down (Order/Production/
+  // Quality/Shipment/Finance tabs) instead of the generic record detail.
+  if (mod!.id === "orderhistory" && tab!.id === "shipped" && recordId) {
+    return (
+      <div className="erp-scroll flex-1 overflow-y-auto px-[26px] pb-7 pt-[18px]">
+        <OrderHistoryDetail publicId={recordId} backHref={`/${mod!.id}/${tab!.id}`} />
       </div>
     );
   }

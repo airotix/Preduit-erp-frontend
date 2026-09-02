@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { AiHeader } from "@/components/screens/ai/ai-header";
 import { SELECT_CLS } from "@/components/screens/ai/ai-shared";
+import { useModuleAccess } from "@/lib/module-access";
 import {
   fetchAiSeasonConfig, saveAiSeasonConfig, fetchAiIngestStatus, runAiIngest,
   fetchAiForecastJob, refreshAiForecast, fetchAiBacktestStatus, runAiBacktest,
@@ -22,6 +23,7 @@ const money = (n: number, cur: string) => `${cur} ${Math.round(n).toLocaleString
 
 export function AiSetup() {
   const router = useRouter();
+  const { canWrite, reason: writeReason } = useModuleAccess("ai");
   const qc = useQueryClient();
 
   const [step, setStep] = React.useState<1 | 2>(1);
@@ -206,7 +208,8 @@ export function AiSetup() {
                   className={cn("cursor-pointer p-6 text-center transition-all hover:border-brand-orange/50",
                     !engineLive && "cursor-not-allowed opacity-60",
                     done.has(2) && "border-[#2E9E6B] bg-[#EAF7EF]/40")}
-                  onClick={() => engineLive && busy !== "ingest" && doIngest()}
+                  onClick={() => engineLive && canWrite && busy !== "ingest" && doIngest()}
+                  title={!canWrite ? writeReason ?? undefined : undefined}
                 >
                   <div className="flex flex-col items-center">
                     {busy === "ingest" ? <Loader2 size={36} className="mb-3 animate-spin text-brand-orange" />
@@ -227,7 +230,8 @@ export function AiSetup() {
                     <p>Status: <strong className="text-foreground">{fjob.data?.status ?? "idle"}</strong></p>
                     <p>Last run: <strong className="text-foreground">{fjob.data?.lastRun ? new Date(fjob.data.lastRun).toLocaleString() : "—"}</strong></p>
                   </div>
-                  <Button variant="outline" onClick={doRefresh} disabled={!engineLive || busy === "forecast" || fjob.data?.status === "running"}>
+                  <Button variant="outline" onClick={doRefresh} disabled={!engineLive || !canWrite || busy === "forecast" || fjob.data?.status === "running"}
+                    title={!canWrite ? writeReason ?? undefined : undefined}>
                     {busy === "forecast" || fjob.data?.status === "running" ? <><Loader2 size={15} className="animate-spin" /> Running…</> : <><RefreshCw size={15} /> Refresh forecasts</>}
                   </Button>
                 </div>
@@ -241,7 +245,8 @@ export function AiSetup() {
                     <p>Status: <strong className="text-foreground">{btest.data?.status ?? "idle"}</strong></p>
                     {btest.data?.completedAt && <p>Completed: <strong className="text-foreground">{new Date(btest.data.completedAt).toLocaleString()}</strong></p>}
                   </div>
-                  <Button variant="outline" onClick={doBacktest} disabled={!engineLive || busy === "backtest" || btest.data?.status === "running"}>
+                  <Button variant="outline" onClick={doBacktest} disabled={!engineLive || !canWrite || busy === "backtest" || btest.data?.status === "running"}
+                    title={!canWrite ? writeReason ?? undefined : undefined}>
                     {busy === "backtest" || btest.data?.status === "running" ? <><Loader2 size={15} className="animate-spin" /> Running…</> : <><RefreshCw size={15} /> Run backtest</>}
                   </Button>
                 </div>
@@ -254,7 +259,8 @@ export function AiSetup() {
         <div className="flex items-center justify-between">
           <Button variant="outline" onClick={() => setStep(1)} disabled={step === 1}>Back</Button>
           {step === 1 ? (
-            <Button onClick={saveAndContinue} disabled={!step1Valid || saving}>
+            <Button onClick={saveAndContinue} disabled={!step1Valid || saving || !canWrite}
+              title={!canWrite ? writeReason ?? undefined : undefined}>
               {saving ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : <>Save & continue <ArrowRight size={15} /></>}
             </Button>
           ) : (

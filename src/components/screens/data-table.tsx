@@ -4,11 +4,14 @@ import * as React from "react";
 import {
   flexRender,
   getCoreRowModel,
+  getFacetedRowModel,
+  getFacetedUniqueValues,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
+  type ColumnFiltersState,
   type SortingState,
 } from "@tanstack/react-table";
 import {
@@ -33,15 +36,119 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import type { Row } from "@/lib/screen-types";
+
+/**
+ * Resolve each declared filter facet (e.g. "Category", "Status") to a
+ * filterable column. A facet either matches a visible column by label
+ * (case-insensitive), or — for facets with no dedicated column (e.g.
+ * catalog products' "Category"/"Season", which only live in `records`) —
+ * gets a hidden synthetic column that reads straight from `records`.
+ * Facets with neither a matching column nor a matching record field are
+ * dropped rather than rendered as a non-functional control.
+ */
+function useFacetColumns(
+  filters: string[],
+  columns: ColumnDef<Row>[],
+  records?: Record<string, unknown>[]
+) {
+  return React.useMemo(() => {
+    const effective: ColumnDef<Row>[] = columns.map((c) => ({ ...c }));
+    const facets: { label: string; id: string }[] = [];
+    const hiddenIds: string[] = [];
+
+    filters.forEach((label) => {
+      const key = label.toLowerCase();
+      const idx = effective.findIndex(
+        (c) =>
+          ((c.meta as { label?: string } | undefined)?.label ?? "").toLowerCase() === key
+      );
+      if (idx >= 0) {
+        const col = effective[idx] as ColumnDef<Row> & { id?: string };
+        const id = col.id ?? `${idx}`;
+        effective[idx] = { ...col, id, filterFn: "equalsString" };
+        facets.push({ label, id });
+        return;
+      }
+      const hasRecordKey = !!records?.some(
+        (r) => r && Object.prototype.hasOwnProperty.call(r, key)
+      );
+      if (hasRecordKey) {
+        const id = `__filter_${key}`;
+        effective.push({
+          id,
+          accessorFn: (row: Row, index: number) => {
+            const raw = records?.[index]?.[key];
+            if (raw == null || raw === "") return [];
+            return Array.isArray(raw) ? raw.map(String) : [String(raw)];
+          },
+          filterFn: "arrIncludes",
+          enableGlobalFilter: false,
+          enableSorting: false,
+        });
+        hiddenIds.push(id);
+        facets.push({ label, id });
+      }
+      // else: no data source for this facet — silently omit its chip.
+    });
+
+    return { effectiveColumns: effective, facets, hiddenIds };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters, columns, records]);
+}
+
+/** One filter-facet dropdown chip — real options, sourced from the data. */
+const ALL = "__all__";
+function FilterChip({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (v: string) => void;
+}) {
+  return (
+    <Select value={value || ALL} onValueChange={(v) => onChange(v === ALL ? "" : v)}>
+      <SelectTrigger className="flex h-auto w-auto items-center gap-1.5 rounded-full border border-border/70 bg-white px-3.5 py-2 text-[13px] font-semibold text-[#4A4F61] hover:bg-muted focus:ring-1 focus:ring-offset-0 [&>span]:line-clamp-1">
+        <SlidersHorizontal size={14} strokeWidth={1.9} />
+        <span className="truncate">{value ? `${label}: ${value}` : label}</span>
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={ALL}>All {label.toLowerCase()}</SelectItem>
+        {options.map((o) => (
+          <SelectItem key={o} value={o}>
+            {o}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 interface DataTableProps {
   columns: ColumnDef<Row>[];
   data: Row[];
+  /** Raw field values parallel to `data`, used as a fallback data source for
+   *  filter facets that have no dedicated visible column (e.g. Category on
+   *  catalog products). */
+  records?: Record<string, unknown>[];
   searchPlaceholder?: string;
   filters?: string[];
   actionLabel?: string;
   onAction?: () => void;
+  /** Show the action button greyed out (role has view-only access) instead of
+   *  omitting it — `actionDisabledReason` becomes its hover tooltip. */
+  actionDisabled?: boolean;
+  actionDisabledReason?: string;
   onRowClick?: (row: Row) => void;
   /** When provided, each row shows an Edit button that calls back with the
    *  row's original data index (aligned with the backend ids/records arrays). */
@@ -63,10 +170,13 @@ interface DataTableProps {
 export function DataTable({
   columns,
   data,
+  records,
   searchPlaceholder = "Search…",
   filters = [],
   actionLabel = "New",
   onAction,
+  actionDisabled,
+  actionDisabledReason,
   onRowClick,
   onEditRow,
   onStartRow,
@@ -81,18 +191,26 @@ export function DataTable({
   const hasActions = !!onEditRow || !!onStatusChange || !!onStartRow || !!onShipRow;
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = React.useState("");
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+  const { effectiveColumns, facets, hiddenIds } = useFacetColumns(filters, columns, records);
 
   const table = useReactTable({
     data,
-    columns,
-    state: { sorting, globalFilter },
+    columns: effectiveColumns,
+    state: { sorting, globalFilter, columnFilters },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
+    onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    getFacetedRowModel: getFacetedRowModel(),
+    getFacetedUniqueValues: getFacetedUniqueValues(),
     getPaginationRowModel: getPaginationRowModel(),
-    initialState: { pagination: { pageSize: 8 } },
+    initialState: {
+      pagination: { pageSize: 8 },
+      columnVisibility: Object.fromEntries(hiddenIds.map((id) => [id, false])),
+    },
   });
 
   const rowCount = table.getFilteredRowModel().rows.length;
@@ -112,21 +230,33 @@ export function DataTable({
           />
         </div>
 
-        {filters.map((f) => (
-          <button
-            key={f}
-            className="flex items-center gap-1.5 rounded-full border border-border/70 bg-white px-3.5 py-2 text-[13px] font-semibold text-[#4A4F61] transition-colors hover:bg-muted"
-          >
-            <SlidersHorizontal size={14} strokeWidth={1.9} />
-            {f}
-            <ChevronDown size={14} className="opacity-60" />
-          </button>
-        ))}
+        {facets.map(({ label, id }) => {
+          const column = table.getColumn(id);
+          if (!column) return null;
+          const options = Array.from(column.getFacetedUniqueValues().keys())
+            .filter((v): v is string => typeof v === "string" && v !== "")
+            .sort((a, b) => a.localeCompare(b));
+          if (options.length === 0) return null;
+          return (
+            <FilterChip
+              key={id}
+              label={label}
+              value={(column.getFilterValue() as string | undefined) ?? ""}
+              options={options}
+              onChange={(v) => column.setFilterValue(v || undefined)}
+            />
+          );
+        })}
 
         <div className="flex-1" />
 
-        {onAction && (
-          <Button size="sm" onClick={onAction}>
+        {(onAction || actionDisabled) && (
+          <Button
+            size="sm"
+            onClick={onAction}
+            disabled={actionDisabled}
+            title={actionDisabled ? actionDisabledReason : undefined}
+          >
             <Plus size={16} strokeWidth={2.2} />
             {actionLabel}
           </Button>

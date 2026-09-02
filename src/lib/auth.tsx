@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { setTokens, getAccessToken, getRefreshToken, clearTokens } from "@/lib/auth-token";
+import { setTokens, getAccessToken, clearTokens } from "@/lib/auth-token";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api/v1";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api/v1";
 
 export interface AuthUser {
   userId: string | null;
@@ -18,6 +18,9 @@ export interface AuthUser {
     name: string | null;
     currency?: string | null;
     setupComplete?: boolean;
+    /** Module ids chosen in the setup wizard. null/undefined = not set yet
+     *  (pre-existing tenants) — treat as "every module enabled". */
+    enabledModules?: string[] | null;
   };
 }
 
@@ -40,15 +43,19 @@ export function postAuthPath(user: AuthUser | null): string {
 interface AuthState {
   user: AuthUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<AuthUser>;
+  login: (email: string, password: string, remember?: boolean, businessName?: string) => Promise<AuthUser>;
   register: (p: RegisterPayload) => Promise<AuthUser>;
   verifyEmail: (email: string, code: string) => Promise<AuthUser>;
   resendVerification: (email: string) => Promise<{ devCode?: string }>;
   acceptInvite: (token: string, name: string, password: string) => Promise<AuthUser>;
   completeSetup: (p: CompanySetupPayload) => Promise<AuthUser>;
+  listBusinesses: () => Promise<Business[]>;
+  switchBusiness: (businessId: string) => Promise<AuthUser>;
   logout: () => void;
   hasPermission: (perm: string) => boolean;
 }
+
+export interface Business { businessId: string; name: string; role: string }
 
 export interface RegisterPayload {
   companyName: string;
@@ -68,6 +75,7 @@ async function authFetch<T>(path: string, opts: RequestInit = {}, token?: string
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(opts.headers as Record<string, string> | undefined),
     },
+    credentials: "include",   // carry the HttpOnly refresh cookie
     cache: "no-store",
   });
   if (!res.ok) {
@@ -99,17 +107,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const me = await authFetch<AuthUser>("/auth/me", {}, access);
         if (!cancelled) setUser(me);
       } catch {
-        const refresh = getRefreshToken();
-        if (refresh) {
-          try {
-            const r = await authFetch<{ accessToken: string; refreshToken?: string; user: AuthUser }>(
-              "/auth/refresh", { method: "POST", body: JSON.stringify({ refreshToken: refresh }) });
-            setTokens(r.accessToken, r.refreshToken);   // rotated refresh token
-            if (!cancelled) setUser(r.user);
-          } catch {
-            clearTokens();
-          }
-        } else {
+        // Access token stale/absent — try a refresh. The HttpOnly cookie (if
+        // any) proves identity; nothing to read from JS.
+        try {
+          const r = await authFetch<{ accessToken: string; user: AuthUser }>(
+            "/auth/refresh", { method: "POST" });
+          setTokens(r.accessToken);
+          if (!cancelled) setUser(r.user);
+        } catch {
           clearTokens();
         }
       } finally {
@@ -119,10 +124,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, []);
 
-  const login = React.useCallback(async (email: string, password: string) => {
+  const login = React.useCallback(async (email: string, password: string, remember = true, businessName?: string): Promise<AuthUser> => {
     const res = await fetch(`${API_BASE}/auth/login`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }), cache: "no-store",
+      body: JSON.stringify({ email, password, businessName, remember }),
+      credentials: "include", cache: "no-store",
     });
     if (res.status === 423) {
       // Account locked — carry the unlock time so the UI can redirect to /locked.
@@ -137,24 +143,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try { const j = await res.json(); if (typeof j?.detail === "string") detail = j.detail; } catch { /* ignore */ }
       throw new Error(detail);
     }
-    const r = (await res.json()) as { accessToken: string; refreshToken: string; user: AuthUser };
-    setTokens(r.accessToken, r.refreshToken);
+    const r = (await res.json()) as { accessToken: string; user: AuthUser };
+    // "Keep me signed in" unchecked → session-only storage for the access token
+    // (the refresh cookie's lifetime is set server-side from the same flag).
+    setTokens(r.accessToken, remember);
+    setUser(r.user);
+    return r.user;
+  }, []);
+
+  const listBusinesses = React.useCallback(async () => {
+    const r = await authFetch<{ businesses: Business[] }>("/auth/businesses", {}, getAccessToken());
+    return r.businesses;
+  }, []);
+
+  const switchBusiness = React.useCallback(async (businessId: string) => {
+    const r = await authFetch<{ accessToken: string; user: AuthUser }>(
+      "/auth/switch-business", { method: "POST", body: JSON.stringify({ businessId }) }, getAccessToken());
+    setTokens(r.accessToken);
     setUser(r.user);
     return r.user;
   }, []);
 
   const register = React.useCallback(async (p: RegisterPayload) => {
-    const r = await authFetch<{ accessToken: string; refreshToken: string; user: AuthUser }>(
+    const r = await authFetch<{ accessToken: string; user: AuthUser }>(
       "/auth/register-company", { method: "POST", body: JSON.stringify(p) });
-    setTokens(r.accessToken, r.refreshToken);
+    setTokens(r.accessToken);
     setUser(r.user);
     return r.user;
   }, []);
 
   const verifyEmail = React.useCallback(async (email: string, code: string) => {
-    const r = await authFetch<{ accessToken: string; refreshToken: string; user: AuthUser }>(
+    const r = await authFetch<{ accessToken: string; user: AuthUser }>(
       "/auth/verify-email", { method: "POST", body: JSON.stringify({ email, code }) });
-    setTokens(r.accessToken, r.refreshToken);
+    setTokens(r.accessToken);
     setUser(r.user);
     return r.user;
   }, []);
@@ -165,9 +186,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const acceptInvite = React.useCallback(async (token: string, name: string, password: string) => {
-    const r = await authFetch<{ accessToken: string; refreshToken: string; user: AuthUser }>(
+    const r = await authFetch<{ accessToken: string; user: AuthUser }>(
       "/auth/invitations/accept", { method: "POST", body: JSON.stringify({ token, name, password }) });
-    setTokens(r.accessToken, r.refreshToken);
+    setTokens(r.accessToken);
     setUser(r.user);
     return r.user;
   }, []);
@@ -180,14 +201,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = React.useCallback(() => {
-    const refresh = getRefreshToken();
-    // Best-effort server-side revocation; don't block the UI on it.
-    if (refresh) {
-      void fetch(`${API_BASE}/auth/logout`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken: refresh }), keepalive: true,
-      }).catch(() => { /* ignore */ });
-    }
+    // Best-effort server-side revocation (reads + clears the HttpOnly cookie);
+    // don't block the UI on it.
+    void fetch(`${API_BASE}/auth/logout`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      credentials: "include", keepalive: true,
+    }).catch(() => { /* ignore */ });
     clearTokens();
     setUser(null);
     router.push("/login");
@@ -202,8 +221,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = React.useMemo(
-    () => ({ user, loading, login, register, verifyEmail, resendVerification, acceptInvite, completeSetup, logout, hasPermission }),
-    [user, loading, login, register, verifyEmail, resendVerification, acceptInvite, completeSetup, logout, hasPermission]
+    () => ({ user, loading, login, register, verifyEmail, resendVerification, acceptInvite,
+             completeSetup, listBusinesses, switchBusiness, logout, hasPermission }),
+    [user, loading, login, register, verifyEmail, resendVerification, acceptInvite,
+     completeSetup, listBusinesses, switchBusiness, logout, hasPermission]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

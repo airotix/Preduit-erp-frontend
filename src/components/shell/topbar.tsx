@@ -18,6 +18,7 @@ import {
   SheetClose,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { CopilotPanel } from "@/components/shell/copilot-panel";
 
 export function Topbar() {
   const pathname = usePathname();
@@ -32,6 +33,7 @@ export function Topbar() {
 
   const [notifOpen, setNotifOpen] = React.useState(false);
   const [quickOpen, setQuickOpen] = React.useState(false);
+  const [copilotOpen, setCopilotOpen] = React.useState(false);
   const unread = NOTIFICATIONS.filter((n) => n.unread).length;
 
   return (
@@ -86,10 +88,14 @@ export function Topbar() {
           )}
         </button>
 
-        <button className="flex h-[38px] items-center gap-1.5 rounded-xl bg-gradient-to-br from-brand-orange to-brand-orange-d px-4 text-[13px] font-bold text-white transition-[filter] hover:brightness-95">
+        <button
+          onClick={() => setCopilotOpen(true)}
+          className="flex h-[38px] items-center gap-1.5 rounded-xl bg-gradient-to-br from-brand-orange to-brand-orange-d px-4 text-[13px] font-bold text-white transition-[filter] hover:brightness-95">
           <Sparkles size={16} strokeWidth={2} /> Copilot
         </button>
       </div>
+
+      <CopilotPanel open={copilotOpen} onOpenChange={setCopilotOpen} />
 
       {/* Quick create */}
       <Sheet open={quickOpen} onOpenChange={setQuickOpen}>

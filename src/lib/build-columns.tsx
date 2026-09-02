@@ -27,6 +27,6 @@ export function buildColumns(columns: ColumnDef[]): TanstackColumnDef<Row>[] {
     ),
     enableSorting: true,
     sortingFn: "alphanumeric",
-    meta: { align: col.align ?? "left", width: col.w },
+    meta: { align: col.align ?? "left", width: col.w, label: col.label },
   }));
 }

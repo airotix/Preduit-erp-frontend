@@ -123,7 +123,10 @@ export function OrderPaymentModal({
               min={0}
               max={total}
               step="any"
-              value={amount}
+              // Show empty (with a 0 placeholder) instead of a literal "0", so
+              // typing a value doesn't produce a leading zero like "012".
+              value={amount === 0 ? "" : amount}
+              placeholder="0.00"
               disabled={status !== "partial"}
               onChange={(e) => setAmount(Math.max(0, Math.min(Number(e.target.value) || 0, total)))}
             />

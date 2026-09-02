@@ -6,12 +6,15 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Store, Image as ImageIcon, Building2, Tag, MapPin, Phone, Globe, ShieldCheck,
   Linkedin, Instagram, Facebook, Twitter, CheckCircle2, Loader2, BadgeCheck, ArrowLeft,
+  Shirt, Layers, ShoppingCart, Truck, Landmark, TrendingUp, Package, Share2, Blocks,
+  type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import {
   getCompanyProfile, saveCompanyProfile, uploadCompanyImage, fetchImageObjectUrl,
   type CompanyProfile,
 } from "@/lib/company-profile-api";
+import { fieldFormatError } from "@/lib/validators";
 
 // ---- theme tokens (matched to the Company Profile mockups) ----------------
 const INPUT =
@@ -34,11 +37,30 @@ const SECTIONS = [
   { id: "logo", label: "Logo & cover", icon: ImageIcon },
   { id: "identity", label: "Company identity", icon: Building2 },
   { id: "industry", label: "Industry & type", icon: Tag },
+  { id: "modules", label: "Modules", icon: Blocks },
   { id: "founded", label: "Founded & HQ", icon: MapPin },
   { id: "contact", label: "Contact info", icon: Phone },
   { id: "social", label: "Website & social", icon: Globe },
   { id: "legal", label: "Legal & registration", icon: ShieldCheck },
+  { id: "banking", label: "Banking details", icon: Landmark },
 ];
+
+/** Same module ids as config/navigation.ts / the setup wizard's Modules
+ *  step — kept in sync deliberately so a toggle here maps to a real module. */
+interface ModuleChoice { key: string; label: string; desc: string; icon: LucideIcon; core?: boolean }
+const MODULE_CHOICES: ModuleChoice[] = [
+  { key: "catalog", label: "Catalog", desc: "Products, variants, pricing", icon: Shirt, core: true },
+  { key: "inventory", label: "Inventory", desc: "Stock levels, transfers, stock takes", icon: Layers, core: true },
+  { key: "sales", label: "Sales & Orders", desc: "Tills, orders, returns", icon: ShoppingCart, core: true },
+  { key: "procurement", label: "Procurement", desc: "Suppliers, POs, goods received", icon: Truck },
+  { key: "finance", label: "Finance", desc: "Ledger, tax, payables", icon: Landmark },
+  { key: "production", label: "Production", desc: "Work orders, BOMs, assembly", icon: TrendingUp },
+  { key: "quality", label: "Quality", desc: "Inspections, holds, returns to vendor", icon: BadgeCheck },
+  { key: "shipments", label: "Shipments", desc: "Dispatch, carriers, tracking", icon: Package },
+  { key: "commerce", label: "Channels", desc: "Online store, marketplaces, wholesale", icon: Globe },
+  { key: "ai", label: "Demand Planning", desc: "Forecasts, replenishment suggestions", icon: Share2 },
+];
+const ALL_MODULE_KEYS = MODULE_CHOICES.map((m) => m.key);
 
 const PROGRESS_KEYS: (keyof CompanyProfile)[] = [
   "companyName", "about", "industry", "businessType", "salesModel", "founded", "street",
@@ -64,6 +86,7 @@ export function CompanyProfilePage() {
   const [preview, setPreview] = React.useState<{ logo?: string | null; cover?: string | null }>({});
   const [active, setActive] = React.useState("logo");
   const [saving, setSaving] = React.useState(false);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
   const [imgError, setImgError] = React.useState<string | null>(null);
   const fetchedRef = React.useRef<string>("");
 
@@ -85,6 +108,16 @@ export function CompanyProfilePage() {
 
   const set = <K extends keyof CompanyProfile>(k: K, v: CompanyProfile[K]) =>
     setForm((f) => (f ? { ...f, [k]: v } : f));
+
+  // null/undefined enabledModules means it was never set — treat as
+  // "everything currently on" so opening this section shows the status quo.
+  const selectedModules = form?.enabledModules ?? ALL_MODULE_KEYS;
+  const toggleModuleChoice = (m: ModuleChoice) => {
+    if (m.core || !canEdit) return;
+    const next = new Set(selectedModules);
+    next.has(m.key) ? next.delete(m.key) : next.add(m.key);
+    set("enabledModules", Array.from(next));
+  };
 
   const dirty = !!form && !!saved && JSON.stringify(form) !== JSON.stringify(saved);
 
@@ -112,6 +145,18 @@ export function CompanyProfilePage() {
 
   const save = async () => {
     if (!form) return;
+    // Validate contact/web formats before saving.
+    const checks: [string, string][] = [
+      ["businessEmail", form.businessEmail], ["phone", form.phone],
+      ["supportLine", form.supportLine], ["website", form.website],
+      ["linkedin", form.linkedin], ["instagram", form.instagram],
+      ["facebook", form.facebook], ["x", form.x],
+    ];
+    for (const [n, v] of checks) {
+      const msg = fieldFormatError(n, v);
+      if (msg) { setSaveError(`${msg}`); setActive(/mail|phone|support/.test(n) ? "contact" : "social"); return; }
+    }
+    setSaveError(null);
     setSaving(true);
     try {
       const res = await saveCompanyProfile(form);
@@ -280,6 +325,39 @@ export function CompanyProfilePage() {
             </div>
           </section>
 
+          {/* Modules */}
+          <section id="sec-modules" className={CARD}>
+            <h2 className={H}>Modules</h2>
+            <p className={SUB}>
+              Turn on what you use today — this controls what shows up in the sidebar. Can be changed anytime.
+            </p>
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {MODULE_CHOICES.map((m) => {
+                const on = selectedModules.includes(m.key);
+                const Icon = m.icon;
+                return (
+                  <button key={m.key} type="button" disabled={m.core || !canEdit}
+                          onClick={() => toggleModuleChoice(m)}
+                          className={"flex items-start gap-3 rounded-[14px] border p-4 text-left transition-colors " +
+                            (on ? "border-[#F58220] bg-[#FEF4EA]" : "border-[#e6e3da] bg-white hover:border-[#d9d4c8]") +
+                            (m.core || !canEdit ? " cursor-default" : " cursor-pointer")}>
+                    <span className={"mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] " +
+                      (on ? "bg-[#F58220]/15 text-[#EA6C18]" : "bg-[#f1efe8] text-[#9a948a]")}>
+                      <Icon size={18} strokeWidth={2} />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="flex items-center gap-2">
+                        <span className="text-[14px] font-extrabold text-[#211f1c]">{m.label}</span>
+                        {m.core && <span className="text-[10px] font-bold tracking-[0.12em] text-[#b6ad9e]">CORE</span>}
+                      </span>
+                      <span className="mt-0.5 block text-[12.5px] text-[#8a8579]">{m.desc}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
           {/* Founded & HQ */}
           <section id="sec-founded" className={CARD}>
             <h2 className={H}>Founded &amp; headquarters</h2>
@@ -373,6 +451,26 @@ export function CompanyProfilePage() {
               )}
             </div>
           </section>
+
+          {/* Banking details */}
+          <section id="sec-banking" className={CARD}>
+            <h2 className={H}>Banking details</h2>
+            <p className={SUB}>Your company&apos;s remittance account. These appear in the &ldquo;Remit to&rdquo; block on every sales invoice.</p>
+            <div className="mt-5 space-y-4">
+              <div><label className={LABEL}>Bank name</label><input className={INPUT} placeholder="Meezan Bank Limited" value={form.bankName} onChange={(e) => set("bankName", e.target.value)} readOnly={!canEdit} /></div>
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <div><label className={LABEL}>Account number</label><input className={`${INPUT} font-mono`} placeholder="0123-4567890-01" value={form.bankAccount} onChange={(e) => set("bankAccount", e.target.value)} readOnly={!canEdit} /></div>
+                <div><label className={LABEL}>IBAN</label><input className={`${INPUT} font-mono`} placeholder="PK00 MEZN 0000 0000 0000 0000" value={form.bankIban} onChange={(e) => set("bankIban", e.target.value)} readOnly={!canEdit} /></div>
+              </div>
+              <div className="sm:w-1/2 sm:pr-2.5"><label className={LABEL}>SWIFT / BIC</label><input className={`${INPUT} font-mono`} placeholder="MEZNPKKA" value={form.bankSwift} onChange={(e) => set("bankSwift", e.target.value)} readOnly={!canEdit} /></div>
+              {!form.bankName.trim() && (
+                <div className="flex items-start gap-2.5 rounded-[12px] bg-[#FEF4EA] px-4 py-3.5 text-[13px] leading-relaxed text-[#B5691B]">
+                  <Landmark size={16} className="mt-0.5 shrink-0" />
+                  <p>Add your bank details so they auto-fill the &ldquo;Remit to&rdquo; block on customer invoices.</p>
+                </div>
+              )}
+            </div>
+          </section>
         </div>
       </div>
 
@@ -380,7 +478,9 @@ export function CompanyProfilePage() {
       <footer className="fixed inset-x-0 bottom-0 z-20 border-t border-[#ecebe2] bg-white/95 px-6 py-3.5 backdrop-blur">
         <div className="mx-auto flex max-w-[1160px] items-center justify-between">
           <div className="flex items-center gap-2 text-[13px] font-semibold">
-            {dirty
+            {saveError
+              ? <span className="text-[#C0392B]">● {saveError}</span>
+              : dirty
               ? <span className="text-[#B5691B]">● Unsaved changes</span>
               : <span className="flex items-center gap-1.5 text-[#1F9254]"><CheckCircle2 size={16} /> All changes saved</span>}
           </div>

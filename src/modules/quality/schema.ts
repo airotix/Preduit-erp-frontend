@@ -2,14 +2,17 @@ import { z } from "zod";
 
 export const inspectionSchema = z.object({
   order: z.string().min(1, "Required"),
-  stage: z.enum(["Inline", "Final"]),
-  aql: z.enum(["2.5", "4.0"]),
+  stage: z.enum(["Pre-Production", "Inline", "During Production", "Final", "Pre-Shipment"]),
+  inspectionType: z.enum(["First Article", "In-line", "Final QC", "Pre-Shipment"]).optional(),
+  aql: z.enum(["1.0", "1.5", "2.5", "4.0", "6.5"]),
+  batchLot: z.string().optional(),
+  inspector: z.string().optional(),
 });
 
 export const defectTypeSchema = z.object({
   name: z.string().min(1, "Required"),
-  category: z.enum(["Stitching", "Fabric", "Trim"]),
-  severity: z.enum(["Major", "Minor"]),
+  category: z.string().min(1, "Required"),
+  severity: z.enum(["Critical", "Major", "Minor"]),
 });
 
 export const SCHEMAS = {

@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileText, Plus, ArrowLeft, Save, Printer, Loader2 } from "lucide-react";
+import { FileText, Plus, ArrowLeft, Save, Printer, Loader2, Search } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/select";
 import { apiGet, apiPost, apiPut, USE_BACKEND } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { zeroToBlank } from "@/lib/number-input";
+import { useModuleAccess } from "@/lib/module-access";
 
 // ----- types + helpers ------------------------------------------------------
 type FlatLine = { article: string; colour: string; size: string; qty: number; unitPrice: number; amount?: number };
@@ -82,6 +84,7 @@ export function SalesInvoices() {
 
 // ----- list + generate ------------------------------------------------------
 function InvoiceList({ onOpen }: { onOpen: (doc: Doc, publicId: string | null) => void }) {
+  const { canWrite, reason: writeReason } = useModuleAccess("sales");
   const [genOpen, setGenOpen] = React.useState(false);
   const [orderNo, setOrderNo] = React.useState("");
   const [type, setType] = React.useState<InvoiceType>("Retail");
@@ -115,11 +118,41 @@ function InvoiceList({ onOpen }: { onOpen: (doc: Doc, publicId: string | null) =
 
   const invoices = data?.invoices ?? [];
 
+  const [q, setQ] = React.useState("");
+  const [typeF, setTypeF] = React.useState("All");
+  const [statusF, setStatusF] = React.useState("All");
+  const typeOpts = ["All", ...Array.from(new Set(invoices.map((i) => i.invoiceType).filter(Boolean) as string[]))];
+  const statusOpts = ["All", ...Array.from(new Set(invoices.map((i) => i.status).filter(Boolean) as string[]))];
+  const filtered = invoices.filter((i) => {
+    const hay = `${i.invoiceNo ?? ""} ${i.orderNo ?? ""} ${i.customer ?? ""}`.toLowerCase();
+    if (q && !hay.includes(q.toLowerCase())) return false;
+    if (typeF !== "All" && i.invoiceType !== typeF) return false;
+    if (statusF !== "All" && i.status !== statusF) return false;
+    return true;
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-[14px] text-muted-foreground">Retail, online &amp; wholesale invoices generated against sales orders.</p>
-        <Button variant="navy" size="sm" onClick={() => setGenOpen(true)}><Plus size={15} /> Generate invoice</Button>
+        <Button variant="navy" size="sm" disabled={!canWrite} title={!canWrite ? writeReason ?? undefined : undefined}
+          onClick={() => setGenOpen(true)}><Plus size={15} /> Generate invoice</Button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-[220px] flex-1 items-center gap-2 rounded-full border border-border/70 bg-muted px-3.5 py-2 text-muted-foreground">
+          <Search size={15} strokeWidth={1.9} />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search invoice, order, customer…"
+            className="w-full border-0 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground" />
+        </div>
+        <Select value={typeF} onValueChange={setTypeF}>
+          <SelectTrigger className="w-[150px]"><SelectValue placeholder="Type" /></SelectTrigger>
+          <SelectContent>{typeOpts.map((t) => <SelectItem key={t} value={t}>{t === "All" ? "All types" : t}</SelectItem>)}</SelectContent>
+        </Select>
+        <Select value={statusF} onValueChange={setStatusF}>
+          <SelectTrigger className="w-[150px]"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectContent>{statusOpts.map((s) => <SelectItem key={s} value={s}>{s === "All" ? "All statuses" : s}</SelectItem>)}</SelectContent>
+        </Select>
       </div>
 
       <Card className="overflow-hidden p-0">
@@ -136,7 +169,7 @@ function InvoiceList({ onOpen }: { onOpen: (doc: Doc, publicId: string | null) =
             </tr>
           </thead>
           <tbody>
-            {invoices.map((inv) => (
+            {filtered.map((inv) => (
               <tr key={inv.publicId} onClick={() => open(inv.publicId)}
                   className="cursor-pointer border-t border-border/50 transition-colors hover:bg-muted/40">
                 <td className="px-4 py-3 font-bold text-foreground">{inv.invoiceNo || "—"}</td>
@@ -148,9 +181,11 @@ function InvoiceList({ onOpen }: { onOpen: (doc: Doc, publicId: string | null) =
                 <td className="px-4 py-3 text-muted-foreground">{inv.createdAt ? new Date(inv.createdAt).toLocaleDateString() : "—"}</td>
               </tr>
             ))}
-            {invoices.length === 0 && (
+            {filtered.length === 0 && (
               <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">
-                No invoices yet — click “Generate invoice”, enter an order number and pick a type.
+                {invoices.length === 0
+                  ? "No invoices yet — click “Generate invoice”, enter an order number and pick a type."
+                  : "No invoices match your search or filters."}
               </td></tr>
             )}
           </tbody>
@@ -209,6 +244,7 @@ function Field({ label, value, onChange }: { label: string; value: string; onCha
 // ----- editor shell (chooses layout) ---------------------------------------
 function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId: string | null; onBack: () => void }) {
   const qc = useQueryClient();
+  const { canWrite, reason: writeReason } = useModuleAccess("sales");
   const [doc, setDoc] = React.useState<Doc>(initial);
   const [saving, setSaving] = React.useState(false);
   const [savedId, setSavedId] = React.useState<string | null>(publicId);
@@ -250,7 +286,8 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
         <Button variant="outline" size="sm" onClick={onBack}><ArrowLeft size={15} /> Back</Button>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => window.print()}><Printer size={15} /> Print</Button>
-          <Button size="sm" onClick={save} disabled={saving}>
+          <Button size="sm" onClick={save} disabled={saving || !canWrite}
+            title={!canWrite ? writeReason ?? undefined : undefined}>
             {saving ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : <><Save size={15} /> Save</>}
           </Button>
         </div>
@@ -274,21 +311,21 @@ function TotalsBox({ doc, ccy, totals, update, freight }: {
       </div>
       <div className="flex items-center justify-between px-3 py-1.5">
         <span>Remise · Discount</span>
-        <input type="number" className="w-24 border-b border-[#c2c2c2] bg-transparent text-right text-[12px] outline-none focus:border-[#111]"
-               value={doc.totals?.discount ?? 0} onChange={(e) => update((d) => { d.totals.discount = parseFloat(e.target.value) || 0; })} />
+        <input type="number" placeholder="0" className="w-24 border-b border-[#c2c2c2] bg-transparent text-right text-[12px] outline-none focus:border-[#111]"
+               value={zeroToBlank(doc.totals?.discount ?? 0)} onChange={(e) => update((d) => { d.totals.discount = parseFloat(e.target.value) || 0; })} />
       </div>
       <div className="flex items-center justify-between px-3 py-1.5">
         <span className="flex items-center gap-1">Sales tax (
-          <input type="number" className="w-12 border-b border-[#c2c2c2] bg-transparent text-right text-[12px] outline-none focus:border-[#111]"
-                 value={doc.totals?.taxRate ?? 0} onChange={(e) => update((d) => { d.totals.taxRate = parseFloat(e.target.value) || 0; })} />%)
+          <input type="number" placeholder="0" className="w-12 border-b border-[#c2c2c2] bg-transparent text-right text-[12px] outline-none focus:border-[#111]"
+                 value={zeroToBlank(doc.totals?.taxRate ?? 0)} onChange={(e) => update((d) => { d.totals.taxRate = parseFloat(e.target.value) || 0; })} />%)
         </span>
         <span className="tabular">{num(totals.tax)}</span>
       </div>
       {freight && (
         <div className="flex items-center justify-between px-3 py-1.5">
           <span>Fret · Freight</span>
-          <input type="number" className="w-24 border-b border-[#c2c2c2] bg-transparent text-right text-[12px] outline-none focus:border-[#111]"
-                 value={doc.totals?.freight ?? 0} onChange={(e) => update((d) => { d.totals.freight = parseFloat(e.target.value) || 0; })} />
+          <input type="number" placeholder="0" className="w-24 border-b border-[#c2c2c2] bg-transparent text-right text-[12px] outline-none focus:border-[#111]"
+                 value={zeroToBlank(doc.totals?.freight ?? 0)} onChange={(e) => update((d) => { d.totals.freight = parseFloat(e.target.value) || 0; })} />
         </div>
       )}
       <div className="flex items-center justify-between bg-[#e4e4e4] px-3 py-2 font-extrabold">
@@ -301,7 +338,7 @@ function TotalsBox({ doc, ccy, totals, update, freight }: {
 // ============================================================================
 // RETAIL / ONLINE — flat receipt
 // ============================================================================
-const REMIT_ROWS: [string, string][] = [["Title", "title"], ["Bank", "bank"], ["Account", "account"]];
+const REMIT_ROWS: [string, string][] = [["Title", "title"], ["Bank", "bank"], ["Account", "account"], ["IBAN", "iban"], ["SWIFT", "swift"]];
 
 function RetailPaper({ doc, ccy, totals, update }: {
   doc: Doc; ccy: string; totals: ReturnType<typeof computeTotals>; update: (p: (d: Doc) => void) => void;

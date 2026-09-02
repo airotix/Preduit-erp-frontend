@@ -21,6 +21,7 @@ import * as finance from "./finance";
 import * as production from "./production";
 import * as quality from "./quality";
 import * as shipments from "./shipments";
+import * as orderhistory from "./orderhistory";
 import * as commerce from "./commerce";
 import * as ai from "./ai";
 import * as admin from "./admin";
@@ -41,6 +42,7 @@ const REGISTRY: Record<string, ModuleContract> = {
   production,
   quality,
   shipments,
+  orderhistory,
   commerce,
   ai,
   admin,

@@ -2,7 +2,7 @@
 
 import { FinanceOverview } from "@/components/screens/finance/finance-overview";
 import { FinanceLedger } from "@/components/screens/finance/finance-ledger";
-import { FinanceProfitability } from "@/components/screens/finance/finance-profitability";
+import { FinanceCashBankLedger } from "@/components/screens/finance/finance-cash-bank-ledger";
 import { FinanceReports } from "@/components/screens/finance/finance-reports";
 import { FinanceBanking } from "@/components/screens/finance/finance-banking";
 
@@ -16,8 +16,10 @@ export function FinanceScreen({ tab }: { tab: string }) {
       return <FinanceLedger variant="customer" />;
     case "supplierledger":
       return <FinanceLedger variant="supplier" />;
-    case "profitability":
-      return <FinanceProfitability />;
+    case "cashledger":
+      return <FinanceCashBankLedger kind="cash" />;
+    case "bankledger":
+      return <FinanceCashBankLedger kind="bank" />;
     case "reports":
       return <FinanceReports />;
     case "banking":

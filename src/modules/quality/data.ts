@@ -12,20 +12,19 @@ export const screens: Record<string, ScreenConfig> = {
     ],
     "columns": [
       {
-        "label": "Inspection"
-      },
-      {
         "label": "Order"
       },
       {
-        "label": "Stage"
+        "label": "Order ref"
+      },
+      {
+        "label": "Items"
+      },
+      {
+        "label": "Inspector"
       },
       {
         "label": "Defects",
-        "align": "center"
-      },
-      {
-        "label": "AQL",
         "align": "center"
       },
       {

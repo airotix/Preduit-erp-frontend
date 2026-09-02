@@ -12,6 +12,7 @@ import { FinanceHeader } from "@/components/screens/finance/finance-header";
 import { FinanceFormSheet } from "@/components/screens/finance/finance-form-sheet";
 import { OrderPaymentModal } from "@/components/screens/sales/order-payment-modal";
 import { downloadCsv } from "@/lib/export-csv";
+import { useModuleAccess } from "@/lib/module-access";
 import type { Tone } from "@/lib/tone";
 
 interface Party {
@@ -26,10 +27,40 @@ interface StatementRow {
   invoicePublicId?: string | null; baseAmount?: number | null;
   // Handle to inline-edit this row's description (routed to its source record).
   editType?: string | null; editId?: string | null;
+  // Cash / Bank — feeds the cash and bank ledgers derived from this line.
+  paymentType?: "cash" | "bank" | null;
+}
+
+/** Inline Cash/Bank dropdown for a ledger row. */
+export function PaymentTypeCell({
+  value, editable, onSave,
+}: {
+  value: "cash" | "bank" | null | undefined;
+  editable: boolean;
+  onSave: (v: "cash" | "bank" | "") => void;
+}) {
+  if (!editable) {
+    return (
+      <span className="text-muted-foreground">
+        {value === "cash" ? "Cash" : value === "bank" ? "Bank" : "—"}
+      </span>
+    );
+  }
+  return (
+    <select
+      value={value ?? ""}
+      onChange={(e) => onSave(e.target.value as "cash" | "bank" | "")}
+      className="w-full min-w-[92px] rounded-md border border-border/70 bg-transparent px-2 py-1 text-[13px] text-foreground outline-none focus-visible:border-primary/60"
+    >
+      <option value="">—</option>
+      <option value="cash">Cash</option>
+      <option value="bank">Bank</option>
+    </select>
+  );
 }
 
 /** Inline-editable description cell (click to edit → input with ✓ / ✕). */
-function EditableDesc({
+export function EditableDesc({
   value, editable, onSave,
 }: {
   value: string;
@@ -86,6 +117,7 @@ interface Statement {
 
 export function FinanceLedger({ variant }: { variant: "customer" | "supplier" }) {
   const { currency } = useCurrency();
+  const { canWrite, reason: writeReason } = useModuleAccess("finance");
   const isCustomer = variant === "customer";
   const base = isCustomer ? "/finance/customer-ledger" : "/finance/supplier-ledger";
   const [selected, setSelected] = React.useState<string | null>(null);
@@ -121,6 +153,7 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
         description: v.description,
         debit: Number(v.debit) || 0,
         credit: Number(v.credit) || 0,
+        paymentType: v.paymentType || null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["finance", "ledger"] });
@@ -135,14 +168,26 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["finance", "ledger"] }),
   });
 
+  // Inline Cash/Bank edits, routed to the row's source record (invoice, bill,
+  // payment, credit note, or manual entry) — feeds the cash/bank ledgers.
+  const savePaymentType = useMutation({
+    mutationFn: (b: { type: string; publicId: string; paymentType: string }) =>
+      apiPut("/finance/ledger-entries/payment-type", b),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["finance", "ledger"] }),
+  });
+
   const exportCsv = () => {
     if (!stmt) return;
-    const rows: (string | number)[][] = [["Opening balance", "", "", "", "", stmt.opening]];
-    stmt.rows.forEach((r) => rows.push([r.date, r.ref, r.desc, r.debit ?? "", r.credit ?? "", r.balance]));
-    rows.push(["Totals", "", "", stmt.totalDebit, stmt.totalCredit, stmt.closing]);
+    const rows: (string | number)[][] = [["Opening balance", "", "", "", "", "", stmt.opening]];
+    stmt.rows.forEach((r) => rows.push([
+      r.date, r.ref, r.desc,
+      r.paymentType === "cash" ? "Cash" : r.paymentType === "bank" ? "Bank" : "",
+      r.debit ?? "", r.credit ?? "", r.balance,
+    ]));
+    rows.push(["Totals", "", "", "", stmt.totalDebit, stmt.totalCredit, stmt.closing]);
     downloadCsv(
       `${variant}-ledger-${stmt.code}.csv`,
-      ["Date", "Reference", "Description", "Debit", "Credit", "Balance"],
+      ["Date", "Reference", "Description", "Payment Type", "Debit", "Credit", "Balance"],
       rows
     );
   };
@@ -153,7 +198,9 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
         title={isCustomer ? "Customer ledger" : "Supplier ledger"}
         subtitle={isCustomer ? "Receivables by customer with running balance" : "Payables by supplier with running balance"}
         action="New entry"
-        onAction={() => setFormOpen(true)}
+        onAction={canWrite ? () => setFormOpen(true) : undefined}
+        actionDisabled={!canWrite}
+        actionDisabledReason={writeReason ?? undefined}
         onExport={exportCsv}
       />
 
@@ -167,6 +214,8 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
         onSubmit={(v) => create.mutate(v)}
         fields={[
           { name: "description", label: "Description", required: true },
+          { name: "paymentType", label: "Payment type", type: "select", placeholder: "—",
+            options: [{ value: "cash", label: "Cash" }, { value: "bank", label: "Bank" }] },
           { name: "debit", label: "Debit amount", type: "number" },
           { name: "credit", label: "Credit amount", type: "number" },
         ]}
@@ -285,6 +334,7 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
                       <th className="pb-2 text-left font-bold">Date</th>
                       <th className="pb-2 text-left font-bold">Reference</th>
                       <th className="pb-2 text-left font-bold">Description</th>
+                      <th className="pb-2 text-left font-bold">Payment Type</th>
                       <th className="pb-2 text-right font-bold">Debit</th>
                       <th className="pb-2 text-right font-bold">Credit</th>
                       <th className="pb-2 text-right font-bold">Balance</th>
@@ -293,7 +343,7 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
                   </thead>
                   <tbody>
                     <tr className="border-t border-border/50">
-                      <td className="py-2.5 font-semibold text-muted-foreground" colSpan={5}>Opening balance</td>
+                      <td className="py-2.5 font-semibold text-muted-foreground" colSpan={6}>Opening balance</td>
                       <td className="py-2.5 text-right tabular text-foreground">{money(stmt.opening, currency)}</td>
                       <td />
                     </tr>
@@ -304,9 +354,18 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
                         <td className="py-2.5 text-foreground">
                           <EditableDesc
                             value={r.desc}
-                            editable={!!r.editId}
+                            editable={!!r.editId && canWrite}
                             onSave={(v) =>
                               saveDesc.mutate({ type: r.editType as string, publicId: r.editId as string, description: v })
+                            }
+                          />
+                        </td>
+                        <td className="py-2.5 text-foreground">
+                          <PaymentTypeCell
+                            value={r.paymentType}
+                            editable={!!r.editId && canWrite}
+                            onSave={(v) =>
+                              savePaymentType.mutate({ type: r.editType as string, publicId: r.editId as string, paymentType: v })
                             }
                           />
                         </td>
@@ -314,7 +373,7 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
                         <td className="py-2.5 text-right tabular text-[#2E9E6B]">{r.credit ? money(r.credit, currency) : "—"}</td>
                         <td className="py-2.5 text-right tabular font-semibold text-foreground">{money(r.balance, currency)}</td>
                         <td className="py-2.5 pl-3 text-right">
-                          {r.invoicePublicId && (
+                          {r.invoicePublicId && canWrite && (
                             <button
                               type="button"
                               onClick={() => setSettle({
@@ -332,6 +391,7 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
                     ))}
                     <tr className="border-t-2 border-border bg-muted/40 font-extrabold text-foreground">
                       <td className="py-2.5" colSpan={3}>Totals</td>
+                      <td />
                       <td className="py-2.5 text-right tabular">{money(stmt.totalDebit, currency)}</td>
                       <td className="py-2.5 text-right tabular text-[#2E9E6B]">{money(stmt.totalCredit, currency)}</td>
                       <td className="py-2.5 text-right tabular" style={{ color: stmt.balanceTone === "accent" ? "#7C3AED" : "#EA6C18" }}>{money(stmt.closing, currency)}</td>

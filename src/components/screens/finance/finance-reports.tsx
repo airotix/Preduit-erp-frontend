@@ -10,7 +10,7 @@ import { apiGet, apiPost, USE_BACKEND } from "@/lib/api-client";
 import { useCurrency, money } from "@/lib/currency";
 import { FinanceHeader } from "@/components/screens/finance/finance-header";
 import { FinanceFormSheet } from "@/components/screens/finance/finance-form-sheet";
-import { downloadCsv } from "@/lib/export-csv";
+import { useModuleAccess } from "@/lib/module-access";
 
 interface Line { code?: string; name: string; amount?: number; debit?: number; credit?: number }
 interface Statements {
@@ -30,10 +30,10 @@ interface Vat { ratePct: number; revenueBase: number; costBase: number; output: 
 interface BudgetRow { account: string; code: string; budget: number; actual: number; variance: number }
 interface Budget { fiscalYear: number; rows: BudgetRow[]; totalBudget: number; totalActual: number; totalVariance: number }
 interface Asset { public_id: string; asset_no: string; name: string; category: string; cost: number; monthly: number; accumulated: number; nbv: number; status: string }
-interface Periods { rows: { public_id: string; name: string; start: string; end: string; status: string }[] }
 
 export function FinanceReports() {
   const { currency } = useCurrency();
+  const { canWrite, reason: writeReason } = useModuleAccess("finance");
   const qc = useQueryClient();
   const year = new Date().getFullYear();
   const [assetOpen, setAssetOpen] = React.useState(false);
@@ -58,17 +58,7 @@ export function FinanceReports() {
     queryFn: () => apiGet<{ rows: Asset[] }>(`/finance/fixed-assets?currency=${currency}`),
     enabled: USE_BACKEND,
   });
-  const { data: periods } = useQuery<Periods>({
-    queryKey: ["finance", "periods"],
-    queryFn: () => apiGet<Periods>("/finance/periods"),
-    enabled: USE_BACKEND,
-  });
 
-  const setPeriod = useMutation({
-    mutationFn: ({ id, action }: { id: string; action: "close" | "reopen" }) =>
-      apiPost(`/finance/periods/${id}/${action}`, {}),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance", "periods"] }),
-  });
   const depreciate = useMutation({
     mutationFn: (id: string) => apiPost(`/finance/fixed-assets/${id}/depreciate`, {}),
     onSuccess: () => {
@@ -84,13 +74,6 @@ export function FinanceReports() {
       }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["finance", "assets"] }); setAssetOpen(false); },
   });
-
-  const exportCsv = () => {
-    if (!data) return;
-    const rows = data.trialBalance.rows.map((r) => [r.code ?? "", r.name, r.debit ?? 0, r.credit ?? 0]);
-    rows.push(["", "Totals", data.trialBalance.totalDebit, data.trialBalance.totalCredit]);
-    downloadCsv("trial-balance.csv", ["Code", "Account", "Debit", "Credit"], rows);
-  };
 
   const Row = ({ l }: { l: Line }) => (
     <tr className="border-t border-border/50">
@@ -109,17 +92,16 @@ export function FinanceReports() {
     <div>
       <FinanceHeader
         title="Financial statements"
-        subtitle="Trial balance, P&L, balance sheet and cash flow — derived from the general ledger"
-        onExport={exportCsv}
+        subtitle="Balance sheet and cash flow — derived from the general ledger"
       />
 
       {!data ? (
         <div className="py-20 text-center text-muted-foreground">Loading…</div>
       ) : (
-        <Tabs defaultValue="tb">
+        <Tabs defaultValue="bs">
           <TabsList className="mb-5 w-full justify-start gap-0 border-b border-border/70">
-            {[["tb", "Trial Balance"], ["pnl", "Profit & Loss"], ["bs", "Balance Sheet"], ["cf", "Cash Flow"],
-              ["vat", "VAT return"], ["budget", "Budget vs actual"], ["assets", "Fixed assets"], ["periods", "Periods"]].map(
+            {[["bs", "Balance Sheet"], ["cf", "Cash Flow"],
+              ["vat", "VAT return"], ["budget", "Budget vs actual"], ["assets", "Fixed assets"]].map(
               ([v, l]) => (
                 <TabsTrigger key={v} value={v}
                   className="mr-1 rounded-none border-b-2 border-transparent bg-transparent px-3.5 pb-3 pt-0 text-[14px] data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground">
@@ -128,66 +110,6 @@ export function FinanceReports() {
               )
             )}
           </TabsList>
-
-          {/* Trial Balance */}
-          <TabsContent value="tb">
-            <Card className="p-6">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-[17px] font-extrabold text-foreground">Trial balance</h3>
-                <ToneBadge tone={data.trialBalance.balanced ? "green" : "red"} dot={false}>
-                  {data.trialBalance.balanced ? "Balanced ✓" : "Out of balance"}
-                </ToneBadge>
-              </div>
-              <table className="w-full text-[13px]">
-                <thead>
-                  <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    <th className="pb-2 text-left font-bold">Code</th>
-                    <th className="pb-2 text-left font-bold">Account</th>
-                    <th className="pb-2 text-right font-bold">Debit</th>
-                    <th className="pb-2 text-right font-bold">Credit</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.trialBalance.rows.map((r, i) => (
-                    <tr key={i} className="border-t border-border/50">
-                      <td className="py-2.5 tabular text-muted-foreground">{r.code}</td>
-                      <td className="py-2.5 text-foreground">{r.name}</td>
-                      <td className="py-2.5 text-right tabular">{r.debit ? money(r.debit, currency) : "—"}</td>
-                      <td className="py-2.5 text-right tabular">{r.credit ? money(r.credit, currency) : "—"}</td>
-                    </tr>
-                  ))}
-                  <tr className="border-t-2 border-border bg-muted/40 font-extrabold text-foreground">
-                    <td className="py-2.5" colSpan={2}>Totals</td>
-                    <td className="py-2.5 text-right tabular">{money(data.trialBalance.totalDebit, currency)}</td>
-                    <td className="py-2.5 text-right tabular">{money(data.trialBalance.totalCredit, currency)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </Card>
-          </TabsContent>
-
-          {/* P&L */}
-          <TabsContent value="pnl">
-            <Card className="p-6">
-              <h3 className="mb-3 text-[17px] font-extrabold text-foreground">Profit &amp; loss</h3>
-              <table className="w-full text-[13px]">
-                <tbody>
-                  <tr><td className="pb-1 pt-2 text-[11px] font-bold uppercase text-muted-foreground" colSpan={2}>Revenue</td></tr>
-                  {data.pnl.revenue.map((l, i) => <Row key={"r" + i} l={l} />)}
-                  <Total label="Total revenue" v={data.pnl.totalRevenue} strong={false} />
-                  <Total label="Cost of goods sold" v={data.pnl.cogs} strong={false} />
-                  <Total label="Gross profit" v={data.pnl.grossProfit} />
-                  <tr><td className="pb-1 pt-4 text-[11px] font-bold uppercase text-muted-foreground" colSpan={2}>Operating expenses</td></tr>
-                  {data.pnl.expenses.map((l, i) => <Row key={"e" + i} l={l} />)}
-                  <Total label="Total operating expenses" v={data.pnl.opex} strong={false} />
-                  <tr className="border-t-2 border-border font-extrabold text-[#2E9E6B]">
-                    <td className="py-3">Net profit ({data.pnl.netMarginPct}% margin)</td>
-                    <td className="py-3 text-right tabular">{money(data.pnl.netProfit, currency)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </Card>
-          </TabsContent>
 
           {/* Balance Sheet */}
           <TabsContent value="bs">
@@ -206,13 +128,6 @@ export function FinanceReports() {
                   <tr><td className="pb-1 pt-4 text-[11px] font-bold uppercase text-muted-foreground" colSpan={2}>Liabilities</td></tr>
                   {data.balanceSheet.liabilities.map((l, i) => <Row key={"l" + i} l={l} />)}
                   <Total label="Total liabilities" v={data.balanceSheet.totalLiabilities} strong={false} />
-                  <tr><td className="pb-1 pt-4 text-[11px] font-bold uppercase text-muted-foreground" colSpan={2}>Equity</td></tr>
-                  {data.balanceSheet.equity.map((l, i) => <Row key={"q" + i} l={l} />)}
-                  <tr className="border-t border-border/50">
-                    <td className="py-2.5 text-foreground">Retained earnings (current)</td>
-                    <td className="py-2.5 text-right tabular text-foreground">{money(data.balanceSheet.retained, currency)}</td>
-                  </tr>
-                  <Total label="Total liabilities + equity" v={data.balanceSheet.totalLiabilities + data.balanceSheet.totalEquityRE} />
                 </tbody>
               </table>
             </Card>
@@ -301,7 +216,10 @@ export function FinanceReports() {
             <Card className="p-6">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-[17px] font-extrabold text-foreground">Fixed asset register</h3>
-                <Button size="sm" variant="navy" onClick={() => setAssetOpen(true)}>New asset</Button>
+                <Button size="sm" variant="navy" onClick={canWrite ? () => setAssetOpen(true) : undefined}
+                        disabled={!canWrite} title={!canWrite ? writeReason ?? undefined : undefined}>
+                  New asset
+                </Button>
               </div>
               <table className="w-full text-[13px]">
                 <thead>
@@ -325,48 +243,14 @@ export function FinanceReports() {
                       <td className="py-2.5 text-right tabular">{money(a.accumulated, currency)}</td>
                       <td className="py-2.5 text-right tabular font-semibold text-foreground">{money(a.nbv, currency)}</td>
                       <td className="py-2.5 text-right">
-                        <Button size="sm" variant="outline" disabled={depreciate.isPending || a.nbv <= 0}
+                        <Button size="sm" variant="outline" disabled={depreciate.isPending || a.nbv <= 0 || !canWrite}
+                          title={!canWrite ? writeReason ?? undefined : undefined}
                           onClick={() => depreciate.mutate(a.public_id)}>Run 1 mo</Button>
                       </td>
                     </tr>
                   ))}
                   {(!assets || assets.rows.length === 0) && (
                     <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">No assets registered yet.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </Card>
-          </TabsContent>
-
-          {/* Periods */}
-          <TabsContent value="periods">
-            <Card className="p-6">
-              <h3 className="mb-3 text-[17px] font-extrabold text-foreground">Accounting periods</h3>
-              <table className="w-full max-w-2xl text-[13px]">
-                <thead>
-                  <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    <th className="pb-2 text-left font-bold">Period</th>
-                    <th className="pb-2 text-left font-bold">Range</th>
-                    <th className="pb-2 text-left font-bold">Status</th>
-                    <th className="pb-2 text-right font-bold" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {(periods?.rows ?? []).map((p) => (
-                    <tr key={p.public_id} className="border-t border-border/50">
-                      <td className="py-2.5 font-semibold text-foreground">{p.name}</td>
-                      <td className="py-2.5 text-muted-foreground">{p.start} → {p.end}</td>
-                      <td className="py-2.5"><ToneBadge tone={p.status === "Closed" ? "neutral" : "green"} dot={false}>{p.status}</ToneBadge></td>
-                      <td className="py-2.5 text-right">
-                        <Button size="sm" variant="outline" disabled={setPeriod.isPending}
-                          onClick={() => setPeriod.mutate({ id: p.public_id, action: p.status === "Closed" ? "reopen" : "close" })}>
-                          {p.status === "Closed" ? "Reopen" : "Close"}
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                  {(!periods || periods.rows.length === 0) && (
-                    <tr><td colSpan={4} className="py-8 text-center text-muted-foreground">No periods defined. Closing a period blocks postings dated within it.</td></tr>
                   )}
                 </tbody>
               </table>

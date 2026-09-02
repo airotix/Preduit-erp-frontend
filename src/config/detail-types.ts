@@ -19,6 +19,7 @@ export const DETAIL_TYPES: Record<string, string> = {
   "ai/aireports": "aireport",
   "production/porders": "productionorder",
   "production/bom": "bomline",
+  "orderhistory/shipped": "orderhistory",
 };
 
 export function detailTypeFor(

@@ -17,6 +17,7 @@ import {
   StatusPill, AiLoading, AiError, SELECT_CLS,
 } from "@/components/screens/ai/ai-shared";
 import { useAi } from "@/lib/ai-context";
+import { useModuleAccess } from "@/lib/module-access";
 import {
   fetchAiRecommendations, updateAiRecommendation, lockAiRecommendation, unlockAiRecommendation,
 } from "@/lib/ai-api";
@@ -30,6 +31,7 @@ function refCouleur(r: RecommendationRow): [string, string] {
 
 export function AiRecommendations() {
   const { scenario } = useAi();
+  const { canWrite, reason: writeReason } = useModuleAccess("ai");
   const qc = useQueryClient();
   const { data, isLoading, isError, refetch } = useQuery<RecommendationRow[]>({
     queryKey: ["ai", "recommendations", scenario],
@@ -194,7 +196,8 @@ export function AiRecommendations() {
                     </div>
                     <p className="mt-1 text-[13px] text-muted-foreground">{selected.skuName} — {selected.category}</p>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => toggleLock(selected)} disabled={busy}>
+                  <Button variant="outline" size="sm" onClick={() => toggleLock(selected)} disabled={busy || !canWrite}
+                    title={!canWrite ? writeReason ?? undefined : undefined}>
                     {selected.locked ? <><Unlock size={15} /> Unlock</> : <><Lock size={15} /> Lock</>}
                   </Button>
                 </div>
@@ -227,10 +230,12 @@ export function AiRecommendations() {
                       onChange={(e) => setEditedQty(parseInt(e.target.value) || 0)}
                     />
                   </div>
-                  <Button variant="outline" onClick={() => setSizeEditorOpen(true)} disabled={selected.locked}>
+                  <Button variant="outline" onClick={() => setSizeEditorOpen(true)} disabled={selected.locked || !canWrite}
+                    title={!canWrite ? writeReason ?? undefined : undefined}>
                     <Grid3x3 size={15} /> Edit sizes
                   </Button>
-                  <Button onClick={saveTotal} disabled={selected.locked || editedQty === null || busy}>
+                  <Button onClick={saveTotal} disabled={selected.locked || editedQty === null || busy || !canWrite}
+                    title={!canWrite ? writeReason ?? undefined : undefined}>
                     <Save size={15} /> Save
                   </Button>
                 </div>

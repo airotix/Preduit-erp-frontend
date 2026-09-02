@@ -2,16 +2,21 @@
 
 import * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileText, Plus, ArrowLeft, Save, Printer, Loader2 } from "lucide-react";
+import { FileText, Plus, ArrowLeft, Save, Printer, Loader2, Search } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter, SheetClose,
 } from "@/components/ui/sheet";
 import { apiGet, apiPost, apiPut, USE_BACKEND } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { zeroToBlank } from "@/lib/number-input";
+import { useModuleAccess } from "@/lib/module-access";
 
 // ----- types + helpers ------------------------------------------------------
 type Row = { color: string; qty: Record<string, number>; unitPrice: number; total?: number; amount?: number };
@@ -57,6 +62,7 @@ export function ProcurementInvoices() {
 
 // ----- list + generate ------------------------------------------------------
 function InvoiceList({ onOpen }: { onOpen: (doc: Doc, publicId: string | null) => void }) {
+  const { canWrite, reason: writeReason } = useModuleAccess("procurement");
   const [genOpen, setGenOpen] = React.useState(false);
   const [poNo, setPoNo] = React.useState("");
   const [busy, setBusy] = React.useState(false);
@@ -87,11 +93,34 @@ function InvoiceList({ onOpen }: { onOpen: (doc: Doc, publicId: string | null) =
 
   const invoices = data?.invoices ?? [];
 
+  const [q, setQ] = React.useState("");
+  const [statusF, setStatusF] = React.useState("All");
+  const statusOpts = ["All", ...Array.from(new Set(invoices.map((i) => i.status).filter(Boolean) as string[]))];
+  const filtered = invoices.filter((i) => {
+    const hay = `${i.invoiceNo ?? ""} ${i.poNo ?? ""} ${i.supplier ?? ""}`.toLowerCase();
+    if (q && !hay.includes(q.toLowerCase())) return false;
+    if (statusF !== "All" && i.status !== statusF) return false;
+    return true;
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-[14px] text-muted-foreground">Commercial invoices generated against purchase orders.</p>
-        <Button variant="navy" size="sm" onClick={() => setGenOpen(true)}><Plus size={15} /> Generate invoice</Button>
+        <Button variant="navy" size="sm" disabled={!canWrite} title={!canWrite ? writeReason ?? undefined : undefined}
+          onClick={() => setGenOpen(true)}><Plus size={15} /> Generate invoice</Button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-[220px] flex-1 items-center gap-2 rounded-full border border-border/70 bg-muted px-3.5 py-2 text-muted-foreground">
+          <Search size={15} strokeWidth={1.9} />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search invoice, PO, supplier…"
+            className="w-full border-0 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground" />
+        </div>
+        <Select value={statusF} onValueChange={setStatusF}>
+          <SelectTrigger className="w-[150px]"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectContent>{statusOpts.map((s) => <SelectItem key={s} value={s}>{s === "All" ? "All statuses" : s}</SelectItem>)}</SelectContent>
+        </Select>
       </div>
 
       <Card className="overflow-hidden p-0">
@@ -107,7 +136,7 @@ function InvoiceList({ onOpen }: { onOpen: (doc: Doc, publicId: string | null) =
             </tr>
           </thead>
           <tbody>
-            {invoices.map((inv) => (
+            {filtered.map((inv) => (
               <tr key={inv.publicId} onClick={() => open(inv.publicId)}
                   className="cursor-pointer border-t border-border/50 transition-colors hover:bg-muted/40">
                 <td className="px-4 py-3 font-bold text-foreground">{inv.invoiceNo || "—"}</td>
@@ -118,9 +147,11 @@ function InvoiceList({ onOpen }: { onOpen: (doc: Doc, publicId: string | null) =
                 <td className="px-4 py-3 text-muted-foreground">{inv.createdAt ? new Date(inv.createdAt).toLocaleDateString() : "—"}</td>
               </tr>
             ))}
-            {invoices.length === 0 && (
+            {filtered.length === 0 && (
               <tr><td colSpan={6} className="py-12 text-center text-muted-foreground">
-                No invoices yet — click “Generate invoice” and enter a PO number.
+                {invoices.length === 0
+                  ? "No invoices yet — click “Generate invoice” and enter a PO number."
+                  : "No invoices match your search or filters."}
               </td></tr>
             )}
           </tbody>
@@ -167,6 +198,7 @@ function Field({ label, value, onChange }: { label: string; value: string; onCha
 // ----- editable invoice document (matches the printed template) ------------
 function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId: string | null; onBack: () => void }) {
   const qc = useQueryClient();
+  const { canWrite, reason: writeReason } = useModuleAccess("procurement");
   const [doc, setDoc] = React.useState<Doc>(initial);
   const [saving, setSaving] = React.useState(false);
   const [savedId, setSavedId] = React.useState<string | null>(publicId);
@@ -224,8 +256,8 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
     ["Paiement / terms", "terms"], ["Port chargement / loading", "portLoading"], ["Port déchargement / discharge", "portDischarge"],
   ];
   const BANK: [string, string][] = [
-    ["Bénéficiaire / Beneficiary", "beneficiary"], ["Banque / Bank", "bank"], ["Agence / Branch", "branch"],
-    ["Compte / IBAN", "account"], ["SWIFT / BIC", "swift"], ["Banque corresp. / Corresp.", "corresp"],
+    ["Bénéficiaire / Account title", "beneficiary"], ["Banque / Bank", "bank"], ["Agence / Branch", "branch"],
+    ["Compte / Account no.", "account"], ["IBAN", "iban"], ["SWIFT / BIC", "swift"],
   ];
 
   return (
@@ -235,7 +267,8 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
         <Button variant="outline" size="sm" onClick={onBack}><ArrowLeft size={15} /> Back</Button>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => window.print()}><Printer size={15} /> Print</Button>
-          <Button size="sm" onClick={save} disabled={saving}>
+          <Button size="sm" onClick={save} disabled={saving || !canWrite}
+            title={!canWrite ? writeReason ?? undefined : undefined}>
             {saving ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : <><Save size={15} /> Save</>}
           </Button>
         </div>
@@ -331,8 +364,8 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
             </div>
             <div className="flex items-center justify-between px-3 py-1.5">
               <span>Fret &amp; assurance · Freight</span>
-              <input type="number" className="w-24 border-b border-[#c2c2c2] bg-transparent text-right text-[12px] outline-none focus:border-[#111]"
-                     value={doc.totals?.freight ?? 0} onChange={(e) => update((d) => { d.totals.freight = parseFloat(e.target.value) || 0; })} />
+              <input type="number" placeholder="0" className="w-24 border-b border-[#c2c2c2] bg-transparent text-right text-[12px] outline-none focus:border-[#111]"
+                     value={zeroToBlank(doc.totals?.freight ?? 0)} onChange={(e) => update((d) => { d.totals.freight = parseFloat(e.target.value) || 0; })} />
             </div>
             <div className="flex items-center justify-between bg-[#e4e4e4] px-3 py-2 font-extrabold">
               <span>TOTAL À PAYER · TOTAL {ccy}</span><span className="tabular">{num(totalsView.total)}</span>

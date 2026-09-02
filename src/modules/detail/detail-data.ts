@@ -14,6 +14,59 @@ export interface TimelineItem {
   time: string;
   done: boolean;
 }
+/** A single item's inspection workspace within an order's grouped inspection page. */
+/** An order item whose production isn't finished yet — shown as a placeholder
+ *  tab in the grouped inspection page (no inspection to work on yet). */
+export interface InspectionPlaceholder {
+  publicId: string;
+  item: string;
+  tabLabel: string;
+  placeholder: true;
+  header: { inspectionNo: string; stage: string; result: string; product: string };
+}
+export interface InspectionItem {
+  publicId: string;
+  item: string;
+  tabLabel: string;
+  placeholder?: false;
+  header: {
+    inspectionNo: string; order: string; product: string; sku: string;
+    batchLot: string; stage: string; inspectionType: string; inspector: string;
+    aql: string; date: string | null; prodQty: number | null; result: string;
+  };
+  progress: { key: string; label: string; done: boolean; current: boolean }[];
+  aql: {
+    aql: string; lotQty: number; codeLetter: string | null; sampleSize: number;
+    maxDefects: number; actualDefects: number; accepted: boolean; result: string;
+  };
+  summary: { sampled: number; defects: number; defectRate: number; maxDefects: number; evaluation: string };
+  shipmentRef: string | null;
+  canStart: boolean;
+  canDecide: boolean;
+  canDispose: boolean;
+  disposition: string | null;
+  dispositionNotes: string;
+  assignedTo: string;
+  dueDate: string | null;
+  dispositionOptions: string[];
+  editForm: { inspector: string; batchLot: string; inspectionType: string; aql: string; sampleSize: string };
+  aqlOptions: string[];
+  typeOptions: string[];
+  checks: {
+    publicId: string; criterion: string; requirement: string;
+    targetValue: number | null; tolerance: number | null;
+    actual: string; result: string; notes: string;
+  }[];
+  defects: {
+    publicId: string; defectNo: string; name: string; category: string;
+    severity: string; qtyAffected: number; location: string; description: string;
+    corrective: string; imageDocId: string | null;
+  }[];
+  history: {
+    inspectionNo: string; date: string | null; stage: string; inspector: string;
+    result: string; defects: number; aql: string; publicId: string; current: boolean;
+  }[];
+}
 export interface DetailModel {
   variant:
     | "product"
@@ -26,7 +79,9 @@ export interface DetailModel {
     | "generic"
     | "productionorder"
     | "bomline"
-    | "stockarticle";
+    | "stockarticle"
+    | "shipment"
+    | "inspection";
   ref: string;
   title: string;
   statusLabel: string;
@@ -51,6 +106,7 @@ export interface DetailModel {
       supplierPrice: number | null;
       imageUrl: string;
       composition: string;
+      fabric: string;
       gauge: string;
       care: string;
       origin: string;
@@ -93,12 +149,15 @@ export interface DetailModel {
     };
     supplierCard?: {
       name: string; status: string; code: string; location: string;
-      email: string; phone: string; contactId: string; vat: string; bank: string;
+      email: string; phone: string; contactId: string; vat: string;
+      bankName: string; bankAccountTitle: string; bankAccountNumber: string;
+      bankSwift: string; bankIban: string;
     };
     supplierForm?: {
       name: string; region: string; leadTime: string; category: string;
       email: string; phone: string; address: string; contactPerson: string;
-      vatNumber: string; bankDetails: string;
+      vatNumber: string; bankName: string; bankAccountTitle: string;
+      bankAccountNumber: string; bankSwift: string; bankIban: string;
     };
     customerCard?: {
       name: string; kind: string; code: string; title: string; location: string;
@@ -118,6 +177,14 @@ export interface DetailModel {
     sections: { heading: string; body: string }[];
   };
   generic?: { timeline: TimelineItem[] };
+  /** One inspection workspace = one item (production line). */
+  inspection?: {
+    items: (InspectionItem | InspectionPlaceholder)[];
+    shipment: {
+      allPassed: boolean; passedCount: number; total: number;
+      shipmentRef: string | null; inspectionId: string | null;
+    };
+  };
   porder?: {
     materials: { component: string; material: string; qty: string; cost: string }[];
     timeline: TimelineItem[];
@@ -126,6 +193,8 @@ export interface DetailModel {
   shipment?: {
     tracking: TimelineItem[];
     contents: { name: string; sku: string; qty: number }[];
+    form?: { carrier: string; destination: string; eta: string; status: string };
+    statusOptions?: string[];
   };
   stock?: {
     sizes: string[];

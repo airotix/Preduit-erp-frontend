@@ -1,17 +1,21 @@
 /**
  * Thin fetch helper for the real backend API, with auth.
  *
- *   NEXT_PUBLIC_API_URL     e.g. http://127.0.0.1:8000/api/v1
+ *   NEXT_PUBLIC_API_URL     same-origin path (default /api/v1); the Next proxy
+ *                           forwards it to the backend so the refresh cookie is
+ *                           first-party
  *   NEXT_PUBLIC_USE_BACKEND "true" to hit the backend; anything else = mocks
  *
- * Every request carries the app JWT (Authorization: Bearer). On a 401 we try a
- * one-shot refresh and replay the request; if that fails we clear tokens and
- * bounce to /login. 403 and 429 surface as typed errors for the UI to handle.
+ * Every request carries the app JWT (Authorization: Bearer) and credentials so
+ * the HttpOnly refresh cookie rides along. On a 401 we try a one-shot refresh
+ * (the cookie proves identity — no token in JS) and replay the request; if that
+ * fails we clear the access token and bounce to /login. 403 and 429 surface as
+ * typed errors for the UI to handle.
  */
-import { getAccessToken, getRefreshToken, setTokens, clearTokens } from "@/lib/auth-token";
+import { getAccessToken, setTokens, clearTokens } from "@/lib/auth-token";
 
 const BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api/v1";
+  process.env.NEXT_PUBLIC_API_URL ?? "/api/v1";
 
 export const USE_BACKEND = process.env.NEXT_PUBLIC_USE_BACKEND === "true";
 
@@ -25,19 +29,18 @@ export class ApiError extends Error {
 let _refreshing: Promise<boolean> | null = null;
 
 async function tryRefresh(): Promise<boolean> {
-  const refresh = getRefreshToken();
-  if (!refresh) return false;
   if (!_refreshing) {
+    // No body token — the HttpOnly refresh cookie is sent automatically. The
+    // rotated cookie comes back in the response's Set-Cookie.
     _refreshing = fetch(`${BASE_URL}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken: refresh }),
+      credentials: "include",
     })
       .then(async (r) => {
         if (!r.ok) return false;
         const data = await r.json();
-        // Refresh tokens rotate on every use — persist the new one too.
-        setTokens(data.accessToken, data.refreshToken);
+        setTokens(data.accessToken);   // access token only; refresh stays in the cookie
         return true;
       })
       .catch(() => false)
@@ -62,6 +65,7 @@ async function request<T>(path: string, init: RequestInit, retried = false): Pro
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init.headers as Record<string, string> | undefined),
     },
+    credentials: "include",   // send the HttpOnly refresh cookie
     cache: "no-store",
   });
 

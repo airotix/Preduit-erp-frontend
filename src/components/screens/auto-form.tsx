@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SheetFooter, SheetClose } from "@/components/ui/sheet";
+import { fieldFormatError } from "@/lib/validators";
 
 type Field = {
   name: string;
@@ -62,8 +63,15 @@ function titleCase(s: string) {
     .trim();
 }
 
-/** Introspect a ZodObject into a renderable field list. */
-function fieldsFromSchema(schema: z.ZodObject<z.ZodRawShape>): Field[] {
+/** Introspect a ZodObject into a renderable field list. `dynamicOptions`
+ *  lets a caller turn a plain string field into a select populated from
+ *  live data (e.g. a category list fetched at render time) instead of a
+ *  hardcoded enum baked into the schema — the schema itself only validates
+ *  "non-empty", the live list is what actually constrains the choice. */
+function fieldsFromSchema(
+  schema: z.ZodObject<z.ZodRawShape>,
+  dynamicOptions?: Record<string, string[]>
+): Field[] {
   const shape = schema.shape;
   return Object.entries(shape).map(([name, raw]) => {
     let def = raw as z.ZodTypeAny;
@@ -84,6 +92,10 @@ function fieldsFromSchema(schema: z.ZodObject<z.ZodRawShape>): Field[] {
       kind = "enum";
       options = def._def.values as string[];
     }
+    if (dynamicOptions?.[name]) {
+      kind = "enum";
+      options = dynamicOptions[name];
+    }
     // Date-picker for due-date fields (stored/sent as an ISO date string).
     if (kind === "text" && /due.?date$/i.test(name)) kind = "date";
     // Image upload for image fields (stored/sent as a data URL or URL string).
@@ -99,6 +111,9 @@ interface AutoFormProps<T extends z.ZodObject<z.ZodRawShape>> {
   pending?: boolean;
   /** Prefill values (edit mode). */
   defaultValues?: Record<string, unknown>;
+  /** Override a field's select options with live data (e.g. a category
+   *  list fetched at render time) instead of whatever the schema declares. */
+  dynamicOptions?: Record<string, string[]>;
 }
 
 export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
@@ -107,8 +122,24 @@ export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
   onSubmit,
   pending,
   defaultValues,
+  dynamicOptions,
 }: AutoFormProps<T>) {
-  const fields = React.useMemo(() => fieldsFromSchema(schema), [schema]);
+  const fields = React.useMemo(
+    () => fieldsFromSchema(schema, dynamicOptions),
+    [schema, dynamicOptions]
+  );
+  // Layer format checks (email/phone/website/…) on top of the module schema by
+  // field name, so every AutoForm-driven form validates consistently.
+  const guardedSchema = React.useMemo(
+    () =>
+      schema.superRefine((val: Record<string, unknown>, ctx) => {
+        for (const [k, v] of Object.entries(val)) {
+          const msg = fieldFormatError(k, v);
+          if (msg) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [k], message: msg });
+        }
+      }),
+    [schema]
+  );
   const {
     register,
     handleSubmit,
@@ -116,7 +147,7 @@ export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
     watch,
     formState: { errors },
   } = useForm({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(guardedSchema),
     mode: "onBlur",
     defaultValues: defaultValues as Record<string, unknown> | undefined,
   });

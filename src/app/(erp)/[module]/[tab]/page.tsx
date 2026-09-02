@@ -29,7 +29,8 @@ export default function ScreenPage({
   // list tabs (Chart of Accounts, Journals, Payments, Bills, AR/AP aging) use
   // the generic list renderer below.
   const FINANCE_BESPOKE = new Set([
-    "overview", "customerledger", "supplierledger", "profitability", "reports", "banking",
+    "overview", "customerledger", "supplierledger", "cashledger", "bankledger",
+    "profitability", "reports", "banking",
   ]);
   if (mod.id === "finance" && FINANCE_BESPOKE.has(tab.id)) {
     return (

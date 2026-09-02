@@ -11,13 +11,21 @@
  *                            backend API base + "/ai")
  *   NEXT_PUBLIC_USE_AI_BACKEND  "false" to disable the calls (default: on)
  */
+import { getAiFixture } from "@/lib/ai-fixtures";
+
 const ERP_BASE =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api/v1";
+  process.env.NEXT_PUBLIC_API_URL ?? "/api/v1";
 
 const AI_BASE = process.env.NEXT_PUBLIC_AI_API_URL ?? `${ERP_BASE}/ai`;
 
 export const USE_AI_BACKEND =
   process.env.NEXT_PUBLIC_USE_AI_BACKEND !== "false";
+
+// Demo mode: serve the Demand Planning module from static fixtures (no engine
+// backend needed). Set NEXT_PUBLIC_AI_DEMO="false" to talk to the real facade.
+export const AI_DEMO = process.env.NEXT_PUBLIC_AI_DEMO !== "false";
+
+const _delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 let _token: string | null = null;
 
@@ -51,6 +59,10 @@ export async function aiGet<T>(
   path: string,
   params?: Record<string, string | number | boolean | undefined | null>
 ): Promise<T> {
+  if (AI_DEMO) {
+    await _delay(120);
+    return getAiFixture(path) as T;
+  }
   const res = await fetch(buildUrl(path, params), {
     headers: authHeaders(),
     cache: "no-store",
@@ -62,6 +74,10 @@ export async function aiGet<T>(
 }
 
 export async function aiPost<T>(path: string, body?: unknown): Promise<T> {
+  if (AI_DEMO) {
+    await _delay(120);
+    return getAiFixture(path) as T;
+  }
   const res = await fetch(buildUrl(path), {
     method: "POST",
     headers: authHeaders(),
@@ -74,6 +90,10 @@ export async function aiPost<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export async function aiPut<T>(path: string, body?: unknown): Promise<T> {
+  if (AI_DEMO) {
+    await _delay(120);
+    return getAiFixture(path) as T;
+  }
   const res = await fetch(buildUrl(path), {
     method: "PUT",
     headers: authHeaders(),

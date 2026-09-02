@@ -26,9 +26,28 @@ export function SidebarRail() {
   const { logout, user, hasPermission } = useAuth();
 
   // Team/admin tools are only shown to workspace admins (and Super Admins).
-  const modules = MODULES.filter((m) =>
-    m.id === "admin" ? !user || hasPermission("admin.users") : true
-  );
+  // Everything else passes two independent filters:
+  //  1. Role permission (core/roles.py) — a module the signed-in role has
+  //     neither <module>.read nor <module>.write for is hidden outright, not
+  //     just left with disabled controls. While `user` hasn't loaded yet we
+  //     stay permissive so the rail doesn't flash empty before auth resolves.
+  //  2. The company's chosen module set from setup (Modules step / Company
+  //     Profile) — null/undefined means it was never set (pre-existing
+  //     tenants), so we fall back to showing everything.
+  // Platform (Super) Admins are exempt from both: they operate across
+  // companies, so neither a company's module selection nor a role's
+  // permission set (they always hold "*") should hide the rest of the app.
+  const enabledModules = user?.company?.enabledModules;
+  const hasModuleAccess = (id: string) =>
+    !user || hasPermission(`${id}.read`) || hasPermission(`${id}.write`);
+  const modules = MODULES.filter((m) => {
+    if (m.id === "admin") return !user || hasPermission("admin.users");
+    if (m.id === "dashboard") return true;
+    if (user?.isPlatformAdmin) return true;
+    if (!hasModuleAccess(m.id)) return false;
+    if (!enabledModules || enabledModules.length === 0) return true;
+    return enabledModules.includes(m.id);
+  });
 
   const { data } = useQuery({
     queryKey: ["me"],

@@ -25,12 +25,12 @@ export default function LoginPage() {
     e.preventDefault();
     setBusy(true); setError(null);
     try {
-      const user = await login(email, password);
+      const user = await login(email, password, keep, business);
       router.push(postAuthPath(user));
     } catch (err) {
-      const e = err as Error & { locked?: boolean; until?: number | null };
-      if (e?.locked) {
-        router.push(e.until ? `/locked?until=${e.until}` : "/locked");
+      const e2 = err as Error & { locked?: boolean; until?: number | null };
+      if (e2?.locked) {
+        router.push(e2.until ? `/locked?until=${e2.until}` : "/locked");
         return;
       }
       setError(err instanceof Error ? err.message : "Sign in failed");

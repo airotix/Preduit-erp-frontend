@@ -9,6 +9,7 @@ import { apiGet, apiPost, USE_BACKEND } from "@/lib/api-client";
 import { useCurrency, money } from "@/lib/currency";
 import { FinanceHeader } from "@/components/screens/finance/finance-header";
 import { FinanceFormSheet } from "@/components/screens/finance/finance-form-sheet";
+import { useModuleAccess } from "@/lib/module-access";
 import type { Tone } from "@/lib/tone";
 
 interface Acct { public_id: string; name: string; account_no: string; currency: string }
@@ -27,6 +28,7 @@ const STATUS_TONE: Record<string, Tone> = {
 
 export function FinanceBanking() {
   const { currency } = useCurrency();
+  const { canWrite, reason: writeReason } = useModuleAccess("finance");
   const qc = useQueryClient();
   const [selected, setSelected] = React.useState<string | null>(null);
   const [acctOpen, setAcctOpen] = React.useState(false);
@@ -75,6 +77,8 @@ export function FinanceBanking() {
         subtitle="Match imported statement lines to recorded payments"
         action="New account"
         onAction={() => setAcctOpen(true)}
+        actionDisabled={!canWrite}
+        actionDisabledReason={writeReason ?? undefined}
       />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[300px_1fr]">
@@ -108,9 +112,15 @@ export function FinanceBanking() {
                     <div className="text-[13px] text-muted-foreground">{detail.account_no} · {detail.currency}</div>
                   </div>
                   <div className="flex items-center gap-2.5">
-                    <Button size="sm" variant="outline" onClick={() => setLineOpen(true)}>Add line</Button>
-                    <Button size="sm" variant="outline" disabled={autoMatch.isPending} onClick={() => autoMatch.mutate()}>Auto-match</Button>
-                    <Button size="sm" variant="navy" disabled={reconcile.isPending || detail.matched === 0} onClick={() => reconcile.mutate()}>Reconcile matched</Button>
+                    <Button size="sm" variant="outline" disabled={!canWrite}
+                      title={!canWrite ? writeReason ?? undefined : undefined}
+                      onClick={() => setLineOpen(true)}>Add line</Button>
+                    <Button size="sm" variant="outline" disabled={autoMatch.isPending || !canWrite}
+                      title={!canWrite ? writeReason ?? undefined : undefined}
+                      onClick={() => autoMatch.mutate()}>Auto-match</Button>
+                    <Button size="sm" variant="navy" disabled={reconcile.isPending || detail.matched === 0 || !canWrite}
+                      title={!canWrite ? writeReason ?? undefined : undefined}
+                      onClick={() => reconcile.mutate()}>Reconcile matched</Button>
                   </div>
                 </div>
                 <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">

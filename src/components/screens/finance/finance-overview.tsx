@@ -10,6 +10,7 @@ import { useCurrency, money } from "@/lib/currency";
 import { FinanceHeader } from "@/components/screens/finance/finance-header";
 import { JournalEditor } from "@/components/screens/finance/journal-editor";
 import { downloadCsv } from "@/lib/export-csv";
+import { useModuleAccess } from "@/lib/module-access";
 import type { Tone } from "@/lib/tone";
 
 interface Kpi { value: number; sub: string; delta?: string; up?: boolean }
@@ -31,6 +32,7 @@ const WF_COLOR: Record<string, string> = {
 
 export function FinanceOverview() {
   const { currency } = useCurrency();
+  const { canWrite, reason: writeReason } = useModuleAccess("finance");
   const queryClient = useQueryClient();
   const [entryOpen, setEntryOpen] = React.useState(false);
   const { data } = useQuery<OverviewData>({
@@ -70,7 +72,9 @@ export function FinanceOverview() {
         title="Finance overview"
         subtitle="Consolidated position across ledgers, margin and cash"
         action="New entry"
-        onAction={() => setEntryOpen(true)}
+        onAction={canWrite ? () => setEntryOpen(true) : undefined}
+        actionDisabled={!canWrite}
+        actionDisabledReason={writeReason ?? undefined}
         onExport={exportCsv}
       />
 

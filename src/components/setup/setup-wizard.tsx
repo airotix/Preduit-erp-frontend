@@ -38,8 +38,11 @@ const MODULES: ModuleDef[] = [
   { key: "production", label: "Production", desc: "Work orders, BOMs, assembly", icon: TrendingUp },
   { key: "quality", label: "Quality", desc: "Inspections, holds, returns to vendor", icon: BadgeCheck },
   { key: "shipments", label: "Shipments", desc: "Dispatch, carriers, tracking", icon: Package },
-  { key: "channels", label: "Channels", desc: "Online store, marketplaces, wholesale", icon: Globe },
-  { key: "demand", label: "Demand Planning", desc: "Forecasts, replenishment suggestions", icon: Share2 },
+  // Keys below must match the real navigation module ids (config/navigation.ts)
+  // — "commerce" and "ai" — so the selection here actually maps to a module
+  // the sidebar can filter against.
+  { key: "commerce", label: "Channels", desc: "Online store, marketplaces, wholesale", icon: Globe },
+  { key: "ai", label: "Demand Planning", desc: "Forecasts, replenishment suggestions", icon: Share2 },
 ];
 const STEPS = ["Outlets", "Modules", "Your team"];
 

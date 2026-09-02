@@ -6,6 +6,7 @@ import { RefreshCw, CircleDot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { fetchAiSyncState, runAiSync } from "@/lib/ai-api";
+import { useModuleAccess } from "@/lib/module-access";
 import type { AiSyncState } from "@/lib/ai-types";
 
 function timeAgo(iso: string | null): string {
@@ -26,6 +27,7 @@ const DOT: Record<AiSyncState["status"], string> = {
  *  snapshot store from the engine, then refetches every AI query. */
 export function AiSyncControl() {
   const qc = useQueryClient();
+  const { canWrite, reason: writeReason } = useModuleAccess("ai");
   const [busy, setBusy] = React.useState(false);
   const { data } = useQuery<AiSyncState>({
     queryKey: ["ai", "sync-state"],
@@ -59,7 +61,8 @@ export function AiSyncControl() {
         <CircleDot size={12} style={{ color: DOT[status] }} />
         {label}
       </span>
-      <Button variant="outline" size="sm" onClick={sync} disabled={busy}>
+      <Button variant="outline" size="sm" onClick={sync} disabled={busy || !canWrite}
+        title={!canWrite ? writeReason ?? undefined : undefined}>
         <RefreshCw size={15} className={cn(busy && "animate-spin")} />
         {busy ? "Syncing…" : "Sync now"}
       </Button>

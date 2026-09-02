@@ -28,6 +28,13 @@ export interface CompanyProfile {
   sameAsCompany: boolean;
   registrationNumber: string;
   taxNumber: string;
+  bankName: string;
+  bankAccount: string;
+  bankIban: string;
+  bankSwift: string;
+  /** Module ids enabled for this company (setup wizard / Modules section).
+   *  null/undefined = never set — treated as "every module enabled". */
+  enabledModules?: string[] | null;
 }
 
 export const getCompanyProfile = () => apiGet<CompanyProfile>("/auth/company/profile");

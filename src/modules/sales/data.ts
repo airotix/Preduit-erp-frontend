@@ -62,8 +62,8 @@ export const screens: Record<string, ScreenConfig> = {
           "strong": true
         },
         {
-          "badge": "amber",
-          "t": "Picking"
+          "badge": "navy",
+          "t": "Packed"
         }
       ],
       [
@@ -279,31 +279,6 @@ export const screens: Record<string, ScreenConfig> = {
             "metaIcon": "package",
             "av": "LO",
             "tone": "neutral"
-          }
-        ]
-      },
-      {
-        "title": "Picking",
-        "accent": "#D29A22",
-        "count": 2,
-        "cards": [
-          {
-            "ref": "#SO-12354",
-            "title": "Maison Lyon",
-            "sub": "12 items · Wholesale",
-            "meta": "€4,820",
-            "metaIcon": "package",
-            "av": "ML",
-            "tone": "amber"
-          },
-          {
-            "ref": "#SO-12347",
-            "title": "Atelier Sud",
-            "sub": "9 items · Wholesale",
-            "meta": "€3,180",
-            "metaIcon": "package",
-            "av": "AS",
-            "tone": "amber"
           }
         ]
       },

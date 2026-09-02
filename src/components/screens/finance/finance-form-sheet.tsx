@@ -17,10 +17,12 @@ import {
 export interface FinanceField {
   name: string;
   label: string;
-  type?: "text" | "number" | "date";
+  type?: "text" | "number" | "date" | "select";
   placeholder?: string;
   required?: boolean;
   defaultValue?: string;
+  /** Options for type: "select". */
+  options?: { value: string; label: string }[];
 }
 
 /** Small generic create form used by the finance action buttons. */
@@ -84,14 +86,28 @@ export function FinanceFormSheet({
                 {f.label}
                 {f.required && <span className="ml-0.5 text-brand-orange">*</span>}
               </Label>
-              <Input
-                id={f.name}
-                type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
-                step={f.type === "number" ? "any" : undefined}
-                placeholder={f.placeholder}
-                value={values[f.name] ?? ""}
-                onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
-              />
+              {f.type === "select" ? (
+                <select
+                  id={f.name}
+                  value={values[f.name] ?? ""}
+                  onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-[13px] shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="">{f.placeholder ?? "Select…"}</option>
+                  {(f.options ?? []).map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              ) : (
+                <Input
+                  id={f.name}
+                  type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
+                  step={f.type === "number" ? "any" : undefined}
+                  placeholder={f.placeholder}
+                  value={values[f.name] ?? ""}
+                  onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+                />
+              )}
             </div>
           ))}
           {error && (

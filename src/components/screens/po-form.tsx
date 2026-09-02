@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { SheetFooter, SheetClose } from "@/components/ui/sheet";
 import { apiGet, USE_BACKEND } from "@/lib/api-client";
+import { zeroToBlank } from "@/lib/number-input";
 import { ProductNameInput, money, type Suggestion } from "@/components/screens/order-form";
 
 interface ColorOption {
@@ -283,7 +284,8 @@ export function PurchaseOrderForm({
                         type="number"
                         min={0}
                         step="any"
-                        value={l.price}
+                        placeholder="0"
+                        value={zeroToBlank(l.price)}
                         onChange={(e) =>
                           patch(i, { price: Math.max(0, Number(e.target.value) || 0) })
                         }
@@ -310,7 +312,8 @@ export function PurchaseOrderForm({
                             <input
                               type="number"
                               min={0}
-                              value={l.sizeQty[s] ?? 0}
+                              placeholder="0"
+                              value={zeroToBlank(l.sizeQty[s] ?? 0)}
                               onChange={(e) =>
                                 setSize(i, s, Math.max(0, Math.floor(Number(e.target.value) || 0)))
                               }

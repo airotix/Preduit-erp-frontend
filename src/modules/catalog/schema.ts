@@ -2,7 +2,11 @@ import { z } from "zod";
 
 export const productSchema = z.object({
   title: z.string().min(1, "Required"),
-  category: z.enum(["Knitwear", "Bottoms", "Shirts", "Outerwear", "Accessories"]),
+  // Not a static enum: the Category picker is populated live from
+  // GET /catalog/categories (see list-screen.tsx's `dynamicOptions`), so a
+  // category created moments ago is selectable immediately. Validation here
+  // just requires a non-empty value — the live list is what constrains choice.
+  category: z.string().min(1, "Required"),
   season: z.enum(["Core", "Spring '26", "Fall '26", "Winter '26"]),
   status: z.enum(["Active", "Draft", "Discontinued"]),
   // SKU is auto-generated (SKU-000001…). Four price types seed the first variant.
@@ -16,7 +20,10 @@ export const productSchema = z.object({
 export const categorySchema = z.object({
   name: z.string().min(1, "Required"),
   parent: z.string().optional(),
-  active: z.boolean().default(false),
+  // Matches the backend model's own default (Category.is_active defaults to
+  // True) — a newly created category should be usable right away, not
+  // silently inactive until someone notices and flips this switch.
+  active: z.boolean().default(true),
 });
 
 export const attributeSchema = z.object({

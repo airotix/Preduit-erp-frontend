@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { AiHeader } from "@/components/screens/ai/ai-header";
 import { AiLoading, AiError } from "@/components/screens/ai/ai-shared";
 import { useAi } from "@/lib/ai-context";
+import { useModuleAccess } from "@/lib/module-access";
 import {
   fetchAiValidation, fetchAiAudit, fetchAiForecastAccuracy, revertAiOverride, revertAllAiOverrides,
 } from "@/lib/ai-api";
@@ -28,6 +29,7 @@ function timeAgo(ts: string) {
 
 export function AiValidation() {
   const { scenario } = useAi();
+  const { canWrite, reason: writeReason } = useModuleAccess("ai");
   const qc = useQueryClient();
 
   const validation = useQuery<ValidationData>({ queryKey: ["ai", "validation", scenario], queryFn: () => fetchAiValidation(scenario) });
@@ -123,7 +125,8 @@ export function AiValidation() {
                 <p className="text-[13px] text-muted-foreground">{overrides.length} SKUs with manual adjustments</p>
               </div>
               {overrides.length > 0 && (
-                <Button variant="outline" size="sm" onClick={revertAll} disabled={reverting !== null}>
+                <Button variant="outline" size="sm" onClick={revertAll} disabled={reverting !== null || !canWrite}
+                  title={!canWrite ? writeReason ?? undefined : undefined}>
                   <RotateCcw size={14} /> Revert all
                 </Button>
               )}
@@ -148,7 +151,8 @@ export function AiValidation() {
                       <Metric label="Diff" value={`${up ? "+" : ""}${o.userOverride - o.aiRecommended}`} tone={up ? "up" : "down"} />
                       <Button
                         variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-[#C0392B]"
-                        onClick={() => revertOne(o)} disabled={reverting !== null} title="Revert to engine recommendation"
+                        onClick={() => revertOne(o)} disabled={reverting !== null || !canWrite}
+                        title={!canWrite ? writeReason ?? undefined : "Revert to engine recommendation"}
                       >
                         <RotateCcw size={15} className={cn(reverting === key && "animate-spin")} />
                       </Button>

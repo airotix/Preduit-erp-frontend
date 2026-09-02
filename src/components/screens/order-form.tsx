@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/select";
 import { SheetFooter, SheetClose } from "@/components/ui/sheet";
 import { apiGet, USE_BACKEND } from "@/lib/api-client";
+import { zeroToBlank } from "@/lib/number-input";
+import { fieldFormatError } from "@/lib/validators";
 
 const CHANNELS = ["Wholesale", "Online", "Retail"] as const;
 
@@ -70,10 +72,29 @@ interface OrderApiLine {
   price: number;
 }
 
+/** Reach/Account/Finance details for a customer that doesn't exist yet —
+ *  same field set as the customer detail card, minus name (the main Customer
+ *  field already carries that). Matches backend CustomerCreate's camelCase. */
+interface NewCustomerFields {
+  email: string;
+  phone: string;
+  address: string;
+  code: string;
+  terms: string;
+  taxId: string;
+  bankName: string;
+  bankAccount: string;
+}
+
+const emptyNewCustomer = (): NewCustomerFields => ({
+  email: "", phone: "", address: "", code: "", terms: "", taxId: "", bankName: "", bankAccount: "",
+});
+
 interface OrderPayload {
   customer: string;
   channel: string;
   lines: OrderApiLine[];
+  newCustomer?: NewCustomerFields & { name: string; type: string };
 }
 
 /** Type-ahead product name input backed by /catalog/products/search. */
@@ -81,32 +102,39 @@ export function ProductNameInput({
   value,
   onChange,
   onPick,
+  endpoint = "/catalog/products/search",
 }: {
   value: string;
   onChange: (v: string) => void;
   onPick: (s: Suggestion) => void;
+  /** Search endpoint (defaults to the catalog; inventory forms pass the
+   *  in-stock search /inventory/stock/search). */
+  endpoint?: string;
 }) {
   const [items, setItems] = React.useState<Suggestion[]>([]);
   const [open, setOpen] = React.useState(false);
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const load = React.useCallback(async (q: string, openAfter: boolean) => {
+    if (!USE_BACKEND) { setItems([]); return; }
+    try {
+      const res = await apiGet<Suggestion[]>(
+        `${endpoint}?q=${encodeURIComponent(q.trim())}`
+      );
+      setItems(res);
+      if (openAfter) setOpen(res.length > 0);
+    } catch {
+      setItems([]);
+    }
+  }, [endpoint]);
+
+  // Prefetch the full catalogue on mount so the first click shows the list.
+  React.useEffect(() => { load("", false); }, [load]);
+
   const query = (q: string) => {
     if (timer.current) clearTimeout(timer.current);
-    if (!USE_BACKEND || q.trim().length < 1) {
-      setItems([]);
-      return;
-    }
-    timer.current = setTimeout(async () => {
-      try {
-        const res = await apiGet<Suggestion[]>(
-          `/catalog/products/search?q=${encodeURIComponent(q.trim())}`
-        );
-        setItems(res);
-        setOpen(res.length > 0);
-      } catch {
-        setItems([]);
-      }
-    }, 200);
+    // Empty query lists everything (searchable scroll list); typing filters it.
+    timer.current = setTimeout(() => load(q, true), 200);
   };
 
   return (
@@ -118,7 +146,7 @@ export function ProductNameInput({
           onChange(e.target.value);
           query(e.target.value);
         }}
-        onFocus={() => items.length && setOpen(true)}
+        onFocus={() => { setOpen(items.length > 0); load(value, true); }}
         onBlur={() => setTimeout(() => setOpen(false), 120)}
         autoComplete="off"
       />
@@ -146,12 +174,16 @@ export function ProductNameInput({
   );
 }
 
-/** Type-ahead customer name input backed by /sales/customers/search. */
+/** Type-ahead customer name input backed by /sales/customers/search.
+ *  Reports whether the typed name matches an existing customer (and whether a
+ *  lookup is still in flight) so the parent can reveal the "new customer"
+ *  sub-form for names that don't match anyone on file. */
 function CustomerNameInput({
-  value, onChange,
+  value, onChange, onMatchChange,
 }: {
   value: string;
   onChange: (v: string) => void;
+  onMatchChange: (matched: boolean, checking: boolean) => void;
 }) {
   const [items, setItems] = React.useState<{ name: string; region: string }[]>([]);
   const [open, setOpen] = React.useState(false);
@@ -159,15 +191,20 @@ function CustomerNameInput({
 
   const query = (q: string) => {
     if (timer.current) clearTimeout(timer.current);
-    if (!USE_BACKEND || q.trim().length < 1) { setItems([]); return; }
+    const trimmed = q.trim();
+    if (!trimmed) { setItems([]); onMatchChange(true, false); return; }
+    if (!USE_BACKEND) { setItems([]); onMatchChange(true, false); return; }
+    onMatchChange(false, true); // checking — hold off showing "new customer" yet
     timer.current = setTimeout(async () => {
       try {
         const res = await apiGet<{ name: string; region: string }[]>(
-          `/sales/customers/search?q=${encodeURIComponent(q.trim())}`
+          `/sales/customers/search?q=${encodeURIComponent(trimmed)}`
         );
         setItems(res);
         setOpen(res.length > 0);
-      } catch { setItems([]); }
+        const exact = res.some((c) => c.name.toLowerCase() === trimmed.toLowerCase());
+        onMatchChange(exact, false);
+      } catch { setItems([]); onMatchChange(false, false); }
     }, 200);
   };
 
@@ -189,7 +226,7 @@ function CustomerNameInput({
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => { onChange(c.name); setOpen(false); }}
+                onClick={() => { onChange(c.name); setOpen(false); onMatchChange(true, false); }}
                 className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-[13px] hover:bg-muted"
               >
                 <span className="font-semibold text-foreground">{c.name}</span>
@@ -223,15 +260,23 @@ export function OrderForm({
   onSubmit: (payload: OrderPayload) => void;
 }) {
   const [customer, setCustomer] = React.useState("");
+  const [customerMatched, setCustomerMatched] = React.useState(true);
+  const [checkingCustomer, setCheckingCustomer] = React.useState(false);
+  const [newCustomer, setNewCustomer] = React.useState<NewCustomerFields>(emptyNewCustomer());
+  const patchNewCustomer = (next: Partial<NewCustomerFields>) =>
+    setNewCustomer((v) => ({ ...v, ...next }));
+  // A customer whose typed name doesn't match anyone on file — reveal the
+  // inline "new customer" sub-form to capture their Reach/Account/Finance details.
+  const isNewCustomer = customer.trim().length > 0 && !customerMatched && !checkingCustomer;
   const [channel, setChannel] = React.useState<string>("Wholesale");
-  const [colors, setColors] = React.useState<ColorOption[]>([]);
   const [sizes, setSizes] = React.useState<string[]>([]);
   const [lines, setLines] = React.useState<OrderLine[]>([newLine()]);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (!USE_BACKEND) return;
-    apiGet<ColorOption[]>("/catalog/colors").then(setColors).catch(() => setColors([]));
+    // Colours are per-item (loaded when an item is picked); only the size scale
+    // is global here.
     apiGet<string[]>("/catalog/sizes").then(setSizes).catch(() => setSizes([]));
   }, []);
 
@@ -246,6 +291,11 @@ export function OrderForm({
   const addLine = () => setLines((ls) => [...ls, newLine()]);
   const removeLine = (i: number) =>
     setLines((ls) => (ls.length === 1 ? ls : ls.filter((_, j) => j !== i)));
+
+  const handleCustomerMatchChange = (matched: boolean, checking: boolean) => {
+    setCustomerMatched(matched);
+    setCheckingCustomer(checking);
+  };
 
   // Picking a product loads its own colors + per-channel prices, and drops a
   // stale colour pick. The unit price follows the currently selected channel.
@@ -299,8 +349,20 @@ export function OrderForm({
     }
     if (apiLines.length === 0)
       return setError("Add at least one item and enter a quantity for one or more sizes.");
+    if (isNewCustomer) {
+      const bad = fieldFormatError("email", newCustomer.email) || fieldFormatError("phone", newCustomer.phone);
+      if (bad) return setError(bad);
+    }
     setError(null);
-    onSubmit({ customer: customer.trim(), channel, lines: apiLines });
+    const payload: OrderPayload = { customer: customer.trim(), channel, lines: apiLines };
+    if (isNewCustomer) {
+      payload.newCustomer = {
+        ...newCustomer,
+        name: customer.trim(),
+        type: channel === "Wholesale" ? "Wholesale" : "Retail",
+      };
+    }
+    onSubmit(payload);
   };
 
   return (
@@ -310,8 +372,61 @@ export function OrderForm({
           <Label htmlFor="customer">
             Customer<span className="ml-0.5 text-brand-orange">*</span>
           </Label>
-          <CustomerNameInput value={customer} onChange={setCustomer} />
+          <CustomerNameInput
+            value={customer}
+            onChange={setCustomer}
+            onMatchChange={handleCustomerMatchChange}
+          />
         </div>
+
+        {isNewCustomer && (
+          <div className="space-y-3 rounded-xl border border-dashed border-border p-3.5">
+            <p className="text-[12px] font-semibold text-muted-foreground">
+              New customer — no match found for &ldquo;{customer.trim()}&rdquo;. Add their details
+              below and we&rsquo;ll create the customer record along with this order.
+            </p>
+
+            <div className="space-y-2">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                Reach
+              </span>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <Input placeholder="Email" type="email" value={newCustomer.email}
+                  onChange={(e) => patchNewCustomer({ email: e.target.value })} />
+                <Input placeholder="Phone" value={newCustomer.phone}
+                  onChange={(e) => patchNewCustomer({ phone: e.target.value })} />
+                <Input placeholder="Address" value={newCustomer.address}
+                  onChange={(e) => patchNewCustomer({ address: e.target.value })} />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                Account
+              </span>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <Input placeholder="Customer ID" value={newCustomer.code}
+                  onChange={(e) => patchNewCustomer({ code: e.target.value })} />
+                <Input placeholder="Terms (e.g. Net 30)" value={newCustomer.terms}
+                  onChange={(e) => patchNewCustomer({ terms: e.target.value })} />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                Finance
+              </span>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <Input placeholder="Tax ID" value={newCustomer.taxId}
+                  onChange={(e) => patchNewCustomer({ taxId: e.target.value })} />
+                <Input placeholder="Bank" value={newCustomer.bankName}
+                  onChange={(e) => patchNewCustomer({ bankName: e.target.value })} />
+                <Input placeholder="Account no." value={newCustomer.bankAccount}
+                  onChange={(e) => patchNewCustomer({ bankAccount: e.target.value })} />
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="space-y-1.5">
           <Label htmlFor="channel">
@@ -338,9 +453,11 @@ export function OrderForm({
 
           <div className="space-y-3">
             {lines.map((l, i) => {
-              const opts = l.colorOptions.length ? l.colorOptions : colors;
-              const colorHint =
-                l.name && !l.colorOptions.length ? "No colors for item" : "Color";
+              // Colours are scoped to the picked item only — no global fallback.
+              const opts = l.colorOptions;
+              const colorHint = !l.colorOptions.length
+                ? (l.name ? "No colours for this item" : "Select an item first")
+                : "Color";
               const units = lineUnits(l);
               return (
                 <div key={i} className="rounded-xl border border-border/60 p-3">
@@ -395,7 +512,8 @@ export function OrderForm({
                         type="number"
                         min={0}
                         step="any"
-                        value={l.price}
+                        placeholder="0"
+                        value={zeroToBlank(l.price)}
                         onChange={(e) =>
                           patch(i, { price: Math.max(0, Number(e.target.value) || 0) })
                         }
@@ -422,7 +540,8 @@ export function OrderForm({
                             <input
                               type="number"
                               min={0}
-                              value={l.sizeQty[s] ?? 0}
+                              placeholder="0"
+                              value={zeroToBlank(l.sizeQty[s] ?? 0)}
                               onChange={(e) =>
                                 setSize(i, s, Math.max(0, Math.floor(Number(e.target.value) || 0)))
                               }

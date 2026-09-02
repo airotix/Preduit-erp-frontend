@@ -2,14 +2,16 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef as TanstackColumnDef } from "@tanstack/react-table";
 import type { z } from "zod";
 import { DataTable } from "@/components/screens/data-table";
 import { AutoForm } from "@/components/screens/auto-form";
 import { OrderForm } from "@/components/screens/order-form";
 import { PurchaseOrderForm } from "@/components/screens/po-form";
-import { ProductionStartModal } from "@/components/screens/production/production-start-modal";
+import { InspectionForm } from "@/components/screens/inspection-form";
+import { TransferForm } from "@/components/screens/transfer-form";
+import { StockReceiptForm } from "@/components/screens/stock-receipt-form";
 import { FinanceFormSheet } from "@/components/screens/finance/finance-form-sheet";
 import { Button } from "@/components/ui/button";
 import { detailTypeFor } from "@/config/detail-types";
@@ -22,7 +24,8 @@ import {
 } from "@/components/ui/sheet";
 import type { ListConfig, Row } from "@/lib/screen-types";
 import { delay } from "@/lib/mock-fetch";
-import { apiPost, apiPut, USE_BACKEND } from "@/lib/api-client";
+import { apiGet, apiPost, apiPut, USE_BACKEND } from "@/lib/api-client";
+import { useModuleAccess } from "@/lib/module-access";
 
 /** module/tab → backend POST path for wired create forms. */
 const CREATE_ENDPOINTS: Record<string, string> = {
@@ -83,11 +86,12 @@ const STATUS_ENDPOINTS: Record<string, (id: string) => string> = {
   // PO status changes happen in the Approval queue, not the main list.
   "procurement/receipts": (id) => `/procurement/receipts/${id}/status`,
   "inventory/transfers": (id) => `/inventory/transfers/${id}/status`,
-  "quality/inspections": (id) => `/quality/inspections/${id}/status`,
+  // Inspection results are decided inside the per-item workspace (Start →
+  // Complete), not via an inline status dropdown on the grouped list.
   "shipments/shipments": (id) => `/shipments/shipments/${id}/status`,
 };
 const STATUS_OPTIONS: Record<string, string[]> = {
-  "sales/orders": ["New", "Picking", "Packed", "Shipped", "Cancelled"],
+  "sales/orders": ["New", "Packed", "Shipped", "Cancelled"],
   "sales/invoices": ["Open", "Paid", "Overdue", "Void"],
   "sales/returns": ["Inspecting", "Refunded", "Rejected"],
   "procurement/receipts": ["Expected", "Partial", "Complete"],
@@ -146,6 +150,12 @@ export function ListScreen({
   const detailType = detailTypeFor(module, tab);
   const router = useRouter();
   const queryClient = useQueryClient();
+  // View-only roles (core/roles.py <module>.read without .write) keep every
+  // write action out of reach: New/Edit/status-change/Start/Ship. The "+ New"
+  // button stays visible-but-disabled with a tooltip; row-level icon actions
+  // are simply omitted, consistent with how they're already conditionally
+  // shown per row based on business state (e.g. startableRows).
+  const { canWrite, reason } = useModuleAccess(module);
 
   const key = `${module}/${tab}`;
   const updateBuilder = UPDATE_ENDPOINTS[key];
@@ -154,7 +164,8 @@ export function ListScreen({
     !!schema &&
     !!updateBuilder &&
     !!config.records?.length &&
-    !!config.ids?.length;
+    !!config.ids?.length &&
+    canWrite;
 
   const openRecord = React.useCallback(
     (row: Row) => {
@@ -175,7 +186,8 @@ export function ListScreen({
         await delay(400);
         return values;
       }
-      const path = CREATE_ENDPOINTS[key];
+      // A PO raised from Reorder Alerts is a real procurement PO.
+      const path = isReorderPOCreate ? "/procurement/pos" : CREATE_ENDPOINTS[key];
       if (USE_BACKEND && path) {
         return apiPost(path, values);
       }
@@ -184,6 +196,10 @@ export function ListScreen({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["screen", module, tab] });
+      // PO raised from Reorder Alerts must refresh the Procurement PO list too.
+      if (isReorderPOCreate) {
+        queryClient.invalidateQueries({ queryKey: ["screen", "procurement", "pos"] });
+      }
       setOpen(false);
       setEditIndex(null);
     },
@@ -208,7 +224,7 @@ export function ListScreen({
   // Per-row status transitions (document tabs).
   const statusBuilder = STATUS_ENDPOINTS[key];
   const statusOpts = STATUS_OPTIONS[key];
-  const canStatus = USE_BACKEND && !!statusBuilder && !!statusOpts && !!config.ids?.length;
+  const canStatus = USE_BACKEND && !!statusBuilder && !!statusOpts && !!config.ids?.length && canWrite;
   const rowStatuses = config.records?.map(
     (r) => (r as { status?: string } | undefined)?.status
   );
@@ -229,10 +245,29 @@ export function ListScreen({
   // Sales orders + purchase orders use bespoke multi-line create forms.
   const isOrderCreate = !isEdit && module === "sales" && tab === "orders";
   const isPOCreate = !isEdit && module === "procurement" && tab === "pos";
+  // "Create PO" on the inventory Reorder Alerts page reuses the very same
+  // procurement PO form and posts to /procurement/pos, so the order lands in
+  // Procurement and flows through exactly like any other PO.
+  const isReorderPOCreate = !isEdit && module === "inventory" && tab === "alerts";
+  const isTransferCreate = !isEdit && module === "inventory" && tab === "transfers";
+  const isStockReceiptCreate = !isEdit && module === "inventory" && tab === "stock";
+  // New inspection uses a bespoke form with an order-driven Item picker.
+  const isInspectionCreate = !isEdit && module === "quality" && tab === "inspections";
   // Production orders get a per-row "Start production" button + modal.
   const isProductionOrders = module === "production" && tab === "porders";
   // Passing a QC inspection opens a carrier/destination modal → creates a shipment.
   const isInspections = module === "quality" && tab === "inspections";
+  // Order History is a read-only cross-module drill-down — no create form.
+  const isOrderHistory = module === "orderhistory" && tab === "shipped";
+  // Product form's Category field is populated from the live category list
+  // (not a hardcoded enum) so a category created moments ago is selectable
+  // immediately, instead of only appearing after a code change.
+  const isCatalogProducts = module === "catalog" && tab === "products";
+  const { data: categoryNames } = useQuery({
+    queryKey: ["catalog", "category-names"],
+    queryFn: () => apiGet<string[]>("/catalog/categories"),
+    enabled: USE_BACKEND && isCatalogProducts && open,
+  });
   const [passId, setPassId] = React.useState<string | null>(null);
   const passInspection = useMutation({
     mutationFn: (v: Record<string, string | number>) =>
@@ -243,58 +278,36 @@ export function ListScreen({
       setPassId(null);
     },
   });
-  const [startOrderId, setStartOrderId] = React.useState<string | null>(null);
-  const [shipOrderId, setShipOrderId] = React.useState<string | null>(null);
-  const shipOrder = useMutation({
-    mutationFn: (v: Record<string, string | number>) =>
-      apiPost(`/production/porders/${shipOrderId}/ship`, {
-        carrier: v.carrier, destination: v.destination, eta: v.eta || null,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["screen", "production", "porders"] });
-      queryClient.invalidateQueries({ queryKey: ["screen", "shipments"] });
-      setShipOrderId(null);
-    },
-  });
-
   return (
     <>
       <DataTable
         columns={columns}
         data={config.rows}
+        records={config.records}
         searchPlaceholder={config.search}
         filters={config.filters}
         actionLabel={actionLabel}
         total={config.total}
-        onAction={() => {
-          setEditIndex(null);
-          setActionResult(null);
-          setOpen(true);
-        }}
+        onAction={
+          isOrderHistory || !canWrite
+            ? undefined
+            : () => {
+                setEditIndex(null);
+                setActionResult(null);
+                setOpen(true);
+              }
+        }
+        actionDisabled={!isOrderHistory && !canWrite}
+        actionDisabledReason={reason ?? undefined}
         onRowClick={detailType ? openRecord : undefined}
-        onStartRow={
-          isProductionOrders && USE_BACKEND
-            ? (i) => setStartOrderId(config.ids?.[i] ?? null)
-            : undefined
-        }
-        startableRows={
-          isProductionOrders
-            ? config.records?.map((r) => !(r as { started?: boolean })?.started)
-            : undefined
-        }
-        onShipRow={
-          isProductionOrders && USE_BACKEND
-            ? (i) => setShipOrderId(config.ids?.[i] ?? null)
-            : undefined
-        }
-        shippableRows={
-          isProductionOrders
-            ? config.records?.map((r) => {
-                const rec = r as { shippable?: boolean; shipped?: boolean };
-                return !!rec?.shippable && !rec?.shipped;
-              })
-            : undefined
-        }
+        // Production is started per-item inside each order's item tab, not from
+        // the orders list — so no order-level "Start production" row action.
+        onStartRow={undefined}
+        startableRows={undefined}
+        // Shipments are created from Quality (once every item passes), never
+        // from Production — so no "Send shipment" row action here.
+        onShipRow={undefined}
+        shippableRows={undefined}
         onEditRow={
           canEdit
             ? (i) => {
@@ -347,8 +360,23 @@ export function ListScreen({
               pending={save.isPending}
               onSubmit={(v) => save.mutate(v as unknown as Record<string, unknown>)}
             />
-          ) : isPOCreate ? (
+          ) : isPOCreate || isReorderPOCreate ? (
             <PurchaseOrderForm
+              pending={save.isPending}
+              onSubmit={(v) => save.mutate(v as unknown as Record<string, unknown>)}
+            />
+          ) : isTransferCreate ? (
+            <TransferForm
+              pending={save.isPending}
+              onSubmit={(v) => save.mutate(v as unknown as Record<string, unknown>)}
+            />
+          ) : isStockReceiptCreate ? (
+            <StockReceiptForm
+              pending={save.isPending}
+              onSubmit={(v) => save.mutate(v as unknown as Record<string, unknown>)}
+            />
+          ) : isInspectionCreate ? (
+            <InspectionForm
               pending={save.isPending}
               onSubmit={(v) => save.mutate(v as unknown as Record<string, unknown>)}
             />
@@ -359,6 +387,7 @@ export function ListScreen({
               submitLabel={isEdit ? "Save changes" : actionLabel}
               pending={save.isPending}
               defaultValues={defaultValues}
+              dynamicOptions={isCatalogProducts ? { category: categoryNames ?? [] } : undefined}
               onSubmit={(v) => save.mutate(v as Record<string, unknown>)}
             />
           ) : actionConfig ? (
@@ -392,35 +421,6 @@ export function ListScreen({
           fields={[
             { name: "carrier", label: "Carrier", required: true, placeholder: "DHL Express" },
             { name: "destination", label: "Destination", required: true, placeholder: "Paris, FR" },
-          ]}
-        />
-      )}
-
-      {isProductionOrders && (
-        <ProductionStartModal
-          open={!!startOrderId}
-          onOpenChange={(o) => { if (!o) setStartOrderId(null); }}
-          orderId={startOrderId ?? ""}
-          onStarted={() => {
-            queryClient.invalidateQueries({ queryKey: ["screen", module, tab] });
-            setStartOrderId(null);
-          }}
-        />
-      )}
-
-      {isProductionOrders && (
-        <FinanceFormSheet
-          open={!!shipOrderId}
-          onOpenChange={(o) => { if (!o) setShipOrderId(null); }}
-          title="Send shipment"
-          description="Log this completed order as a shipment."
-          submitLabel="Create shipment"
-          pending={shipOrder.isPending}
-          onSubmit={(v) => shipOrder.mutate(v)}
-          fields={[
-            { name: "carrier", label: "Carrier", required: true, placeholder: "DHL Express" },
-            { name: "destination", label: "Destination", required: true, placeholder: "Paris, FR" },
-            { name: "eta", label: "ETA", placeholder: "e.g. 12 Aug" },
           ]}
         />
       )}
