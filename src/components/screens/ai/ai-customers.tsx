@@ -45,7 +45,7 @@ export function AiCustomers() {
   const customers = data?.customers ?? [];
 
   const stats = React.useMemo(() => {
-    const regions = [...new Set(customers.map((c) => c.region))].sort();
+    const regions = Array.from(new Set(customers.map((c) => c.region))).sort();
     const visitedCount = customers.filter((c) => c.status === "visited").length;
     const coverage = customers.length ? Math.round((visitedCount / customers.length) * 100) : 0;
     const byRegion = new Map<string, { total: number; visited: number }>();

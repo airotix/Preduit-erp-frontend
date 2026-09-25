@@ -63,7 +63,7 @@ export function AiRecommendations() {
     }).slice(0, 150);
   }, [recs, search, status, category]);
 
-  const categories = React.useMemo(() => [...new Set(recs.map((r) => r.category))].filter(Boolean), [recs]);
+  const categories = React.useMemo(() => Array.from(new Set(recs.map((r) => r.category))).filter(Boolean), [recs]);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["ai", "recommendations"] });
 

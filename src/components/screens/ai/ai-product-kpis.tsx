@@ -50,7 +50,7 @@ export function AiProductKpis() {
   }, [data, search, category, status, sortBy, sortOrder]);
 
   const categories = React.useMemo(
-    () => [...new Set((data ?? []).map((p) => p.category))].filter(Boolean),
+    () => Array.from(new Set((data ?? []).map((p) => p.category))).filter(Boolean),
     [data]
   );
 
