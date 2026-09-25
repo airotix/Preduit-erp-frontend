@@ -178,9 +178,8 @@ export function AiProjection() {
 
 /** Color × size matrix from the engine's projection detail. */
 function StockMatrix({ detail }: { detail: ProjectionDetail }) {
-  const sizes = detail.sizeColumns ?? [
-    ...new Set(detail.colorVariants.flatMap((v) => Object.keys(v.forecastedQuantity))),
-  ];
+  const sizes = detail.sizeColumns ??
+    Array.from(new Set(detail.colorVariants.flatMap((v) => Object.keys(v.forecastedQuantity))));
   const rowFor = (v: ProjectionDetail["colorVariants"][number]) =>
     sizes.map((s) => v.forecastedQuantity[s] ?? 0);
 

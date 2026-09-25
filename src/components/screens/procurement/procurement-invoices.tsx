@@ -20,7 +20,7 @@ import { useModuleAccess } from "@/lib/module-access";
 
 // ----- types + helpers ------------------------------------------------------
 type Row = { color: string; qty: Record<string, number>; unitPrice: number; total?: number; amount?: number };
-type Article = { articleNo: string; style: string; description: string; fabric: string; hsCode: string; image?: string | null; sizes: string[]; rows: Row[] };
+type Article = { articleNo: string; style: string; description: string; fabric: string; hsCode: string; image?: string | null; sizes: string[]; rows: Row[]; subtotalQty?: number; subtotalAmount?: number };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Doc = any;
 
