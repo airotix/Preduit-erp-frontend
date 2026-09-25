@@ -59,7 +59,7 @@ export function AiSetup() {
     try {
       await saveAiSeasonConfig(form);
       qc.invalidateQueries({ queryKey: ["ai", "season-config"] });
-      setDone((d) => new Set([...d, 1]));
+      setDone((d) => { const s = new Set(d); s.add(1); return s; });
       setStep(2);
     } finally {
       setSaving(false);
@@ -73,7 +73,7 @@ export function AiSetup() {
       const r = await runAiIngest();
       setIngestResult(`Added ${r.rowsAdded ?? 0}, updated ${r.rowsUpdated ?? 0}, skipped ${r.rowsSkipped ?? 0}.`);
       qc.invalidateQueries({ queryKey: ["ai"] });
-      setDone((d) => new Set([...d, 2]));
+      setDone((d) => { const s = new Set(d); s.add(2); return s; });
     } catch {
       setIngestResult("Sync failed — the forecasting engine is offline.");
     } finally {

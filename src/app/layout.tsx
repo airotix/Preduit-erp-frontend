@@ -8,6 +8,7 @@ const nunito = Nunito_Sans({
   weight: ["300", "400", "600", "700", "800"],
   variable: "--font-nunito",
   display: "swap",
+  adjustFontFallback: false,
 });
 
 export const metadata: Metadata = {
