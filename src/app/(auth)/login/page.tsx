@@ -28,9 +28,13 @@ export default function LoginPage() {
       const user = await login(email, password, keep, business);
       router.push(postAuthPath(user));
     } catch (err) {
-      const e2 = err as Error & { locked?: boolean; until?: number | null };
+      const e2 = err as Error & { locked?: boolean; until?: number | null; requiresVerification?: boolean; verifyEmail?: string };
       if (e2?.locked) {
         router.push(e2.until ? `/locked?until=${e2.until}` : "/locked");
+        return;
+      }
+      if (e2?.requiresVerification) {
+        router.push(`/verify?email=${encodeURIComponent(e2.verifyEmail || email)}`);
         return;
       }
       setError(err instanceof Error ? err.message : "Sign in failed");
