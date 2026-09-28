@@ -1,14 +1,22 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { Building2, ShieldAlert } from "lucide-react";
+import * as React from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Building2, ShieldAlert, Trash2, Loader2 } from "lucide-react";
 import { USE_BACKEND, ApiError } from "@/lib/api-client";
-import { getCompanies } from "@/lib/admin-api";
+import { getCompanies, deleteCompany } from "@/lib/admin-api";
 
 const CARD = "rounded-[14px] border border-[#ECE7DD] bg-white";
 
 export function AdminCompanies() {
+  const qc = useQueryClient();
   const companies = useQuery({ queryKey: ["companies"], queryFn: getCompanies, enabled: USE_BACKEND });
+  const [confirmId, setConfirmId] = React.useState<string | null>(null);
+
+  const remove = useMutation({
+    mutationFn: deleteCompany,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["companies"] }); setConfirmId(null); },
+  });
 
   if (!USE_BACKEND) {
     return <Notice title="Backend required"
@@ -21,6 +29,7 @@ export function AdminCompanies() {
 
   const rows = companies.data ?? [];
   const totalUsers = rows.reduce((s, c) => s + c.users, 0);
+  const confirmCompany = rows.find((c) => c.id === confirmId);
 
   return (
     <div className="space-y-5">
@@ -42,10 +51,11 @@ export function AdminCompanies() {
               <th className="px-5 py-2.5">Currency</th>
               <th className="px-5 py-2.5 text-right">Users</th>
               <th className="px-5 py-2.5 text-right">Status</th>
+              <th className="px-5 py-2.5 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {companies.isLoading && <tr><td colSpan={5} className="px-5 py-8 text-center text-[#a39c8f]">Loading…</td></tr>}
+            {companies.isLoading && <tr><td colSpan={6} className="px-5 py-8 text-center text-[#a39c8f]">Loading…</td></tr>}
             {rows.map((c) => (
               <tr key={c.id} className="border-b border-[#F5F2EB] last:border-0">
                 <td className="px-5 py-3">
@@ -68,11 +78,43 @@ export function AdminCompanies() {
                     {c.status}
                   </span>
                 </td>
+                <td className="px-5 py-3 text-right">
+                  <button onClick={() => setConfirmId(c.id)} title="Delete company"
+                          className="rounded-lg p-1.5 text-[#c4b8a8] transition-colors hover:bg-[#FBE8E8] hover:text-[#C0392B]">
+                    <Trash2 size={15} />
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </section>
+
+      {confirmCompany && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => !remove.isPending && setConfirmId(null)}>
+          <div className="w-full max-w-[400px] rounded-[14px] border border-[#ECE7DD] bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-[16px] font-extrabold text-[#211f1c]">Delete company?</h3>
+            <p className="mt-2 text-[13.5px] leading-relaxed text-[#6f6a60]">
+              This will permanently delete <b>{confirmCompany.name}</b> and all its users, subscriptions, and data. This cannot be undone.
+            </p>
+            {remove.isError && (
+              <div className="mt-3 rounded-lg bg-[#FBEAEA] px-3 py-2 text-[13px] font-semibold text-[#C0392B]">
+                {remove.error instanceof Error ? remove.error.message : "Failed to delete"}
+              </div>
+            )}
+            <div className="mt-5 flex gap-3">
+              <button onClick={() => setConfirmId(null)} disabled={remove.isPending}
+                      className="flex-1 rounded-[10px] border border-[#e4e0d6] px-4 py-2.5 text-[13.5px] font-bold text-[#3a372f] transition-colors hover:bg-[#F5F2EB] disabled:opacity-60">
+                Cancel
+              </button>
+              <button onClick={() => remove.mutate(confirmCompany.id)} disabled={remove.isPending}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-[10px] bg-[#C0392B] px-4 py-2.5 text-[13.5px] font-bold text-white transition-colors hover:bg-[#A93226] disabled:opacity-60">
+                {remove.isPending ? <><Loader2 size={14} className="animate-spin" /> Deleting…</> : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

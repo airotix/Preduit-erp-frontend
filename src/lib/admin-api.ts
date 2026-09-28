@@ -51,3 +51,5 @@ export const inviteTeammate = (email: string, role: string) =>
 export const revokeInvitation = (id: string) => apiDelete<Invitation>(`/auth/invitations/${id}`);
 export const updateTeamUser = (id: string, patch: { role?: string; isActive?: boolean }) =>
   apiPatch<TeamUser>(`/auth/users/${id}`, patch);
+export const deleteCompany = (id: string) =>
+  apiDelete<{ deleted: boolean; name: string }>(`/auth/companies/${id}`);
