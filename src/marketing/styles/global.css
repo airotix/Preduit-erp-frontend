@@ -1,0 +1,91 @@
+/* =========================================================================
+   Preduit landing page — styles scoped under .pd-landing so they do not
+   restyle the ERP shell. Tokens live in tokens.css (:root).
+   ========================================================================= */
+
+.pd-landing {
+  scroll-behavior: smooth;
+  margin: 0;
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+.pd-landing,
+.pd-landing * {
+  -webkit-font-smoothing: antialiased;
+}
+.pd-landing a { color: var(--primary); text-decoration: none; }
+.pd-landing a:hover { color: var(--primary-hover); }
+.pd-landing button { font-family: var(--font-sans); }
+
+/* Inputs — focus ring cannot be expressed inline */
+.pd-landing .pd-input:focus,
+.pd-landing .pd-input:focus-visible {
+  border-color: var(--primary) !important;
+  box-shadow: var(--focus-ring);
+}
+
+/* ---------------------------------------------------------------- keyframes */
+@keyframes pdFloatA { 0%, 100% { transform: translate3d(0,0,0) scale(1); } 50% { transform: translate3d(24px,-30px,0) scale(1.08); } }
+@keyframes pdFloatB { 0%, 100% { transform: translate3d(0,0,0) scale(1); } 50% { transform: translate3d(-30px,24px,0) scale(1.12); } }
+@keyframes pdGrow { from { width: 0%; } to { width: 100%; } }
+@keyframes pdMarquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes pdRowIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pdPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.8); } }
+@keyframes pdSweep { from { transform: translateX(-120%); } to { transform: translateX(320%); } }
+@keyframes pdSpin { to { transform: rotate(360deg); } }
+@keyframes pdRise { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pdTourCursor {
+  0%   { transform: translate(0,0) scale(1); opacity: 0; }
+  8%   { opacity: 1; }
+  26%  { transform: translate(190px,52px) scale(1); }
+  32%  { transform: translate(190px,52px) scale(.72); }
+  38%  { transform: translate(190px,52px) scale(1); }
+  62%  { transform: translate(320px,214px) scale(1); }
+  68%  { transform: translate(320px,214px) scale(.72); }
+  74%  { transform: translate(320px,214px) scale(1); }
+  94%  { transform: translate(150px,286px) scale(1); opacity: 1; }
+  100% { transform: translate(150px,286px) scale(1); opacity: 0; }
+}
+
+/* ------------------------------------------------------- responsive tracks */
+@media (max-width: 1180px) {
+  .pd-landing #pd-tour-grid { grid-template-columns: minmax(0,1fr) !important; }
+  .pd-landing #pd-tour-grid > div:first-child { flex-direction: row !important; flex-wrap: wrap !important; }
+  .pd-landing #pd-tour-grid > div:first-child > button { flex: 1 1 260px; }
+  .pd-landing #pd-tour-grid > div:first-child > div:last-child { flex: 1 1 100%; }
+}
+@media (max-width: 1080px) {
+  .pd-landing #pd-depth-grid { grid-template-columns: minmax(0,1fr) !important; }
+  .pd-landing #pd-roles-grid,
+  .pd-landing #pd-rollout-grid,
+  .pd-landing #pd-trust-grid { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
+  .pd-landing #pd-pricing-grid { grid-template-columns: minmax(0,1fr) !important; }
+  .pd-landing #pd-stats-grid { grid-template-columns: repeat(2,minmax(0,1fr)) !important; gap: 32px !important; }
+  .pd-landing #pd-what-grid { grid-template-columns: minmax(0,1fr) !important; }
+  .pd-landing #pd-what-grid > div:nth-child(2) { display: none !important; }
+  .pd-landing #pd-cta-grid { grid-template-columns: minmax(0,1fr) !important; }
+}
+@media (max-width: 1040px) {
+  .pd-landing #pd-hero { grid-template-columns: minmax(0,1fr) !important; gap: 44px !important; }
+  .pd-landing #pd-hero h1 { font-size: 46px !important; }
+}
+@media (max-width: 900px) {
+  .pd-landing #pd-tour-scene { grid-template-columns: minmax(0,1fr) !important; }
+  .pd-landing #pd-tour-scene > div:first-child { display: none !important; }
+  .pd-landing #pd-tour-kpis { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
+  .pd-landing #pd-modal-grid-2,
+  .pd-landing #pd-modal-grid-3 { grid-template-columns: minmax(0,1fr) !important; }
+}
+@media (max-width: 760px) {
+  .pd-landing #pd-roles-grid,
+  .pd-landing #pd-rollout-grid,
+  .pd-landing #pd-trust-grid,
+  .pd-landing #pd-stats-grid { grid-template-columns: minmax(0,1fr) !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pd-landing,
+  .pd-landing *,
+  .pd-landing *::before,
+  .pd-landing *::after { animation: none !important; transition: none !important; }
+}

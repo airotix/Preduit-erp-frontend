@@ -21,8 +21,27 @@ export default function VerifyPage() {
     try {
       const p = new URLSearchParams(window.location.search).get("email");
       if (p) setEmail(p);
+      const stored = sessionStorage.getItem("erp_dev_verify_code");
+      if (stored) {
+        setDevCode(stored);
+        sessionStorage.removeItem("erp_dev_verify_code");
+      }
     } catch { /* ignore */ }
   }, []);
+
+  // Local/dev: if no code was handed off from login, resend once so the
+  // backend can return a `devCode` when SMTP isn't configured.
+  React.useEffect(() => {
+    if (!email || devCode) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await resendVerification(email);
+        if (!cancelled && r?.devCode) setDevCode(r.devCode);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [email, devCode, resendVerification]);
 
   React.useEffect(() => {
     if (seconds <= 0) return;
@@ -90,7 +109,8 @@ export default function VerifyPage() {
         )}
         {devCode && (
           <div className="mt-4 rounded-lg bg-[#FEF6E7] px-3 py-2.5 text-[13px] font-semibold text-[#8A6D1B]">
-            Dev code: <span className="font-mono">{devCode}</span>
+            Local/dev — email isn&apos;t configured, use this code:{" "}
+            <span className="font-mono tracking-widest">{devCode}</span>
           </div>
         )}
 

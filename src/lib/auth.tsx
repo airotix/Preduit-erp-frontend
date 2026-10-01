@@ -145,9 +145,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const r = await res.json();
     if (r.requiresVerification) {
-      const err = new Error("Email verification required.") as Error & { requiresVerification?: boolean; verifyEmail?: string };
+      const err = new Error("Email verification required.") as Error & {
+        requiresVerification?: boolean; verifyEmail?: string; devCode?: string;
+      };
       err.requiresVerification = true;
       err.verifyEmail = r.email;
+      if (typeof r.devVerifyCode === "string") err.devCode = r.devVerifyCode;
       throw err;
     }
     const data = r as { accessToken: string; user: AuthUser };

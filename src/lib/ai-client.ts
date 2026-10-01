@@ -21,9 +21,14 @@ const AI_BASE = process.env.NEXT_PUBLIC_AI_API_URL ?? `${ERP_BASE}/ai`;
 export const USE_AI_BACKEND =
   process.env.NEXT_PUBLIC_USE_AI_BACKEND !== "false";
 
-// Demo mode: serve the Demand Planning module from static fixtures (no engine
-// backend needed). Set NEXT_PUBLIC_AI_DEMO="false" to talk to the real facade.
-export const AI_DEMO = process.env.NEXT_PUBLIC_AI_DEMO !== "false";
+// Demo mode: serve Demand Planning from static fixtures. Off whenever the ERP
+// backend is in use, unless NEXT_PUBLIC_AI_DEMO is explicitly "true".
+export const AI_DEMO =
+  process.env.NEXT_PUBLIC_AI_DEMO === "true"
+    ? true
+    : process.env.NEXT_PUBLIC_AI_DEMO === "false"
+      ? false
+      : process.env.NEXT_PUBLIC_USE_BACKEND !== "true";
 
 const _delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

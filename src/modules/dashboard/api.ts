@@ -13,7 +13,8 @@ export async function fetchScreen(tab: string): Promise<ScreenConfig> {
       const ov = await apiGet<DashboardOverrides>(`/dashboards/${tab}`);
       return mergeDashboard(mock, ov);
     } catch {
-      /* fall back to the mock on any error */
+      // Backend on: never leave design-mock KPIs on screen after an error.
+      return mergeDashboard(mock, {});
     }
   }
   return mockFetch(screens[tab]);

@@ -2,9 +2,10 @@
 
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, ShieldAlert, Trash2, Loader2 } from "lucide-react";
+import { Building2, ShieldAlert, Trash2, Loader2, Plus } from "lucide-react";
 import { USE_BACKEND, ApiError } from "@/lib/api-client";
 import { getCompanies, deleteCompany } from "@/lib/admin-api";
+import { AddWorkspaceWizard } from "@/components/screens/admin/add-workspace-wizard";
 
 const CARD = "rounded-[14px] border border-[#ECE7DD] bg-white";
 
@@ -12,6 +13,7 @@ export function AdminCompanies() {
   const qc = useQueryClient();
   const companies = useQuery({ queryKey: ["companies"], queryFn: getCompanies, enabled: USE_BACKEND });
   const [confirmId, setConfirmId] = React.useState<string | null>(null);
+  const [adding, setAdding] = React.useState(false);
 
   const remove = useMutation({
     mutationFn: deleteCompany,
@@ -40,8 +42,12 @@ export function AdminCompanies() {
       </div>
 
       <section className={CARD}>
-        <div className="border-b border-[#F0ECE3] px-5 py-4">
+        <div className="flex items-center justify-between border-b border-[#F0ECE3] px-5 py-4">
           <h2 className="text-[15px] font-extrabold text-[#211f1c]">All companies</h2>
+          <button onClick={() => setAdding(true)}
+                  className="inline-flex items-center gap-1.5 rounded-[10px] bg-[#F58220] px-3.5 py-2 text-[13.5px] font-bold text-white transition-colors hover:bg-[#EA6C18]">
+            <Plus size={15} strokeWidth={2.5} /> Add workspace
+          </button>
         </div>
         <table className="w-full text-[13.5px]">
           <thead>
@@ -89,6 +95,13 @@ export function AdminCompanies() {
           </tbody>
         </table>
       </section>
+
+      {adding && (
+        <AddWorkspaceWizard
+          onClose={() => setAdding(false)}
+          onCreated={() => qc.invalidateQueries({ queryKey: ["companies"] })}
+        />
+      )}
 
       {confirmCompany && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => !remove.isPending && setConfirmId(null)}>

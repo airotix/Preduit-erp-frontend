@@ -36,17 +36,50 @@ export interface DashboardOverrides {
   alerts?: AlertsOverride;
 }
 
+function hasLiveData(ov: DashboardOverrides): boolean {
+  return (
+    ov.metricsList != null ||
+    ov.metrics != null ||
+    ov.donut != null ||
+    ov.bars != null ||
+    ov.table != null ||
+    ov.alerts != null ||
+    ov.donutTotal != null
+  );
+}
+
+/** Wipe mock KPIs so an empty backend response never shows fictional numbers. */
+function emptyFromMock(cfg: DashboardConfig): DashboardConfig {
+  cfg.metrics = cfg.metrics.map((m) => ({
+    ...m,
+    value: "—",
+    delta: "",
+  }));
+  if (cfg.bars) cfg.bars = cfg.bars.map(() => 0);
+  cfg.donut = [];
+  cfg.donutTotal = "0";
+  cfg.tableData = [];
+  cfg.activity = [];
+  return cfg;
+}
+
 /**
  * Merge real values from the backend onto the mock dashboard config. Layout,
  * icons and colours are preserved; the backend supplies the live numbers,
  * table rows and per-module alerts.
+ *
+ * Rules when the backend is live:
+ * - Empty `{}` → clear every mock KPI (never show design placeholders).
+ * - Sections omitted from a partial override (e.g. no `bars`) are cleared too,
+ *   so inventory/production never leave fake charts on screen.
  */
 export function mergeDashboard(
   mock: ScreenConfig,
   ov: DashboardOverrides | null | undefined
 ): ScreenConfig {
-  if (mock.kind !== "dashboard" || !ov) return mock;
+  if (mock.kind !== "dashboard") return mock;
   const cfg: DashboardConfig = JSON.parse(JSON.stringify(mock));
+  if (!ov || !hasLiveData(ov)) return emptyFromMock(cfg);
 
   // Metrics — positional (preferred) keeps each mock tile's icon/colour.
   if (ov.metricsList) {
@@ -68,9 +101,11 @@ export function mergeDashboard(
       if (o.up != null) m.up = o.up;
       if (o.sub != null) m.sub = o.sub;
     }
+  } else {
+    cfg.metrics = cfg.metrics.map((m) => ({ ...m, value: "—", delta: "" }));
   }
 
-  // Donut — full replace, reusing the mock palette by index.
+  // Donut — full replace, or clear when the backend has nothing for it.
   if (ov.donut) {
     const palette = cfg.donut.map((s) => s.color);
     const fallback = ["#262B3F", "#5B6478", "#8A6D3B", "#4A6B5D", "#6E5B7B", "#C2511A"];
@@ -80,22 +115,34 @@ export function mergeDashboard(
       pct: d.pct ?? 0,
       color: palette[i] ?? fallback[i % fallback.length],
     }));
+  } else {
+    cfg.donut = [];
+    cfg.donutTotal = "0";
   }
   if (ov.donutTotal != null) cfg.donutTotal = ov.donutTotal;
   if (ov.donutTitle != null) cfg.donutTitle = ov.donutTitle;
-  if (ov.bars) cfg.bars = ov.bars;
 
-  // Table — replace title / columns / rows when supplied.
+  if (ov.bars) {
+    cfg.bars = ov.bars;
+  } else if (cfg.bars) {
+    cfg.bars = cfg.bars.map(() => 0);
+  }
+
+  // Table — replace when supplied; otherwise clear mock rows.
   if (ov.table) {
     if (ov.table.title != null) cfg.tableTitle = ov.table.title;
     if (ov.table.cols != null) cfg.tableCols = ov.table.cols;
     if (ov.table.rows != null) cfg.tableData = ov.table.rows;
+  } else {
+    cfg.tableData = [];
   }
 
-  // Alerts — replace the activity feed + its section title.
+  // Alerts — replace when supplied; otherwise clear mock activity.
   if (ov.alerts) {
     cfg.activity = ov.alerts.items;
     cfg.activityTitle = ov.alerts.title ?? "Alerts";
+  } else {
+    cfg.activity = [];
   }
 
   return cfg;
