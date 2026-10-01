@@ -12,24 +12,24 @@ import { getAssignableRoles } from "@/lib/admin-api";
 import { CURRENCIES } from "@/lib/currency";
 
 // ---- theme tokens (matched to the setup mockups) --------------------------
-const INPUT =
+export const INPUT =
   "w-full h-12 rounded-[10px] border border-[#e4e0d6] bg-white px-3.5 text-[15px] text-[#26241f] placeholder:text-[#b3ab9e] outline-none transition-colors focus:border-[#F58220] focus:ring-2 focus:ring-[#F58220]/20";
-const LABEL = "mb-2 block text-[13px] font-bold text-[#3a372f]";
-const CARD = "rounded-[20px] border border-[#ecebe2] bg-white p-6 shadow-[0_10px_40px_rgba(120,90,60,0.06)]";
-const BTN_PRIMARY =
+export const LABEL = "mb-2 block text-[13px] font-bold text-[#3a372f]";
+export const CARD = "rounded-[20px] border border-[#ecebe2] bg-white p-6 shadow-[0_10px_40px_rgba(120,90,60,0.06)]";
+export const BTN_PRIMARY =
   "flex h-12 items-center justify-center gap-2 rounded-[10px] bg-[#F58220] px-6 text-[15px] font-bold text-white shadow-[0_10px_24px_rgba(234,108,24,0.28)] transition-colors hover:bg-[#EA6C18] disabled:opacity-60";
-const BTN_GHOST =
+export const BTN_GHOST =
   "flex h-12 items-center gap-2 rounded-[10px] border border-[#e4e0d6] bg-white px-5 text-[15px] font-bold text-[#26241f] transition-colors hover:bg-[#faf7f1]";
 
 const CURRENCY_LABEL: Record<string, string> = {
   PKR: "Pakistani rupee", USD: "US dollar", EUR: "Euro", AED: "UAE dirham",
 };
 
-interface ModuleDef {
+export interface ModuleDef {
   key: string; label: string; desc: string; icon: LucideIcon;
   core?: boolean; defaultOn?: boolean;
 }
-const MODULES: ModuleDef[] = [
+export const MODULES: ModuleDef[] = [
   { key: "catalog", label: "Catalog", desc: "Products, variants, pricing", icon: Shirt, core: true },
   { key: "inventory", label: "Inventory", desc: "Stock levels, transfers, stock takes", icon: Layers, core: true },
   { key: "sales", label: "Sales & Orders", desc: "Tills, orders, returns", icon: ShoppingCart, core: true },
@@ -46,7 +46,7 @@ const MODULES: ModuleDef[] = [
 ];
 const STEPS = ["Outlets", "Modules", "Your team"];
 
-type TeamRow = { email: string; role: string };
+export type TeamRow = { email: string; role: string };
 
 export function SetupWizard() {
   const router = useRouter();
@@ -201,7 +201,7 @@ export function SetupWizard() {
 // --------------------------------------------------------------------------- //
 // Step 1 — Outlets
 // --------------------------------------------------------------------------- //
-function StepOutlets(p: {
+export function StepOutlets(p: {
   companyName: string; setCompanyName: (v: string) => void;
   country: string; setCountry: (v: string) => void;
   city: string; setCity: (v: string) => void;
@@ -255,7 +255,7 @@ function StepOutlets(p: {
 // --------------------------------------------------------------------------- //
 // Step 2 — Modules
 // --------------------------------------------------------------------------- //
-function StepModules({ modules, toggle }: { modules: Set<string>; toggle: (m: ModuleDef) => void }) {
+export function StepModules({ modules, toggle }: { modules: Set<string>; toggle: (m: ModuleDef) => void }) {
   return (
     <>
       <h1 className="text-[40px] font-extrabold leading-none tracking-tight text-[#211f1c]">Which modules do you need?</h1>
@@ -296,8 +296,10 @@ function StepModules({ modules, toggle }: { modules: Set<string>; toggle: (m: Mo
 // --------------------------------------------------------------------------- //
 // Step 3 — Your team
 // --------------------------------------------------------------------------- //
-function StepTeam({ team, setTeam, roles }: {
+export function StepTeam({ team, setTeam, roles, footnote }: {
   team: TeamRow[]; setTeam: React.Dispatch<React.SetStateAction<TeamRow[]>>; roles: string[];
+  /** Overrides the purple info note under the list (used by the Super Admin flow). */
+  footnote?: string;
 }) {
   const patch = (i: number, next: Partial<TeamRow>) =>
     setTeam((t) => t.map((r, j) => (j === i ? { ...r, ...next } : r)));
@@ -341,7 +343,7 @@ function StepTeam({ team, setTeam, roles }: {
 
         <div className="mt-5 flex items-start gap-2.5 rounded-[12px] bg-[#F3EAFB] px-4 py-3.5 text-[13px] leading-relaxed text-[#6D4E9C]">
           <KeyRound size={16} className="mt-0.5 shrink-0" />
-          <p>Invitees set their own password and must verify their email. You stay the only workspace owner until you promote someone.</p>
+          <p>{footnote ?? "Invitees set their own password and must verify their email. You stay the only workspace owner until you promote someone."}</p>
         </div>
       </div>
     </>

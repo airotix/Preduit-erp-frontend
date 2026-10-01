@@ -1,0 +1,244 @@
+/* =========================================================================
+   MERGCO DESIGN SYSTEM — Foundations
+   Colors + Typography + Spacing + Radii + Shadow tokens
+   Modern telecom + fintech. Bright, energetic, youthful. Orange-dominant.
+   ========================================================================= */
+
+/* --- Fonts (substitutes — see README. Replace with licensed Nexa / Glacier) --- */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+:root {
+  /* ====================================================================
+     BRAND COLORS — raw palette (from the Mergco style guide)
+     ==================================================================== */
+
+  /* Inferno Orange — the dominant brand color (~60% of the palette) */
+  --orange-50:  #FFF4EA;
+  --orange-100: #FFE3CC;
+  --orange-200: #FCC79B;
+  --orange-300: #FBA862;
+  --orange-400: #F89438;
+  --orange-500: #F58220; /* ★ Inferno Orange — primary brand color */
+  --orange-600: #EA6C18; /* hover */
+  --orange-700: #EA4F0A; /* press / hot */
+  --orange-800: #C23F06;
+  --orange-900: #8C2D04;
+  /* extra "hot" accents from the guide, for energetic moments */
+  --orange-hot-1: #EF5D0C;
+  --orange-hot-2: #FF4E00;
+  --orange-hot-3: #FF5800;
+
+  /* Green — positive states + secondary highlights (~20%) */
+  --green-50:  #ECFBEF;
+  --green-100: #CDF6D5;
+  --green-200: #9DEDA8;
+  --green-300: #4BD313; /* bright */
+  --green-400: #24B34B; /* ★ Kelly Green — success */
+  --green-500: #189315;
+  --green-600: #007708;
+  --green-900: #004A33; /* deep forest */
+  /* Pear / lime — the youthful secondary accent */
+  --pear-400: #8FBA10; /* ★ Pear Green */
+  --pear-500: #7FB915;
+
+  /* Purple — premium accents + feature emphasis (~20%) */
+  --purple-50:  #F8EBFF;
+  --purple-100: #EDCFFF;
+  --purple-300: #C96BFF;
+  --purple-400: #A51BFC; /* ★ Electric Lavender */
+  --purple-600: #710193; /* ★ Violet */
+  --purple-900: #45005C;
+
+  /* Neutrals — warm-tinted to sit with the champagne surface */
+  --neutral-0:   #FFFFFF;
+  --neutral-50:  #FAFAF7;
+  --neutral-100: #F3F3EE;
+  --neutral-200: #E8E7E0;
+  --neutral-300: #D6D5CC;
+  --neutral-400: #AFAEA4;
+  --neutral-500: #87867C;
+  --neutral-600: #61605A;
+  --neutral-700: #45443F;
+  --neutral-800: #2A2925;
+  --neutral-900: #1A1916; /* ink */
+
+  --champagne: #F8EFE0; /* warm support surface */
+
+  /* ====================================================================
+     SEMANTIC TOKENS
+     ==================================================================== */
+  --bg:            var(--neutral-0);
+  --bg-muted:      var(--neutral-50);
+  --bg-cream:      var(--champagne);
+  --surface:       var(--neutral-0);
+  --surface-muted: var(--neutral-50);
+
+  --fg1: var(--neutral-900); /* primary text / headings */
+  --fg2: var(--neutral-600); /* secondary text */
+  --fg3: var(--neutral-500); /* tertiary / captions */
+  --fg-on-brand: #FFFFFF;    /* text on orange/violet fills */
+
+  --border:        var(--neutral-200);
+  --border-strong: var(--neutral-300);
+
+  --primary:        var(--orange-500);
+  --primary-hover:  var(--orange-600);
+  --primary-press:  var(--orange-700);
+  --primary-soft:   var(--orange-50);
+  --on-primary:     #FFFFFF;
+
+  --accent:         var(--purple-400); /* premium / feature emphasis */
+  --accent-deep:    var(--purple-600);
+  --accent-soft:    var(--purple-50);
+
+  --success:        var(--green-400);
+  --success-soft:   var(--green-50);
+  --info:           var(--purple-400);
+  --warning:        var(--orange-500);
+  --danger:         #E5392E;
+  --danger-soft:    #FDECEA;
+
+  --focus-ring: 0 0 0 3px rgba(245,130,32,0.35);
+
+  /* ====================================================================
+     TYPOGRAPHY
+     ==================================================================== */
+  --font-sans:    'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; /* Nexa substitute */
+  --font-display: 'Space Grotesk', 'Outfit', sans-serif; /* Glacier substitute */
+  --font-mono:    'Space Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Type scale (px) — geometric, bold, generous */
+  --text-display: 4rem;     /* 64 */
+  --text-h1:      3rem;      /* 48 */
+  --text-h2:      2.25rem;   /* 36 */
+  --text-h3:      1.75rem;   /* 28 */
+  --text-h4:      1.375rem;  /* 22 */
+  --text-lg:      1.125rem;  /* 18 */
+  --text-base:    1rem;      /* 16 */
+  --text-sm:      0.875rem;  /* 14 */
+  --text-xs:      0.8125rem; /* 13 */
+  --text-eyebrow: 0.75rem;   /* 12 uppercase */
+
+  --weight-regular: 400;
+  --weight-medium:  500;
+  --weight-semi:    600;
+  --weight-bold:    700;
+  --weight-black:   800;
+
+  --leading-tight: 1.08;
+  --leading-snug:  1.25;
+  --leading-body:  1.6;
+
+  --tracking-tight: -0.02em;
+  --tracking-eyebrow: 0.12em;
+
+  /* ====================================================================
+     SPACING — 8pt system
+     ==================================================================== */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+  --space-10: 128px;
+
+  /* ====================================================================
+     RADII — medium-to-large, friendly
+     ==================================================================== */
+  --radius-xs:   8px;
+  --radius-sm:   12px;
+  --radius-md:   16px;
+  --radius-lg:   24px;
+  --radius-xl:   32px;
+  --radius-2xl:  40px;
+  --radius-pill: 999px;
+
+  /* ====================================================================
+     SHADOWS — soft, lightweight, no neumorphism
+     ==================================================================== */
+  --shadow-xs: 0 1px 2px rgba(26,25,22,0.05);
+  --shadow-sm: 0 1px 2px rgba(26,25,22,0.04), 0 2px 6px rgba(26,25,22,0.05);
+  --shadow-md: 0 2px 4px rgba(26,25,22,0.04), 0 8px 20px rgba(26,25,22,0.07);
+  --shadow-lg: 0 4px 8px rgba(26,25,22,0.04), 0 18px 40px rgba(26,25,22,0.10);
+  --shadow-primary: 0 10px 28px rgba(245,130,32,0.32); /* colored CTA glow */
+  --shadow-accent:  0 10px 28px rgba(165,27,252,0.28);
+}
+
+/* =========================================================================
+   SEMANTIC ELEMENT STYLES — apply these classes for consistent type
+   ========================================================================= */
+.ds-display {
+  font-family: var(--font-display);
+  font-size: var(--text-display);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--fg1);
+}
+.ds-h1 {
+  font-family: var(--font-sans);
+  font-size: var(--text-h1);
+  font-weight: var(--weight-black);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--fg1);
+}
+.ds-h2 {
+  font-family: var(--font-sans);
+  font-size: var(--text-h2);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-tight);
+  color: var(--fg1);
+}
+.ds-h3 {
+  font-family: var(--font-sans);
+  font-size: var(--text-h3);
+  font-weight: var(--weight-semi);
+  line-height: var(--leading-snug);
+  color: var(--fg1);
+}
+.ds-h4 {
+  font-family: var(--font-sans);
+  font-size: var(--text-h4);
+  font-weight: var(--weight-semi);
+  line-height: var(--leading-snug);
+  color: var(--fg1);
+}
+.ds-body-lg {
+  font-family: var(--font-sans);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-regular);
+  line-height: var(--leading-body);
+  color: var(--fg2);
+}
+.ds-body {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: var(--weight-regular);
+  line-height: var(--leading-body);
+  color: var(--fg2);
+}
+.ds-small {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--fg2);
+}
+.ds-eyebrow {
+  font-family: var(--font-sans);
+  font-size: var(--text-eyebrow);
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-eyebrow);
+  color: var(--primary);
+}
+.ds-mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--fg1);
+}

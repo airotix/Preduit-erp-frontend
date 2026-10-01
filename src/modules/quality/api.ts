@@ -17,7 +17,8 @@ export async function fetchScreen(tab: string): Promise<ScreenConfig> {
       const ov = await apiGet<DashboardOverrides>("/dashboards/qscores");
       return mergeDashboard(mock, ov);
     } catch {
-      /* fall back to mock */
+      // Never show the design mock when the backend is on — empty KPIs instead.
+      return mergeDashboard(mock, {});
     }
   }
   if (USE_BACKEND && BACKEND_TABS[tab]) {

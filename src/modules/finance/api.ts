@@ -23,7 +23,7 @@ export async function fetchScreen(tab: string): Promise<ScreenConfig> {
       const ov = await apiGet<DashboardOverrides>("/dashboards/finreports");
       return mergeDashboard(mock, ov);
     } catch {
-      /* fall back to mock */
+      return mergeDashboard(mock, {});
     }
   }
   if (USE_BACKEND && BACKEND_TABS[tab]) {

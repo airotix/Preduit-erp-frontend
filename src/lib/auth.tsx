@@ -143,12 +143,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try { const j = await res.json(); if (typeof j?.detail === "string") detail = j.detail; } catch { /* ignore */ }
       throw new Error(detail);
     }
-    const r = (await res.json()) as { accessToken: string; user: AuthUser };
+    const r = await res.json();
+    if (r.requiresVerification) {
+      const err = new Error("Email verification required.") as Error & {
+        requiresVerification?: boolean; verifyEmail?: string; devCode?: string;
+      };
+      err.requiresVerification = true;
+      err.verifyEmail = r.email;
+      if (typeof r.devVerifyCode === "string") err.devCode = r.devVerifyCode;
+      throw err;
+    }
+    const data = r as { accessToken: string; user: AuthUser };
     // "Keep me signed in" unchecked → session-only storage for the access token
     // (the refresh cookie's lifetime is set server-side from the same flag).
-    setTokens(r.accessToken, remember);
-    setUser(r.user);
-    return r.user;
+    setTokens(data.accessToken, remember);
+    setUser(data.user);
+    return data.user;
   }, []);
 
   const listBusinesses = React.useCallback(async () => {

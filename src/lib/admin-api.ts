@@ -51,3 +51,28 @@ export const inviteTeammate = (email: string, role: string) =>
 export const revokeInvitation = (id: string) => apiDelete<Invitation>(`/auth/invitations/${id}`);
 export const updateTeamUser = (id: string, patch: { role?: string; isActive?: boolean }) =>
   apiPatch<TeamUser>(`/auth/users/${id}`, patch);
+export interface CreateWorkspacePayload {
+  ownerName: string;
+  email: string;
+  password: string;
+  companyName: string;
+  country?: string;
+  city?: string;
+  currency: string;
+  taxRegistration?: string;
+  modules: string[];
+  invites: { email: string; role: string }[];
+}
+
+export interface CreateWorkspaceResult {
+  company: { id: string; name: string; slug: string };
+  owner: { email: string; name: string; existingAccount: boolean; emailVerified: boolean };
+  invited: Invitation[];
+  skipped: { email: string; reason: string }[];
+}
+
+/** Super Admin: provision a full workspace (owner + setup stepper payload). */
+export const createCompany = (p: CreateWorkspacePayload) =>
+  apiPost<CreateWorkspaceResult>("/auth/companies", p);
+export const deleteCompany = (id: string) =>
+  apiDelete<{ deleted: boolean; name: string }>(`/auth/companies/${id}`);
