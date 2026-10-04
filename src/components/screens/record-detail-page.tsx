@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Printer, Pencil, Plus, Trash2, Mail, Copy, MapPin } from "lucide-react";
 import { Icon } from "@/components/icon";
 import { ToneBadge } from "@/components/tone-badge";
@@ -12,6 +12,12 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { avatarColor, initials, tone as toneOf } from "@/lib/tone";
 import { DocumentsPanel } from "@/components/screens/documents-panel";
+import { OrderFulfillmentPanel } from "@/components/screens/sales/order-fulfillment";
+import { CatalogPOButton } from "@/components/screens/catalog-po-button";
+import { QCReopenDialog } from "@/components/screens/qc-reopen-dialog";
+import { InspectionDefectDialog, type NewInspectionDefect } from "@/components/screens/inspection-defect-dialog";
+import { useMatrixLocationSave } from "@/components/screens/matrix-location-dialog";
+import { colorFromName, NEUTRAL_COLOR, type SavedColor } from "@/lib/color-name";
 import { ImageField } from "@/components/screens/auto-form";
 import { apiGet, apiPut, apiPost, apiDelete, apiUpload, apiUrl, USE_BACKEND } from "@/lib/api-client";
 import { zeroToBlank } from "@/lib/number-input";
@@ -49,24 +55,29 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 function Panel({
   title,
   sub,
+  action,
   children,
   className,
 }: {
   title?: string;
   sub?: string;
+  action?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <Card className={"p-6 " + (className ?? "")}>
       {title && (
-        <div className="mb-4">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
           <h3 className="text-[17px] font-extrabold tracking-tight text-foreground">
             {title}
           </h3>
           {sub && (
             <div className="mt-0.5 text-[13px] text-muted-foreground">{sub}</div>
           )}
+          </div>
+          {action}
         </div>
       )}
       {children}
@@ -511,6 +522,9 @@ function ProductDetailsEditor({
 }) {
   const form = product.form;
   const sizes = product.sizes;
+  const [matrixSizes, setMatrixSizes] = React.useState(sizes);
+  const { saveWithLocation, locationDialog } = useMatrixLocationSave();
+  const [originalSizes, setOriginalSizes] = React.useState<(string | null)[]>(sizes);
   const stockShape: NonNullable<DetailModel["stock"]> = {
     sizes,
     colors: product.matrix.map((c) => ({
@@ -542,6 +556,7 @@ function ProductDetailsEditor({
   const [rows, setRows] = React.useState<EditRow[]>(
     stockShape.colors.map((c) => ({
       name: c.name,
+      originalColor: c.name,
       hex: /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(c.hex) ? c.hex : "#CBD1DC",
       cells: sizes.map((_, i) => c.cells[i] ?? 0),
     }))
@@ -554,6 +569,11 @@ function ProductDetailsEditor({
     enabled: USE_BACKEND,
   });
   const set = (k: keyof typeof f, v: string | number) => setF((p) => ({ ...p, [k]: v }));
+  const onMatrixChange = React.useCallback((nextRows: EditRow[], nextSizes: string[], originals: (string | null)[]) => {
+    setRows(nextRows);
+    setMatrixSizes(nextSizes);
+    setOriginalSizes(originals);
+  }, []);
   const opts = (list: string[], cur: string) =>
     (cur && !list.includes(cur) ? [cur, ...list] : list);
 
@@ -561,6 +581,11 @@ function ProductDetailsEditor({
   const save = async () => {
     // Validate the colour matrix (unique colour names) before saving.
     const named = rows.filter((r) => r.name.trim());
+    if (matrixSizes.some((s, i) => !s.trim() || matrixSizes.findIndex((other) => other.trim().toLowerCase() === s.trim().toLowerCase()) !== i)
+        || (named.length > 0 && matrixSizes.length === 0)) {
+      setError("Enter unique size names and at least one size for the colours.");
+      return;
+    }
     if (named.some((r, i) => named.findIndex((o) =>
         o.name.trim().toLowerCase() === r.name.trim().toLowerCase()) !== i)) {
       setError("Two colours use the same name. Please make them unique.");
@@ -569,6 +594,7 @@ function ProductDetailsEditor({
     setSaving(true);
     setError(null);
     try {
+      await saveWithLocation(async (location) => {
       // 1) Product details + specs + image.
       await apiPut(`/catalog/products/${recordId}`, {
         title: f.title.trim(),
@@ -590,21 +616,27 @@ function ProductDetailsEditor({
       });
       // 2) Colour × size matrix.
       await apiPut(`/catalog/products/${recordId}/matrix`, {
+        location,
         colors: named.map((r) => ({
           color: r.name.trim(),
+          originalColor: r.originalColor,
           hex: r.hex,
-          cells: sizes.map((s, i) => ({ size: s, qty: Number(r.cells[i]) || 0 })),
+          cells: matrixSizes.map((s, i) => ({ size: s.trim(), originalSize: originalSizes[i], qty: Number(r.cells[i]) || 0 })),
         })),
       });
       onSaved();
-    } catch {
-      setError("Could not save changes. Please try again.");
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save changes. Please try again.");
+      setSaving(false);
+    } finally {
       setSaving(false);
     }
   };
 
   return (
     <div className="space-y-4">
+      {locationDialog}
       <Panel title="Edit product" sub="Update details, pricing, specifications & image">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
@@ -696,8 +728,8 @@ function ProductDetailsEditor({
         endpoint={`/catalog/products/${recordId}/matrix`}
         hideActions
         title="Colours & sizes"
-        sub="Update units, rename colours, or add a colour"
-        onRowsChange={setRows}
+        sub="Update quantities by size; changes sync with Inventory"
+        onRowsChange={onMatrixChange}
       />
 
       {error && (
@@ -827,6 +859,7 @@ function StockMatrix({ stock }: { stock: NonNullable<DetailModel["stock"]> }) {
 
 interface EditRow {
   name: string;
+  originalColor?: string;
   hex: string;
   cells: number[];
 }
@@ -851,14 +884,23 @@ function StockMatrixEditor({
   /** Embedded mode: hide the built-in Save/Cancel footer (parent saves). */
   hideActions?: boolean;
   /** Report the current rows up so a parent can save them with its own button. */
-  onRowsChange?: (rows: EditRow[]) => void;
+  onRowsChange?: (rows: EditRow[], sizes: string[], originals: (string | null)[]) => void;
   title?: string;
   sub?: string;
 }) {
   const sizes = stock.sizes;
+  const { saveWithLocation, locationDialog } = useMatrixLocationSave();
+  const { data: savedColors = [] } = useQuery<SavedColor[]>({
+    queryKey: ["catalog", "color-options"],
+    queryFn: () => apiGet<SavedColor[]>("/catalog/colors"),
+    enabled: USE_BACKEND,
+  });
+  const colorListId = React.useId();
+  const originalSizes = stock.sizes;
   const [rows, setRows] = React.useState<EditRow[]>(() =>
     stock.colors.map((c) => ({
       name: c.name,
+      originalColor: c.name,
       hex: /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(c.hex) ? c.hex : "#CBD1DC",
       cells: sizes.map((_, i) => c.cells[i] ?? 0),
     }))
@@ -867,7 +909,7 @@ function StockMatrixEditor({
   const [error, setError] = React.useState<string | null>(null);
 
   // Keep the parent in sync when embedded (stable setter → no loop).
-  React.useEffect(() => { onRowsChange?.(rows); }, [rows, onRowsChange]);
+  React.useEffect(() => { onRowsChange?.(rows, sizes, originalSizes); }, [rows, sizes, originalSizes, onRowsChange]);
 
   const patch = (ri: number, next: Partial<EditRow>) =>
     setRows((rs) => rs.map((r, i) => (i === ri ? { ...r, ...next } : r)));
@@ -885,6 +927,11 @@ function StockMatrixEditor({
 
   const save = async () => {
     const named = rows.filter((r) => r.name.trim());
+    if (sizes.some((s, i) => !s.trim() || sizes.findIndex((other) => other.trim().toLowerCase() === s.trim().toLowerCase()) !== i)
+        || (named.length > 0 && sizes.length === 0)) {
+      setError("Enter unique size names and at least one size for the colours.");
+      return;
+    }
     if (named.some((r, i) => named.findIndex((o) => o.name.trim().toLowerCase() === r.name.trim().toLowerCase()) !== i)) {
       setError("Two rows use the same color name. Please make them unique.");
       return;
@@ -892,22 +939,29 @@ function StockMatrixEditor({
     setSaving(true);
     setError(null);
     try {
+      await saveWithLocation(async (location) => {
       await apiPut(endpoint ?? `/inventory/stock/${recordId}/matrix`, {
+        location,
         colors: named.map((r) => ({
           color: r.name.trim(),
+          originalColor: r.originalColor,
           hex: r.hex,
-          cells: sizes.map((s, i) => ({ size: s, qty: Number(r.cells[i]) || 0 })),
+          cells: sizes.map((s, i) => ({ size: s.trim(), originalSize: originalSizes[i], qty: Number(r.cells[i]) || 0 })),
         })),
       });
       onSaved?.();
-    } catch {
-      setError("Could not save changes. Please try again.");
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save changes. Please try again.");
+      setSaving(false);
+    } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Panel title={title ?? "Edit stock by color & size"} sub={sub ?? "Update counts, rename colors, or add a new color"}>
+    <Panel title={title ?? "Edit stock by color & size"} sub={sub ?? "Update quantities by size; changes sync with Catalogue"}>
+      {locationDialog}
       <div className="overflow-x-auto">
         <table className="w-full text-[13px]">
           <thead>
@@ -915,9 +969,9 @@ function StockMatrixEditor({
               <th className="pb-2 text-left text-[11px] font-bold uppercase text-muted-foreground">
                 Color
               </th>
-              {sizes.map((s) => (
+              {sizes.map((s, ci) => (
                 <th
-                  key={s}
+                  key={ci}
                   className="px-1 pb-2 text-center text-[11px] font-bold uppercase text-muted-foreground"
                 >
                   {s}
@@ -931,18 +985,23 @@ function StockMatrixEditor({
               <tr key={ri}>
                 <td className="py-1.5 pr-3">
                   <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      aria-label="Color swatch"
-                      value={r.hex}
-                      onChange={(e) => patch(ri, { hex: e.target.value })}
-                      className="h-7 w-7 shrink-0 cursor-pointer rounded-full border border-border/60 bg-transparent p-0"
+                    <span
+                      role="img"
+                      aria-label={`${r.name || "Unnamed colour"} swatch`}
+                      title={colorFromName(r.name, savedColors) ? r.name : "Unrecognized name — neutral preview"}
+                      style={{ backgroundColor: r.hex }}
+                      className="h-7 w-7 shrink-0 rounded-full border border-border/60"
                     />
                     <input
                       type="text"
                       placeholder="Color name"
+                      list={colorListId}
+                      maxLength={60}
                       value={r.name}
-                      onChange={(e) => patch(ri, { name: e.target.value })}
+                      onChange={(e) => patch(ri, {
+                        name: e.target.value,
+                        hex: colorFromName(e.target.value, savedColors) ?? NEUTRAL_COLOR,
+                      })}
                       className="w-32 rounded-lg border border-border/60 px-2.5 py-1.5 font-semibold text-foreground outline-none focus:border-primary"
                     />
                   </div>
@@ -975,6 +1034,10 @@ function StockMatrixEditor({
             ))}
           </tbody>
         </table>
+        <datalist id={colorListId}>
+          {Array.from(new Set([...savedColors.map((c) => c?.name).filter((name) => typeof name === "string" && name.trim()), "Black", "White", "Pink", "Navy", "Sky blue", "Cream", "Burgundy", "Sage"]))
+            .map((name) => <option key={name} value={name} />)}
+        </datalist>
       </div>
 
       <button
@@ -1178,9 +1241,7 @@ function CustomerCard({
   );
 }
 
-/** Quality inspection workspace: progress stepper + AQL sampling + summary +
- *  history, plus the Start action. Read-mostly in Phase 1; checklist/defects
- *  editing and decision buttons land in later phases. */
+/** Inspection work first; sampling, batch information and history are expandable. */
 function InspectionWorkspace({
   data, recordId, onSaved, canWrite,
 }: {
@@ -1192,23 +1253,31 @@ function InspectionWorkspace({
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
   const [editingHdr, setEditingHdr] = React.useState(false);
+  const queryClient = useQueryClient();
+  const [newDefectOpen, setNewDefectOpen] = React.useState(false);
   const h = data.header;
   const aql = data.aql;
   const s = data.summary;
   const passed = aql.accepted;
   const inProgress = data.canDecide;
+  const pendingChecks = data.checks.filter((check) => check.result === "Pending").length;
+  const completionBlocked = !data.checks.length || pendingChecks > 0 || !!data.waitingForTNA;
+  const completionHint = data.waitingForTNA ? "Complete the reopened production TNA first."
+    : !data.checks.length ? "Add at least one checklist item before completing."
+    : pendingChecks ? `${pendingChecks} check${pendingChecks === 1 ? "" : "s"} remaining`
+    : "All checks resolved. Complete inspection to calculate the final result.";
 
   const run = async (fn: () => Promise<unknown>) => {
-    if (!recordId) return;
+    if (!recordId) return false;
     setBusy(true); setErr(null);
-    try { await fn(); onSaved?.(); }
-    catch (e) { setErr(e instanceof Error ? e.message : "Something went wrong."); }
+    try { await fn(); onSaved?.(); return true; }
+    catch (e) { setErr(e instanceof Error ? e.message : "Something went wrong."); return false; }
     finally { setBusy(false); }
   };
   const start = () => run(() => apiPost(`/quality/inspections/${recordId}/start`, {}));
 
   // Defect Types catalog for the "Add defect" dropdown.
-  const { data: defOpts } = useQuery({
+  const { data: defOpts, error: defectOptionsError } = useQuery({
     queryKey: ["quality", "defect-options"],
     queryFn: () => apiGet<{ options: { publicId: string; name: string; category: string; severity: string }[] }>("/quality/defect-options"),
     enabled: USE_BACKEND && inProgress,
@@ -1217,8 +1286,7 @@ function InspectionWorkspace({
 
   // Local "add" forms.
   const [chk, setChk] = React.useState({ criterion: "", requirement: "" });
-  const [def, setDef] = React.useState<{ defectTypeId: string; qtyAffected: number; description: string; imageDocId: string }>(
-    { defectTypeId: "", qtyAffected: 1, description: "", imageDocId: "" });
+  const [def, setDef] = React.useState({ defectTypeId: "", defectName: "", qtyAffected: 1, description: "", imageDocId: "" });
   const [defImgName, setDefImgName] = React.useState("");
   const [uploading, setUploading] = React.useState(false);
 
@@ -1249,16 +1317,38 @@ function InspectionWorkspace({
   const addCheck = () => {
     if (!chk.criterion.trim()) return;
     run(() => apiPost(`/quality/inspections/${recordId}/checks`, { ...chk, result: "Pending" }))
-      .then(() => setChk({ criterion: "", requirement: "" }));
+      .then((saved) => { if (saved) setChk({ criterion: "", requirement: "" }); });
   };
   const delCheck = (id: string) => run(() => apiDelete(`/quality/checks/${id}`));
   const addDefect = () => {
-    if (!def.defectTypeId) return;
-    run(() => apiPost(`/quality/inspections/${recordId}/defects`, def))
-      .then(() => { setDef({ defectTypeId: "", qtyAffected: 1, description: "", imageDocId: "" }); setDefImgName(""); });
+    if (busy || uploading || !canWrite || (!def.defectTypeId && !def.defectName.trim())) return;
+    const savedType = options.find((o) => o.name.trim().toLowerCase() === def.defectName.trim().toLowerCase());
+    if (!def.defectTypeId && !savedType) { setNewDefectOpen(true); return; }
+    run(() => apiPost(`/quality/inspections/${recordId}/defects`, {
+      ...def, defectTypeId: def.defectTypeId || savedType?.publicId || null, defectName: def.defectName.trim() || null,
+    })).then((saved) => { if (saved) {
+      setDef({ defectTypeId: "", defectName: "", qtyAffected: 1, description: "", imageDocId: "" }); setDefImgName("");
+    } });
+  };
+  const createAndAddDefect = async (details: NewInspectionDefect) => {
+    if (!canWrite || !recordId) throw new Error("This inspection cannot be edited.");
+    setBusy(true);
+    try {
+      await apiPost(`/quality/inspections/${recordId}/defects`, {
+        ...def, defectTypeId: null, defectName: null, newDefect: details,
+      });
+      queryClient.invalidateQueries({ queryKey: ["quality", "defect-options"] });
+      queryClient.invalidateQueries({ queryKey: ["screen", "quality", "defects"] });
+      setDef({ defectTypeId: "", defectName: "", qtyAffected: 1, description: "", imageDocId: "" });
+      setDefImgName(""); setErr(null); onSaved?.();
+    } finally { setBusy(false); }
   };
   const delDefect = (id: string) => run(() => apiDelete(`/quality/defects/log/${id}`));
-  const complete = () => run(() => apiPost(`/quality/inspections/${recordId}/complete`, {}));
+  const [recoveryOpen, setRecoveryOpen] = React.useState(false);
+  const complete = () => { if (completionBlocked || busy || uploading) return; return run(async () => {
+    const result = await apiPost<{ result: string }>(`/quality/inspections/${recordId}/complete`, {});
+    if (result.result === "Fail") setRecoveryOpen(true);
+  }); };
 
   const CHK_TONE: Record<string, string> = {
     Pass: "text-[#1F9254]", Fail: "text-[#C0392B]", Warning: "text-[#B5691B]",
@@ -1270,20 +1360,9 @@ function InspectionWorkspace({
     disposition: data.disposition ?? "", assignedTo: data.assignedTo ?? "",
     dueDate: data.dueDate ?? "", notes: data.dispositionNotes ?? "",
   });
-  const [reMsg, setReMsg] = React.useState<string | null>(null);
   const saveDispo = () => {
     if (!dispo.disposition) { setErr("Select a disposition."); return; }
     run(() => apiPost(`/quality/inspections/${recordId}/disposition`, dispo));
-  };
-  const reinspect = async () => {
-    if (!recordId) return;
-    setBusy(true); setErr(null);
-    try {
-      const r = await apiPost<{ inspection_no: string }>(`/quality/inspections/${recordId}/reinspect`, {});
-      setReMsg(`Re-inspection ${r.inspection_no} created — open it from the inspection list or history below.`);
-      onSaved?.();
-    } catch (e) { setErr(e instanceof Error ? e.message : "Could not create re-inspection."); }
-    finally { setBusy(false); }
   };
 
   const kv = (k: string, v: React.ReactNode) => (
@@ -1324,90 +1403,30 @@ function InspectionWorkspace({
           <span>·</span><span>{h.stage}</span>
           <ToneBadge tone={/pass/i.test(h.result) ? "green" : /fail/i.test(h.result) ? "red" : /progress/i.test(h.result) ? "navy" : "neutral"} dot={false}>{h.result}</ToneBadge>
         </div>
-        <Button size="sm" variant="outline" disabled={!canWrite} onClick={() => setEditingHdr(true)}>
+        <Button size="sm" variant="outline" disabled={busy || !canWrite} onClick={() => setEditingHdr(true)}>
           <Pencil size={13} strokeWidth={2} /> Edit
         </Button>
       </div>
 
-      {/* Progress stepper */}
-      <Panel title="Inspection progress">
-        <div className="flex flex-wrap items-center gap-x-1 gap-y-2">
-          {data.progress.map((p, i) => (
-            <React.Fragment key={p.key}>
-              <span className={
-                "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-bold " +
-                (p.current ? "bg-brand-orange text-white"
-                  : p.done ? "bg-[#E7F4EC] text-[#1F9254]" : "bg-muted text-muted-foreground")
-              }>
-                <span className={"flex h-4 w-4 items-center justify-center rounded-full text-[10px] " +
-                  (p.done ? "bg-[#1F9254] text-white" : p.current ? "bg-white/25 text-white" : "bg-border text-muted-foreground")}>
-                  {p.done ? "✓" : i + 1}
-                </span>
-                {p.label}
-              </span>
-              {i < data.progress.length - 1 && <span className="text-muted-foreground">›</span>}
-            </React.Fragment>
-          ))}
-        </div>
-      </Panel>
+      <div className="sticky top-4 z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background p-3 shadow-sm">
+        <p className="text-sm text-muted-foreground" aria-live="polite">{busy ? "Saving inspection..." : inProgress ? completionHint : data.waitingForTNA ? "Waiting for production TNA to finish." : data.canStart ? "Start the inspection to record checks and defects." : h.result === "Fail" ? "Inspection failed. Choose the next action." : "Inspection completed."}</p>
+        {data.canStart && <Button size="sm" disabled={busy || !canWrite} onClick={start}>Start inspection</Button>}
+        {inProgress && <Button size="sm" disabled={busy || uploading || !canWrite || completionBlocked} onClick={complete}>Complete inspection</Button>}
+        {data.canDispose && <Button size="sm" disabled={busy || !canWrite} onClick={() => setRecoveryOpen(true)}>Resolve failed inspection</Button>}
+      </div>
 
-      {/* Production / batch information */}
-      <Panel title="Production & batch">
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          {kv("Order", h.order)}
-          {kv("Product", h.product)}
-          {kv("SKU", h.sku)}
-          {kv("Batch / Lot", h.batchLot)}
-          {kv("Stage", h.stage)}
-          {kv("Inspection type", h.inspectionType)}
-          {kv("Inspector", h.inspector)}
-          {kv("Date", h.date ? new Date(h.date).toLocaleDateString() : "—")}
-        </div>
-      </Panel>
-
-      {/* AQL sampling */}
-      <Panel title="AQL sampling" sub={aql.codeLetter ? `Code letter ${aql.codeLetter} · General Level II` : undefined}>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <Panel title="Inspection summary" sub="Resolve the checklist, log defects, then complete the inspection.">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
-            { k: "Production qty", v: aql.lotQty || "—" },
-            { k: "AQL level", v: aql.aql },
-            { k: "Sample size", v: aql.sampleSize },
-            { k: "Max defects", v: aql.maxDefects },
-            { k: "Actual defects", v: aql.actualDefects },
-            { k: "AQL result", v: passed ? "Within limit" : "Exceeded" },
-          ].map((c) => (
-            <div key={c.k} className={"rounded-xl border px-3 py-2.5 " +
-              (c.k === "AQL result"
-                ? (passed ? "border-[#BfE6CE] bg-[#E7F4EC]" : "border-[#F3C9C4] bg-[#FBEAEA]")
-                : "border-border/60 bg-muted/30")}>
-              <div className="text-[10.5px] font-bold uppercase tracking-[0.05em] text-muted-foreground">{c.k}</div>
-              <div className={"mt-1 text-[15px] font-extrabold tabular " +
-                (c.k === "AQL result" ? (passed ? "text-[#1F9254]" : "text-[#C0392B]") : "text-foreground")}>
-                {c.v}
-              </div>
-            </div>
-          ))}
+            ["Checks completed", `${data.checks.length - pendingChecks}/${data.checks.length}`],
+            ["Sample size", s.sampled], ["Defects found", s.defects], ["Allowed defects", s.maxDefects],
+          ].map(([label, value]) => <div key={String(label)} className="rounded-lg bg-muted/40 p-3">
+            <div className="text-xs text-muted-foreground">{label}</div><div className="mt-1 text-lg font-bold tabular-nums">{value}</div>
+          </div>)}
         </div>
-      </Panel>
-
-      {/* Quality summary */}
-      <Panel title="Quality summary">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap gap-x-8 gap-y-2 text-[13px]">
-            <span>Sampled: <b className="tabular">{s.sampled}</b></span>
-            <span>Defects: <b className="tabular">{s.defects}</b></span>
-            <span>Defect rate: <b className="tabular">{s.defectRate}%</b></span>
-            <span>Max allowed: <b className="tabular">{s.maxDefects}</b></span>
-          </div>
-          <ToneBadge tone={/pass/i.test(s.evaluation) ? "green" : /fail/i.test(s.evaluation) ? "red" : "neutral"} dot={false}>
-            {s.evaluation}
-          </ToneBadge>
-        </div>
-        {data.shipmentRef && (
-          <div className="mt-3 flex items-center gap-2 rounded-xl bg-[#E7F4EC] px-4 py-2.5 text-[13px] font-semibold text-[#1F9254]">
-            ✓ Shipment created · {data.shipmentRef}
-          </div>
-        )}
+        {data.shipmentRef && <p className="mt-3 text-sm text-green-700">Shipment created: {data.shipmentRef}</p>}
+        {h.result === "Pass" && !data.shipmentRef && <p className="mt-3 text-sm text-muted-foreground">Inspection passed. Inventory receipt waits for every production item to finish TNA and pass final QC; fully stocked sales orders then go to Shipments.</p>}
+        {data.historical && <p className="mt-3 text-sm text-muted-foreground">You are viewing a previous inspection. Open the latest article tab to continue work.</p>}
       </Panel>
 
       {/* Checklist */}
@@ -1431,14 +1450,14 @@ function InspectionWorkspace({
                 </td>
                 <td className="py-2 pr-2">
                   {inProgress ? (
-                    <input defaultValue={c.actual} placeholder="—"
+                    <input disabled={busy || !canWrite} defaultValue={c.actual} placeholder="—"
                       onBlur={(e) => e.target.value !== c.actual && saveCheck(c.publicId, { actual: e.target.value })}
                       className="w-24 rounded-md border border-border/70 bg-transparent px-2 py-1 text-[12px] outline-none" />
                   ) : (c.actual || "—")}
                 </td>
                 <td className="py-2 pr-2">
                   {inProgress ? (
-                    <select value={c.result} onChange={(e) => saveCheck(c.publicId, { result: e.target.value })}
+                    <select value={c.result} disabled={busy || !canWrite} onChange={(e) => saveCheck(c.publicId, { result: e.target.value })}
                       className={"rounded-md border border-border/70 bg-transparent px-2 py-1 text-[12px] font-bold outline-none " + (CHK_TONE[c.result] ?? "")}>
                       {["Pending", "Pass", "Fail", "Warning", "NA"].map((r) => <option key={r} value={r}>{r}</option>)}
                     </select>
@@ -1446,7 +1465,7 @@ function InspectionWorkspace({
                 </td>
                 {inProgress && (
                   <td className="py-2 text-right">
-                    <button onClick={() => delCheck(c.publicId)} disabled={busy}
+                    <button onClick={() => delCheck(c.publicId)} disabled={busy || !canWrite}
                       className="text-muted-foreground hover:text-[#C0392B]"><Trash2 size={14} /></button>
                   </td>
                 )}
@@ -1459,11 +1478,11 @@ function InspectionWorkspace({
         </table>
         {inProgress && (
           <div className="mt-3 flex flex-wrap items-end gap-2">
-            <input value={chk.criterion} onChange={(e) => setChk({ ...chk, criterion: e.target.value })}
+            <input disabled={busy || !canWrite} value={chk.criterion} onChange={(e) => setChk({ ...chk, criterion: e.target.value })}
               placeholder="New criterion" className="rounded-md border border-border/70 bg-transparent px-2 py-1.5 text-[12px] outline-none" />
-            <input value={chk.requirement} onChange={(e) => setChk({ ...chk, requirement: e.target.value })}
+            <input disabled={busy || !canWrite} value={chk.requirement} onChange={(e) => setChk({ ...chk, requirement: e.target.value })}
               placeholder="Requirement / spec" className="flex-1 rounded-md border border-border/70 bg-transparent px-2 py-1.5 text-[12px] outline-none" />
-            <Button size="sm" variant="outline" onClick={addCheck} disabled={busy || !chk.criterion.trim()}>
+            <Button size="sm" variant="outline" onClick={addCheck} disabled={busy || !canWrite || !chk.criterion.trim()}>
               <Plus size={14} /> Add check
             </Button>
           </div>
@@ -1471,7 +1490,7 @@ function InspectionWorkspace({
       </Panel>
 
       {/* Defects */}
-      <Panel title="Defects" sub="Logged from the Defect Types catalog; category & severity auto-fill. Attach a photo per defect.">
+      <Panel title="Defects" sub="Select a saved defect or enter a new name. New defects ask for details before being saved and added.">
         <table className="w-full text-[13px]">
           <thead>
             <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
@@ -1502,7 +1521,7 @@ function InspectionWorkspace({
                 </td>
                 {inProgress && (
                   <td className="py-2 text-right">
-                    <button onClick={() => delDefect(d.publicId)} disabled={busy}
+                    <button onClick={() => delDefect(d.publicId)} disabled={busy || !canWrite}
                       className="text-muted-foreground hover:text-[#C0392B]"><Trash2 size={14} /></button>
                   </td>
                 )}
@@ -1515,55 +1534,42 @@ function InspectionWorkspace({
         </table>
         {inProgress && (
           <div className="mt-3 flex flex-wrap items-end gap-2">
-            <select value={def.defectTypeId} onChange={(e) => setDef({ ...def, defectTypeId: e.target.value })}
-              className="rounded-md border border-border/70 bg-transparent px-2 py-1.5 text-[12px] outline-none">
-              <option value="">Select defect type…</option>
-              {options.map((o) => <option key={o.publicId} value={o.publicId}>{o.name} · {o.severity}</option>)}
-            </select>
-            <input type="number" min={1} value={def.qtyAffected}
+            <div className="min-w-[220px] flex-1">
+              <label htmlFor={`defect-name-${recordId}`} className="mb-1 block text-xs font-semibold">Defect</label>
+              <input id={`defect-name-${recordId}`} list={`defect-options-${recordId}`} value={def.defectName} maxLength={120} disabled={busy || !canWrite}
+                onChange={(e) => { const name = e.target.value; const match = options.find((o) => o.name.trim().toLowerCase() === name.trim().toLowerCase()); setDef({ ...def, defectName: name, defectTypeId: match?.publicId ?? "" }); }}
+                placeholder="Search or enter a new defect" className="w-full rounded-md border border-border/70 px-2 py-1.5 text-[12px]" />
+              <datalist id={`defect-options-${recordId}`}>{options.map((o) => <option key={o.publicId} value={o.name}>{o.category} ? {o.severity}</option>)}</datalist>
+            </div>
+            <input type="number" aria-label="Affected quantity" disabled={busy || !canWrite} min={1} value={def.qtyAffected}
               onChange={(e) => setDef({ ...def, qtyAffected: Math.max(1, Number(e.target.value) || 1) })}
               className="w-16 rounded-md border border-border/70 bg-transparent px-2 py-1.5 text-[12px] outline-none" />
-            <input value={def.description} onChange={(e) => setDef({ ...def, description: e.target.value })}
+            <input aria-label="Defect description" maxLength={400} disabled={busy || !canWrite} value={def.description} onChange={(e) => setDef({ ...def, description: e.target.value })}
               placeholder="Description" className="flex-1 rounded-md border border-border/70 bg-transparent px-2 py-1.5 text-[12px] outline-none" />
             <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border/70 px-2.5 py-1.5 text-[12px] font-semibold text-foreground hover:bg-muted">
               {uploading ? "Uploading…" : def.imageDocId ? "✓ Photo" : "Add photo"}
-              <input type="file" accept="image/*" className="hidden" disabled={uploading}
+              <input type="file" accept="image/*" className="hidden" disabled={uploading || busy || !canWrite}
                 onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadDefectImage(file); e.target.value = ""; }} />
             </label>
-            <Button size="sm" variant="outline" onClick={addDefect} disabled={busy || uploading || !def.defectTypeId}>
+            <Button size="sm" variant="outline" onClick={addDefect} disabled={busy || uploading || !canWrite || (!def.defectTypeId && !def.defectName.trim())}>
               <Plus size={14} /> Add defect
             </Button>
             {def.imageDocId && <span className="text-[11px] text-muted-foreground">{defImgName}</span>}
           </div>
         )}
+        {inProgress && defectOptionsError && <p role="alert" className="mt-2 text-sm text-destructive">Could not load saved defect types. Enter a defect name to continue.</p>}
       </Panel>
 
       {err && <div className="rounded-md bg-[#FBEAEA] p-3 text-[13px] font-semibold text-[#C0392B]">{err}</div>}
 
       {/* Action bar */}
-      <div className="flex flex-wrap items-center gap-2">
-        {data.canStart && (
-          <Button size="sm" disabled={busy || !canWrite} onClick={start}>
-            {busy ? "Starting…" : "Start inspection"}
-          </Button>
-        )}
-        {inProgress && (
-          <Button size="sm" disabled={busy || !canWrite} onClick={complete}>
-            {busy ? "Evaluating…" : "Complete inspection"}
-          </Button>
-        )}
-        {data.canStart && (
-          <span className="text-[12px] text-muted-foreground">Start moves the inspection to In Progress.</span>
-        )}
-        {inProgress && (
-          <span className="text-[12px] text-muted-foreground">Completing auto-scores the result from the checklist + AQL.</span>
-        )}
-      </div>
-
-
+      <InspectionDefectDialog name={def.defectName.trim()} open={newDefectOpen} onOpenChange={setNewDefectOpen} onSave={createAndAddDefect} />
+      {recordId && <QCReopenDialog inspectionId={recordId} open={recoveryOpen} onOpenChange={setRecoveryOpen}
+        canReopenProduction={data.canReopenProduction} onSaved={onSaved} correctiveAction={{ assignedTo: data.assignedTo ?? "", dueDate: data.dueDate ?? "", notes: data.dispositionNotes ?? "" }} />}
+      {data.waitingForTNA && <p className="text-sm text-muted-foreground">Complete the reopened production TNA before starting reinspection.</p>}
       {/* Disposition (failed inspections) */}
       {(data.canDispose || data.disposition) && (
-        <Panel title="Disposition & corrective action"
+        <details className="rounded-xl border p-4"><summary className="cursor-pointer text-sm font-semibold">Corrective action details</summary><div className="mt-3"><Panel title="Disposition & corrective action"
                sub={`Failure reason: ${s.evaluation}. Affected quantity: ${s.defects}.`}>
           {data.disposition && (
             <div className="mb-3 flex flex-wrap items-center gap-2 text-[13px]">
@@ -1596,15 +1602,70 @@ function InspectionWorkspace({
               <input value={dispo.notes} onChange={(e) => setDispo({ ...dispo, notes: e.target.value })}
                 placeholder="Notes" className="min-w-[160px] flex-1 rounded-md border border-border/70 bg-transparent px-2 py-1.5 text-[13px] outline-none" />
               <Button size="sm" variant="outline" disabled={busy || !canWrite} onClick={saveDispo}>Save disposition</Button>
-              <Button size="sm" disabled={busy || !canWrite} onClick={reinspect}>Create re-inspection</Button>
             </div>
           )}
-          {reMsg && <div className="mt-3 rounded-md bg-[#E7F4EC] p-3 text-[13px] font-semibold text-[#1F9254]">{reMsg}</div>}
-        </Panel>
+        </Panel></div></details>
       )}
 
+      <details className="rounded-xl border p-4">
+        <summary className="cursor-pointer text-sm font-semibold">Size breakdown, batch and sampling details</summary>
+        <div className="mt-4 space-y-4">
+      {/* AQL sampling */}
+      <Panel title="Size breakdown & ratio" sub={`Quantities from ${data.sizeBreakdown?.source.toLowerCase() ?? "production"} for this inspection.`}>
+        {data.sizeBreakdown?.sizes.length ? <div className="overflow-x-auto"><table className="w-full text-sm">
+          <thead><tr><th className="p-2 text-left">Article / colour</th>
+            {data.sizeBreakdown.sizes.map((size) => <th key={size} className="p-2 text-right">{size}</th>)}<th className="p-2 text-right">Total</th></tr></thead>
+          <tbody>{data.sizeBreakdown.rows.map((row, index) => <tr key={index} className="border-t">
+            <td className="p-2">{row.article} / {row.color}</td>{row.quantities.map((qty, i) => <td key={i} className="p-2 text-right tabular-nums">{qty}</td>)}
+            <td className="p-2 text-right font-semibold">{row.total}</td></tr>)}</tbody>
+          <tfoot><tr className="border-t font-semibold"><td className="p-2">Total units</td>
+            {data.sizeBreakdown.totals.map((qty, i) => <td key={i} className="p-2 text-right">{qty}</td>)}<td className="p-2 text-right">{data.sizeBreakdown.total}</td></tr>
+            <tr className="border-t"><td className="p-2">Size ratio</td>{data.sizeBreakdown.ratio.map((qty, i) => <td key={i} className="p-2 text-right">{qty}</td>)}<td /></tr></tfoot>
+        </table></div> : <p className="text-sm text-muted-foreground">No size quantities are recorded for this production item.</p>}
+      </Panel>
+      <Panel title="AQL sampling" sub={aql.codeLetter ? `Code letter ${aql.codeLetter} · General Level II` : undefined}>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {[
+            { k: "Production qty", v: aql.lotQty || "—" },
+            { k: "AQL level", v: aql.aql },
+            { k: "Sample size", v: aql.sampleSize },
+            { k: "Max defects", v: aql.maxDefects },
+            { k: "Actual defects", v: aql.actualDefects },
+            { k: "AQL result", v: passed ? "Within limit" : "Exceeded" },
+          ].map((c) => (
+            <div key={c.k} className={"rounded-xl border px-3 py-2.5 " +
+              (c.k === "AQL result"
+                ? (passed ? "border-[#BfE6CE] bg-[#E7F4EC]" : "border-[#F3C9C4] bg-[#FBEAEA]")
+                : "border-border/60 bg-muted/30")}>
+              <div className="text-[10.5px] font-bold uppercase tracking-[0.05em] text-muted-foreground">{c.k}</div>
+              <div className={"mt-1 text-[15px] font-extrabold tabular " +
+                (c.k === "AQL result" ? (passed ? "text-[#1F9254]" : "text-[#C0392B]") : "text-foreground")}>
+                {c.v}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Panel>
+
+      {/* Production / batch information */}
+      <Panel title="Production & batch">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          {kv("Order", h.order)}
+          {kv("Product", h.product)}
+          {kv("SKU", h.sku)}
+          {kv("Batch / Lot", h.batchLot)}
+          {kv("Stage", h.stage)}
+          {kv("Inspection type", h.inspectionType)}
+          {kv("Inspector", h.inspector)}
+          {kv("Date", h.date ? new Date(h.date).toLocaleDateString() : "—")}
+        </div>
+      </Panel>
+
+        </div>
+      </details>
+
       {/* Inspection history */}
-      <Panel title="Inspection history">
+      <details className="rounded-xl border p-4"><summary className="cursor-pointer text-sm font-semibold">Inspection history ({data.history.length})</summary><div className="mt-3">
         <table className="w-full text-[13px]">
           <thead>
             <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
@@ -1619,7 +1680,7 @@ function InspectionWorkspace({
           <tbody>
             {data.history.map((r) => (
               <tr key={r.publicId} className={"border-t border-border/50 " + (r.current ? "bg-muted/40" : "")}>
-                <td className="py-2.5 font-bold text-foreground">{r.inspectionNo}{r.current ? " ·" : ""}</td>
+                <td className="py-2.5 font-bold text-foreground"><Link href={`/quality/inspections/${r.publicId}`} className="hover:underline">{r.inspectionNo}</Link>{r.current ? " ·" : ""}</td>
                 <td className="py-2.5 text-muted-foreground">{r.date ? new Date(r.date).toLocaleDateString() : "—"}</td>
                 <td className="py-2.5 text-foreground">{r.stage}</td>
                 <td className="py-2.5 text-foreground">{r.inspector}</td>
@@ -1632,7 +1693,7 @@ function InspectionWorkspace({
             )}
           </tbody>
         </table>
-      </Panel>
+      </div></details>
     </div>
   );
 }
@@ -1680,6 +1741,18 @@ function InspectionShipmentBar({
   };
 
   // Already shipped → show the reference.
+  if (data.replenishmentPO) {
+    return <div className="mt-4 rounded-xl border bg-muted/30 p-5">
+      <h3 className="font-bold">Stock for sales order</h3>
+      <p className="mt-1 text-sm text-muted-foreground">{data.replenishmentPO.received
+        ? "Stock was added to inventory automatically. Fully covered sales orders are sent to Shipments."
+        : data.allPassed ? "Final QC passed. Inventory updates automatically when every production item is complete and cleared."
+        : `Waiting for final QC (${data.passedCount}/${data.total} items cleared). Available order stock stays reserved.`}</p>
+      <div className="mt-3 flex gap-4 text-sm font-semibold text-primary">
+        <Link href={`/procurement/pos/${data.replenishmentPO.publicId}`}>Open {data.replenishmentPO.poNo}</Link>
+      </div>
+    </div>;
+  }
   if (data.shipmentRef) {
     return (
       <div className="mt-4 flex items-center gap-2 rounded-2xl border border-[#BfE6CE] bg-[#E7F4EC] px-5 py-3.5 text-[13px] font-semibold text-[#1F9254]">
@@ -1812,7 +1885,7 @@ function tabContentFor(
             data={it}
             recordId={it.publicId}
             onSaved={ctx.onSaved}
-            canWrite={ctx.canWrite}
+            canWrite={ctx.canWrite && !it.historical}
           />
         );
       }
@@ -1837,6 +1910,7 @@ function tabContentFor(
           <Panel
             title="Variant matrix"
             sub="Available units by color and size"
+            action={ctx.recordId && USE_BACKEND ? <CatalogPOButton productId={ctx.recordId} /> : undefined}
           >
             <VariantMatrix product={p} />
           </Panel>
@@ -1854,7 +1928,8 @@ function tabContentFor(
         </div>
       ),
       "Variant matrix": (
-        <Panel title="Variant matrix" sub="Available units by color and size">
+        <Panel title="Variant matrix" sub="Available units by color and size"
+          action={ctx.recordId && USE_BACKEND ? <CatalogPOButton productId={ctx.recordId} /> : undefined}>
           <VariantMatrix product={p} />
         </Panel>
       ),
@@ -1953,12 +2028,19 @@ function tabContentFor(
     const primary = (
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.6fr_1fr]">
         <Panel>
+          {d.productionOrder && (
+            <Link href={`/production/porders/${d.productionOrder.publicId}`}
+                  className="mb-4 inline-block text-sm font-semibold text-primary hover:underline">
+              Open production / TNA {d.productionOrder.orderNo}
+            </Link>
+          )}
           <Lines {...doc} />
         </Panel>
         <div className="space-y-4">
           <Panel>
             <PartyCard party={doc.party} title={doc.partyTitle} />
           </Panel>
+          {d.variant === "invoice" && doc.bankDetails && <Panel title="Bank details"><Specs specs={doc.bankDetails.map((field) => ({ ...field, v: field.v || "Not set" }))} /></Panel>}
           <Panel title={doc.timelineTitle}>
             <Timeline items={doc.timeline} />
           </Panel>
@@ -2462,9 +2544,21 @@ export function RecordDetailPage({
   reload?: () => void;
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   // Re-fetch the record's data on the client; router.refresh() alone can't
   // re-run this client page's useEffect fetch.
-  const afterSave = () => { setEditing(false); reload?.(); router.refresh(); };
+  const afterSave = () => {
+    setEditing(false);
+    for (const key of [["screen", "catalog"], ["screen", "inventory"], ["catalog"], ["inventory"], ["screen", "sales"], ["sales"], ["screen", "shipments"]]) {
+      queryClient.invalidateQueries({ queryKey: key });
+    }
+    if (module === "quality") {
+      for (const key of [["screen", "sales"], ["screen", "shipments"], ["screen", "procurement"], ["screen", "quality"], ["screen", "production"], ["production"]]) {
+        queryClient.invalidateQueries({ queryKey: key });
+      }
+    }
+    reload?.(); router.refresh();
+  };
   const [editing, setEditing] = React.useState(false);
   const d = model ?? buildDetail(type, row, columns);
   // View-only roles (core/roles.py <module>.read without .write) see every
@@ -2622,6 +2716,9 @@ export function RecordDetailPage({
       </Card>
 
       {/* Order-level shipment (inspection group): locked until all items pass */}
+      {d.variant === "order" && d.fulfillment && recordId && (
+        <OrderFulfillmentPanel data={d.fulfillment} orderId={recordId} onSaved={() => { reload?.(); router.refresh(); }} />
+      )}
       {d.variant === "inspection" && d.inspection && (
         <InspectionShipmentBar
           data={d.inspection.shipment}

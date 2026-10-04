@@ -25,6 +25,7 @@ export interface InspectionPlaceholder {
   header: { inspectionNo: string; stage: string; result: string; product: string };
 }
 export interface InspectionItem {
+  historical?: boolean;
   publicId: string;
   item: string;
   tabLabel: string;
@@ -42,6 +43,12 @@ export interface InspectionItem {
   summary: { sampled: number; defects: number; defectRate: number; maxDefects: number; evaluation: string };
   shipmentRef: string | null;
   canStart: boolean;
+  sizeBreakdown?: {
+    sizes: string[]; rows: { article: string; color: string; quantities: number[]; total: number }[];
+    totals: number[]; total: number; ratio: number[]; source: string;
+  };
+  waitingForTNA?: boolean;
+  canReopenProduction?: boolean;
   canDecide: boolean;
   canDispose: boolean;
   disposition: string | null;
@@ -68,6 +75,7 @@ export interface InspectionItem {
   }[];
 }
 export interface DetailModel {
+  fulfillment?: import("@/components/screens/sales/order-fulfillment").OrderFulfillment | null;
   variant:
     | "product"
     | "order"
@@ -88,6 +96,7 @@ export interface DetailModel {
   statusTone: Tone;
   meta: MetaItem[];
   tabs: string[];
+  productionOrder?: { publicId: string; orderNo: string } | null;
   product?: {
     sizes: string[];
     matrix: { name: string; hex: string; cells: { q: number; tone: "red" | "amber" | "neutral" }[] }[];
@@ -115,6 +124,7 @@ export interface DetailModel {
     };
   };
   doc?: {
+    bankDetails?: MetaItem[];
     lines: { name: string; sku: string; qty: number; price: string; total: string }[];
     totals: MetaItem[];
     grand: string;
@@ -181,6 +191,7 @@ export interface DetailModel {
   inspection?: {
     items: (InspectionItem | InspectionPlaceholder)[];
     shipment: {
+      replenishmentPO?: { publicId: string; poNo: string; received: boolean } | null;
       allPassed: boolean; passedCount: number; total: number;
       shipmentRef: string | null; inspectionId: string | null;
     };

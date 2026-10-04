@@ -8,7 +8,10 @@ import type { z } from "zod";
 import { DataTable } from "@/components/screens/data-table";
 import { AutoForm } from "@/components/screens/auto-form";
 import { OrderForm } from "@/components/screens/order-form";
+import { CreateShortagePOButton } from "@/components/screens/sales/order-fulfillment";
 import { PurchaseOrderForm } from "@/components/screens/po-form";
+import { QCReopenDialog } from "@/components/screens/qc-reopen-dialog";
+import type { DetailModel } from "@/modules/detail/detail-data";
 import { InspectionForm } from "@/components/screens/inspection-form";
 import { TransferForm } from "@/components/screens/transfer-form";
 import { StockReceiptForm } from "@/components/screens/stock-receipt-form";
@@ -26,6 +29,7 @@ import type { ListConfig, Row } from "@/lib/screen-types";
 import { delay } from "@/lib/mock-fetch";
 import { apiGet, apiPost, apiPut, USE_BACKEND } from "@/lib/api-client";
 import { useModuleAccess } from "@/lib/module-access";
+import { buildColumns } from "@/lib/build-columns";
 
 /** module/tab → backend POST path for wired create forms. */
 const CREATE_ENDPOINTS: Record<string, string> = {
@@ -47,7 +51,6 @@ const CREATE_ENDPOINTS: Record<string, string> = {
   "finance/journals": "/finance/journals",
   "finance/payments": "/finance/payments",
   "finance/bills": "/finance/bills",
-  "production/porders": "/production/porders",
   "production/bom": "/production/bom",
   "quality/inspections": "/quality/inspections",
   "quality/defects": "/quality/defects",
@@ -97,7 +100,7 @@ const STATUS_OPTIONS: Record<string, string[]> = {
   "procurement/receipts": ["Expected", "Partial", "Complete"],
   "inventory/transfers": ["Draft", "In transit", "Received", "Cancelled"],
   "quality/inspections": ["Pending", "Pass", "Fail"],
-  "shipments/shipments": ["Label created", "In transit", "Customs", "Out for delivery", "Delivered"],
+  "shipments/shipments": ["Pending", "Label created", "In transit", "Customs", "Out for delivery", "Delivered"],
 };
 
 /** module/tab → a bulk action button (no create form). */
@@ -196,9 +199,35 @@ export function ListScreen({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["screen", module, tab] });
+      if (module === "finance" || isPOCreate || isReorderPOCreate) {
+        queryClient.invalidateQueries({ queryKey: ["finance"] });
+      }
+      if (module === "catalog" && tab === "products") {
+        queryClient.invalidateQueries({ queryKey: ["catalog", "season-names"] });
+      }
+      if (module === "sales" && tab === "orders") {
+        for (const key of [["screen", "inventory"], ["screen", "shipments"], ["screen", "sales"], ["finance"]]) {
+          queryClient.invalidateQueries({ queryKey: key });
+        }
+      }
+      if (module === "inventory" && tab === "stock") {
+        for (const key of [["screen", "catalog"], ["catalog"], ["inventory"], ["screen", "sales"], ["sales"], ["screen", "shipments"]]) {
+          queryClient.invalidateQueries({ queryKey: key });
+        }
+      }
+      if (module === "procurement" && tab === "receipts") {
+        for (const key of [["screen", "sales"], ["screen", "shipments"], ["screen", "inventory"], ["screen", "procurement"]]) {
+          queryClient.invalidateQueries({ queryKey: key });
+        }
+      }
       // PO raised from Reorder Alerts must refresh the Procurement PO list too.
       if (isReorderPOCreate) {
         queryClient.invalidateQueries({ queryKey: ["screen", "procurement", "pos"] });
+      }
+      if (isPOCreate || isReorderPOCreate) {
+        queryClient.invalidateQueries({ queryKey: ["procurement", "invoices"] });
+        queryClient.invalidateQueries({ queryKey: ["screen", "production"] });
+        queryClient.invalidateQueries({ queryKey: ["production"] });
       }
       setOpen(false);
       setEditIndex(null);
@@ -228,6 +257,12 @@ export function ListScreen({
   const rowStatuses = config.records?.map(
     (r) => (r as { status?: string } | undefined)?.status
   );
+  const [failedInspectionId, setFailedInspectionId] = React.useState<string | null>(null);
+  const { data: failedInspection } = useQuery({
+    queryKey: ["quality", "recovery", failedInspectionId],
+    queryFn: () => apiGet<DetailModel>(`/quality/inspections/${failedInspectionId}/detail`),
+    enabled: !!failedInspectionId,
+  });
   const setStatus = useMutation({
     mutationFn: async ({ index, status }: { index: number; status: string }) => {
       const id = config.ids?.[index];
@@ -237,7 +272,18 @@ export function ListScreen({
       await delay(300);
       return null;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["screen", module, tab] }),
+    onSuccess: (_, variables) => {
+      if (module === "finance") queryClient.invalidateQueries({ queryKey: ["finance"] });
+      if (module === "quality" && tab === "inspections" && variables.status === "Fail") {
+        setFailedInspectionId(config.ids?.[variables.index] ?? null);
+      }
+      queryClient.invalidateQueries({ queryKey: ["screen", module, tab] });
+      if (module === "sales" || module === "shipments" || module === "quality") {
+        for (const key of [["screen", "sales"], ["screen", "shipments"], ["screen", "inventory"], ["screen", "procurement"]]) {
+          queryClient.invalidateQueries({ queryKey: key });
+        }
+      }
+    },
   });
 
   const isEdit = editIndex != null;
@@ -268,6 +314,15 @@ export function ListScreen({
     queryFn: () => apiGet<string[]>("/catalog/categories"),
     enabled: USE_BACKEND && isCatalogProducts && open,
   });
+  const { data: seasonNames } = useQuery({
+    queryKey: ["catalog", "season-names"],
+    queryFn: () => apiGet<string[]>("/catalog/seasons"),
+    enabled: USE_BACKEND && isCatalogProducts && open,
+  });
+  const seasonSuggestions = Array.from(new Map(
+    [...(seasonNames ?? []), "Core", "Spring '26", "Fall '26", "Winter '26"]
+      .map((name) => [name.toLowerCase(), name])
+  ).values());
   const [passId, setPassId] = React.useState<string | null>(null);
   const passInspection = useMutation({
     mutationFn: (v: Record<string, string | number>) =>
@@ -275,13 +330,22 @@ export function ListScreen({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["screen", "quality", "inspections"] });
       queryClient.invalidateQueries({ queryKey: ["screen", "shipments"] });
+      queryClient.invalidateQueries({ queryKey: ["screen", "sales"] });
+      queryClient.invalidateQueries({ queryKey: ["screen", "inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["screen", "procurement"] });
       setPassId(null);
     },
   });
   return (
     <>
+      {failedInspectionId && <QCReopenDialog inspectionId={failedInspectionId} open onOpenChange={(value) => { if (!value) setFailedInspectionId(null); }}
+        canReopenProduction={failedInspection?.inspection?.items.some((item) => item.publicId === failedInspectionId && !item.placeholder && item.canReopenProduction)}
+        onSaved={() => {
+          queryClient.invalidateQueries({ queryKey: ["screen", "quality"] });
+          queryClient.invalidateQueries({ queryKey: ["screen", "production"] });
+        }} />}
       <DataTable
-        columns={columns}
+        columns={isProductionOrders && USE_BACKEND ? buildColumns(config.columns) : columns}
         data={config.rows}
         records={config.records}
         searchPlaceholder={config.search}
@@ -289,7 +353,7 @@ export function ListScreen({
         actionLabel={actionLabel}
         total={config.total}
         onAction={
-          isOrderHistory || !canWrite
+          isOrderHistory || isProductionOrders || !canWrite
             ? undefined
             : () => {
                 setEditIndex(null);
@@ -297,9 +361,12 @@ export function ListScreen({
                 setOpen(true);
               }
         }
-        actionDisabled={!isOrderHistory && !canWrite}
+        actionDisabled={!isOrderHistory && !isProductionOrders && !canWrite}
         actionDisabledReason={reason ?? undefined}
         onRowClick={detailType ? openRecord : undefined}
+        renderRowAction={module === "sales" && tab === "orders" && USE_BACKEND ? (i) =>
+          config.records?.[i]?.status === "PO needed" && config.ids?.[i]
+            ? <CreateShortagePOButton orderId={config.ids[i]} /> : null : undefined}
         // Production is started per-item inside each order's item tab, not from
         // the orders list — so no order-level "Start production" row action.
         onStartRow={undefined}
@@ -337,7 +404,10 @@ export function ListScreen({
         open={open}
         onOpenChange={(o) => {
           setOpen(o);
-          if (!o) setEditIndex(null);
+          if (!o) {
+            setEditIndex(null);
+            save.reset();
+          }
         }}
       >
         <SheetContent>
@@ -345,15 +415,9 @@ export function ListScreen({
             <SheetTitle>
               {isEdit ? "Edit details" : actionConfig ? actionConfig.title : actionLabel}
             </SheetTitle>
-            <SheetDescription>
-              {schema
-                ? isEdit
-                  ? "Update the details below and save your changes."
-                  : "Fill in the details below. Validated with Zod."
-                : actionConfig
-                  ? actionConfig.body
-                  : "Create form for this entity is not yet defined."}
-            </SheetDescription>
+            {actionConfig && !schema ? (
+              <SheetDescription>{actionConfig.body}</SheetDescription>
+            ) : null}
           </SheetHeader>
           {isOrderCreate ? (
             <OrderForm
@@ -388,6 +452,15 @@ export function ListScreen({
               pending={save.isPending}
               defaultValues={defaultValues}
               dynamicOptions={isCatalogProducts ? { category: categoryNames ?? [] } : undefined}
+              textSuggestions={isCatalogProducts ? { season: seasonSuggestions } : undefined}
+              numericPrefixes={isCatalogProducts && !isEdit ? { sku: "SKU-" } : undefined}
+              serverError={
+                save.isError
+                  ? save.error instanceof Error
+                    ? save.error.message
+                    : "Could not save"
+                  : undefined
+              }
               onSubmit={(v) => save.mutate(v as Record<string, unknown>)}
             />
           ) : actionConfig ? (

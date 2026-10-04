@@ -68,9 +68,13 @@ function InvoiceList({ onOpen }: { onOpen: (doc: Doc, publicId: string | null) =
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  const { data } = useQuery({
-    queryKey: ["procurement", "invoices"],
-    queryFn: () => apiGet<{ invoices: Doc[] }>("/procurement/invoices"),
+  const { data, error: loadError, isLoading } = useQuery({
+    queryKey: ["procurement", "invoices", canWrite],
+    queryFn: async () => {
+      // Repair older POs through an authorized mutation before loading the list.
+      if (canWrite) await apiPost("/procurement/invoices/generate-missing", {});
+      return apiGet<{ invoices: Doc[] }>("/procurement/invoices");
+    },
     enabled: USE_BACKEND,
   });
 
@@ -105,6 +109,8 @@ function InvoiceList({ onOpen }: { onOpen: (doc: Doc, publicId: string | null) =
 
   return (
     <div className="space-y-4">
+      {isLoading && <p className="text-sm text-muted-foreground">Loading purchase order invoices...</p>}
+      {loadError && <p role="alert" className="text-sm text-destructive">{loadError instanceof Error ? loadError.message : "Could not load or generate purchase order invoices."}</p>}
       <div className="flex items-center justify-between">
         <p className="text-[14px] text-muted-foreground">Commercial invoices generated against purchase orders.</p>
         <Button variant="navy" size="sm" disabled={!canWrite} title={!canWrite ? writeReason ?? undefined : undefined}
@@ -242,10 +248,11 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
       if (savedId) await apiPut(`/procurement/invoices/${savedId}`, payload);
       else { const res = await apiPost<{ publicId: string }>("/procurement/invoices", payload); setSavedId(res.publicId); }
       qc.invalidateQueries({ queryKey: ["procurement", "invoices"] });
+      qc.invalidateQueries({ queryKey: ["finance"] });
       setNotice({ kind: "ok", text: isUpdate ? "Invoice updated successfully." : "Invoice saved successfully." });
       setTimeout(() => setNotice(null), 4000);
-    } catch {
-      setNotice({ kind: "err", text: "Could not save the invoice. Please try again." });
+    } catch (error) {
+      setNotice({ kind: "err", text: error instanceof Error ? error.message : "Could not save the invoice. Please try again." });
     } finally { setSaving(false); }
   };
 

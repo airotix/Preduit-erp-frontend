@@ -466,7 +466,7 @@ function WholesalePaper({ doc, ccy, totals, update }: {
     ["Invoice no", "invoiceNo"], ["PO no", "poNo"], ["Order date", "orderDate"],
     ["Payment terms", "paymentTerms"], ["Sales rep", "salesRep"], ["Ship to", "shipTo"],
   ];
-  const REMIT: [string, string][] = [["Title", "title"], ["Bank", "bank"], ["Account", "account"]];
+  const REMIT = REMIT_ROWS;
   return (
     <div className="invoice-paper mx-auto w-full max-w-[900px] border border-[#e2e2e2] bg-white p-8 text-[#111] shadow-erp-lg">
       <div className="mb-1 flex items-center justify-between text-[9px] text-[#8a8a8a]">

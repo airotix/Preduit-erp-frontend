@@ -63,6 +63,24 @@ function titleCase(s: string) {
     .trim();
 }
 
+const FIELD_LABELS: Record<string, string> = {
+  sku: "SKU ID",
+  retailPrice: "Retail Price",
+  wholesalePrice: "Wholesale Price",
+  onlinePrice: "Online Price",
+  supplierPrice: "Supplier Price",
+  dueDate: "Due Date",
+  openingBalance: "Opening Balance",
+  allocatedTo: "Allocated To",
+  avgTransit: "Avg Transit",
+  leadTime: "Lead Time",
+  qtyPerUnit: "Qty / Unit",
+  onHand: "On Hand",
+  batchLot: "Batch / Lot",
+  inspectionType: "Inspection Type",
+  poRef: "PO",
+};
+
 /** Introspect a ZodObject into a renderable field list. `dynamicOptions`
  *  lets a caller turn a plain string field into a select populated from
  *  live data (e.g. a category list fetched at render time) instead of a
@@ -100,7 +118,7 @@ function fieldsFromSchema(
     if (kind === "text" && /due.?date$/i.test(name)) kind = "date";
     // Image upload for image fields (stored/sent as a data URL or URL string).
     if (kind === "text" && /image/i.test(name)) kind = "image";
-    return { name, label: titleCase(name), kind, options, optional };
+    return { name, label: FIELD_LABELS[name] ?? titleCase(name), kind, options, optional };
   });
 }
 
@@ -114,6 +132,10 @@ interface AutoFormProps<T extends z.ZodObject<z.ZodRawShape>> {
   /** Override a field's select options with live data (e.g. a category
    *  list fetched at render time) instead of whatever the schema declares. */
   dynamicOptions?: Record<string, string[]>;
+  textSuggestions?: Record<string, string[]>;
+  numericPrefixes?: Record<string, string>;
+  /** Server-side error (e.g. duplicate SKU) shown above the footer. */
+  serverError?: string;
 }
 
 export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
@@ -123,6 +145,9 @@ export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
   pending,
   defaultValues,
   dynamicOptions,
+  textSuggestions,
+  numericPrefixes,
+  serverError,
 }: AutoFormProps<T>) {
   const fields = React.useMemo(
     () => fieldsFromSchema(schema, dynamicOptions),
@@ -136,9 +161,13 @@ export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
         for (const [k, v] of Object.entries(val)) {
           const msg = fieldFormatError(k, v);
           if (msg) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [k], message: msg });
+          const prefix = numericPrefixes?.[k];
+          if (prefix && (typeof v !== "string" || !v.startsWith(prefix) || !/^\d+$/.test(v.slice(prefix.length)))) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: [k], message: "Enter the SKU number" });
+          }
         }
       }),
-    [schema]
+    [schema, numericPrefixes]
   );
   const {
     register,
@@ -158,6 +187,11 @@ export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
       className="flex flex-1 flex-col overflow-hidden"
     >
       <div className="erp-scroll flex-1 space-y-4 overflow-y-auto px-6 pb-6">
+        {serverError && (
+          <p className="rounded-md bg-[#FDECEA] px-3 py-2 text-xs font-semibold text-[#C0392B]">
+            {serverError}
+          </p>
+        )}
         {fields.map((f) => (
           <div key={f.name} className="space-y-1.5">
             <Label htmlFor={f.name}>
@@ -199,11 +233,27 @@ export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
               />
             ) : f.kind === "date" ? (
               <Input id={f.name} type="date" {...register(f.name)} />
+            ) : numericPrefixes?.[f.name] ? (
+              <div className="flex items-center rounded-md border border-input focus-within:ring-2 focus-within:ring-ring">
+                <span className="pl-3 text-sm font-medium">{numericPrefixes[f.name]}</span>
+                <Input
+                  id={f.name}
+                  {...register(f.name)}
+                  className="border-0 shadow-none focus-visible:ring-0"
+                  inputMode="numeric"
+                  placeholder="000001"
+                  maxLength={64 - numericPrefixes[f.name].length}
+                  value={String(watch(f.name) ?? "").replace(numericPrefixes[f.name], "")}
+                  onChange={(e) => setValue(f.name, numericPrefixes[f.name] + e.target.value.replace(/\D/g, ""), { shouldDirty: true, shouldValidate: true })}
+                />
+              </div>
             ) : (
+              <>
               <Input
                 id={f.name}
                 type={f.kind === "number" ? "number" : "text"}
                 step={f.kind === "number" ? "any" : undefined}
+                list={textSuggestions?.[f.name] ? `${f.name}-suggestions` : undefined}
                 {...register(
                   f.name,
                   f.kind === "number"
@@ -211,6 +261,12 @@ export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
                     : {}
                 )}
               />
+              {textSuggestions?.[f.name] && (
+                <datalist id={`${f.name}-suggestions`}>
+                  {textSuggestions[f.name].map((name) => <option key={name} value={name} />)}
+                </datalist>
+              )}
+              </>
             )}
 
             {errors[f.name] && (

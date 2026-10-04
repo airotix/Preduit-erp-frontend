@@ -10,7 +10,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter, SheetClose,
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter, SheetClose,
 } from "@/components/ui/sheet";
 import { apiGet, apiPost, USE_BACKEND } from "@/lib/api-client";
 
@@ -56,6 +56,7 @@ export function JournalEditor({
     setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...x } : l)));
 
   const submit = async () => {
+    if (!date) return setError("Date is required.");
     if (!memo.trim()) return setError("Memo is required.");
     const valid = lines.filter((l) => l.account && (n(l.debit) > 0 || n(l.credit) > 0));
     if (valid.length < 2) return setError("Add at least two account lines with amounts.");
@@ -80,7 +81,6 @@ export function JournalEditor({
       <SheetContent className="sm:max-w-2xl">
         <SheetHeader>
           <SheetTitle>New journal entry</SheetTitle>
-          <SheetDescription>Post a balanced double-entry journal to the general ledger.</SheetDescription>
         </SheetHeader>
 
         <div className="erp-scroll flex-1 space-y-4 overflow-y-auto px-6 pb-6">
@@ -90,7 +90,7 @@ export function JournalEditor({
               <Input id="ref" placeholder="Auto (JE-…)" value={reference} onChange={(e) => setReference(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="jdate">Date</Label>
+              <Label htmlFor="jdate">Date<span className="ml-0.5 text-brand-orange">*</span></Label>
               <Input id="jdate" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
           </div>

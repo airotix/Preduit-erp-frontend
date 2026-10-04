@@ -177,40 +177,6 @@ export function FinanceOverview() {
             </Card>
           </div>
 
-          {/* Recent journal entries */}
-          <Card className="p-6">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-[17px] font-extrabold tracking-tight text-foreground">Recent journal entries</h3>
-              <span className="text-[13px] font-semibold text-brand-orange">View all</span>
-            </div>
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                  <th className="pb-2 text-left font-bold">Date</th>
-                  <th className="pb-2 text-left font-bold">Entry</th>
-                  <th className="pb-2 text-left font-bold">Account</th>
-                  <th className="pb-2 text-left font-bold">Memo</th>
-                  <th className="pb-2 text-right font-bold">Debit</th>
-                  <th className="pb-2 text-right font-bold">Credit</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.recent.map((r, i) => (
-                  <tr key={i} className="border-t border-border/50">
-                    <td className="py-2.5 whitespace-nowrap text-muted-foreground">{r.date}</td>
-                    <td className="py-2.5 font-bold tabular text-foreground">{r.entry}</td>
-                    <td className="py-2.5"><ToneBadge tone={r.accountTone} dot={false}>{r.account}</ToneBadge></td>
-                    <td className="py-2.5 text-muted-foreground">{r.memo}</td>
-                    <td className="py-2.5 text-right tabular text-foreground">{r.debit ? money(r.debit, currency) : "—"}</td>
-                    <td className="py-2.5 text-right tabular text-foreground">{r.credit ? money(r.credit, currency) : "—"}</td>
-                  </tr>
-                ))}
-                {data.recent.length === 0 && (
-                  <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">No journal entries yet.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </Card>
         </div>
       )}
     </div>

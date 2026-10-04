@@ -248,9 +248,6 @@ export const screens: Record<string, ScreenConfig> = {
         "label": "Category"
       },
       {
-        "label": "Parent"
-      },
-      {
         "label": "Products",
         "align": "center"
       },
@@ -265,7 +262,6 @@ export const screens: Record<string, ScreenConfig> = {
           "t": "Knitwear",
           "strong": true
         },
-        "—",
         {
           "t": "42",
           "align": "center",
@@ -282,7 +278,6 @@ export const screens: Record<string, ScreenConfig> = {
           "t": "Bottoms",
           "strong": true
         },
-        "—",
         {
           "t": "58",
           "align": "center",
@@ -299,7 +294,6 @@ export const screens: Record<string, ScreenConfig> = {
           "t": "Shirts",
           "strong": true
         },
-        "—",
         {
           "t": "64",
           "align": "center",
@@ -316,7 +310,6 @@ export const screens: Record<string, ScreenConfig> = {
           "t": "Outerwear",
           "strong": true
         },
-        "—",
         {
           "t": "37",
           "align": "center",
@@ -333,7 +326,6 @@ export const screens: Record<string, ScreenConfig> = {
           "t": "Accessories",
           "strong": true
         },
-        "—",
         {
           "t": "47",
           "align": "center",

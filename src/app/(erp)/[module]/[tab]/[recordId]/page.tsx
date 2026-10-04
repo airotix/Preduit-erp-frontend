@@ -45,7 +45,8 @@ export default function RecordPage({
   const tab = getTab(params.module, params.tab);
   const type = detailTypeFor(params.module, params.tab);
   const index = Number.parseInt(params.recordId, 10);
-  const valid = !!mod && !!tab && !!type && !Number.isNaN(index);
+  const isPublicId = USE_BACKEND && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.recordId);
+  const valid = !!mod && !!tab && !!type && (isPublicId || !Number.isNaN(index));
 
   const [loading, setLoading] = React.useState(true);
   const [missing, setMissing] = React.useState(false);
@@ -61,6 +62,15 @@ export default function RecordPage({
     let cancelled = false;
     (async () => {
       try {
+        // Stable cross-module links must work even outside the first list page.
+        if (isPublicId && type && BACKEND_DETAILS[type]) {
+          const m = await apiGet<DetailModel>(BACKEND_DETAILS[type](params.recordId));
+          if (cancelled) return;
+          setModel(m);
+          setRecordId(params.recordId);
+          setScreen({ kind: "list", rows: [[]], columns: [] });
+          return;
+        }
         const scr = await fetchScreen(params.module, params.tab);
         if (cancelled) return;
         if (scr.kind !== "list" || !scr.rows[index]) { setMissing(true); return; }
@@ -96,7 +106,7 @@ export default function RecordPage({
     );
   }
 
-  const row = (screen.kind === "list" ? screen.rows[index] : undefined) as Cell[] | undefined;
+  const row = (screen.kind === "list" ? screen.rows[isPublicId ? 0 : index] : undefined) as Cell[] | undefined;
   if (!row) notFound();
 
   // Production orders use a bespoke stage-timeline drill-down.

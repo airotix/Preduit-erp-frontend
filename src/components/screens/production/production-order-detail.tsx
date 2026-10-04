@@ -37,6 +37,7 @@ interface Detail {
   stages: Stage[]; materials: { component: string; material: string; qty: string; cost: string }[];
   orderLines?: OrderLine[];
   orderTotal?: string;
+  sourcePurchaseOrder?: { publicId: string; poNo: string } | null;
   lines?: LineTL[];
 }
 
@@ -252,6 +253,12 @@ export function ProductionOrderDetail({
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#9499A6]">{data.ref}</div>
+                {data.sourcePurchaseOrder && (
+                  <Link href={`/procurement/pos/${data.sourcePurchaseOrder.publicId}`}
+                        className="mt-2 inline-block text-sm font-semibold text-primary hover:underline">
+                    View source PO {data.sourcePurchaseOrder.poNo}
+                  </Link>
+                )}
                 <div className="mt-1 flex items-center gap-3">
                   <h1 className="text-[26px] font-extrabold tracking-tight text-foreground">{data.title}</h1>
                   <ToneBadge tone={data.statusTone}>{data.statusLabel}</ToneBadge>
@@ -293,7 +300,9 @@ export function ProductionOrderDetail({
             {/* Summary — the complete order this work order fulfils. */}
             <TabsContent value="summary">
               <Card className="p-6">
-                <div className="mb-4 text-base font-extrabold text-foreground">Order line items</div>
+                <div className="mb-4 text-base font-extrabold text-foreground">
+                  {data.sourcePurchaseOrder ? "Purchase order line items" : "Order line items"}
+                </div>
                 {data.orderLines && data.orderLines.length > 0 ? (
                   <table className="w-full text-[13px]">
                     <thead>
@@ -325,7 +334,7 @@ export function ProductionOrderDetail({
                   </table>
                 ) : (
                   <div className="py-8 text-center text-[13px] text-muted-foreground">
-                    No linked sales order — this is a standalone work order.
+                    No source order line items are available for this legacy work order.
                   </div>
                 )}
               </Card>

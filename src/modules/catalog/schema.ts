@@ -2,24 +2,25 @@ import { z } from "zod";
 
 export const productSchema = z.object({
   title: z.string().min(1, "Required"),
+  // User-supplied; uniqueness is enforced by the backend (tenant + SKU).
+  sku: z.string().min(1, "Required").max(64, "Max 64 characters"),
   // Not a static enum: the Category picker is populated live from
   // GET /catalog/categories (see list-screen.tsx's `dynamicOptions`), so a
   // category created moments ago is selectable immediately. Validation here
   // just requires a non-empty value — the live list is what constrains choice.
   category: z.string().min(1, "Required"),
-  season: z.enum(["Core", "Spring '26", "Fall '26", "Winter '26"]),
+  season: z.string().trim().min(1, "Required").max(40, "Max 40 characters"),
   status: z.enum(["Active", "Draft", "Discontinued"]),
-  // SKU is auto-generated (SKU-000001…). Four price types seed the first variant.
-  retailPrice: z.number({ invalid_type_error: "Must be a number" }).positive("Must be greater than 0").optional(),
-  wholesalePrice: z.number({ invalid_type_error: "Must be a number" }).positive("Must be greater than 0").optional(),
-  onlinePrice: z.number({ invalid_type_error: "Must be a number" }).positive("Must be greater than 0").optional(),
-  supplierPrice: z.number({ invalid_type_error: "Must be a number" }).positive("Must be greater than 0").optional(),
+  // Price columns on the products table — required on create/edit.
+  retailPrice: z.number({ invalid_type_error: "Must be a number" }).positive("Must be greater than 0"),
+  wholesalePrice: z.number({ invalid_type_error: "Must be a number" }).positive("Must be greater than 0"),
+  onlinePrice: z.number({ invalid_type_error: "Must be a number" }).positive("Must be greater than 0"),
+  supplierPrice: z.number({ invalid_type_error: "Must be a number" }).positive("Must be greater than 0"),
   imageUrl: z.string().optional(),
 });
 
 export const categorySchema = z.object({
   name: z.string().min(1, "Required"),
-  parent: z.string().optional(),
   // Matches the backend model's own default (Category.is_active defaults to
   // True) — a newly created category should be usable right away, not
   // silently inactive until someone notices and flips this switch.

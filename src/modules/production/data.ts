@@ -7,8 +7,7 @@ export const screens: Record<string, ScreenConfig> = {
     "search": "Search production orders…",
     "action": "New production order",
     "filters": [
-      "Stage",
-      "Factory"
+      "Stage"
     ],
     "columns": [
       {
@@ -16,9 +15,6 @@ export const screens: Record<string, ScreenConfig> = {
       },
       {
         "label": "Style"
-      },
-      {
-        "label": "Factory"
       },
       {
         "label": "Qty",
@@ -40,7 +36,6 @@ export const screens: Record<string, ScreenConfig> = {
           "mono": true
         },
         "Merino Crew Knit",
-        "Lahore Unit 2",
         {
           "t": "2,400",
           "align": "right",
@@ -64,7 +59,6 @@ export const screens: Record<string, ScreenConfig> = {
           "mono": true
         },
         "Tailored Chino",
-        "Faisalabad",
         {
           "t": "3,000",
           "align": "right",
@@ -88,7 +82,6 @@ export const screens: Record<string, ScreenConfig> = {
           "mono": true
         },
         "Oxford Shirt",
-        "Lahore Unit 1",
         {
           "t": "5,000",
           "align": "right",
@@ -112,7 +105,6 @@ export const screens: Record<string, ScreenConfig> = {
           "mono": true
         },
         "Field Jacket",
-        "Sialkot",
         {
           "t": "1,200",
           "align": "right",

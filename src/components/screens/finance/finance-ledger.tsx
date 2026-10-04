@@ -156,7 +156,7 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
         paymentType: v.paymentType || null,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["finance", "ledger"] });
+      queryClient.invalidateQueries({ queryKey: ["finance"] });
       setFormOpen(false);
     },
   });
@@ -165,7 +165,7 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
   const saveDesc = useMutation({
     mutationFn: (b: { type: string; publicId: string; description: string }) =>
       apiPut("/finance/ledger-entries/description", b),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["finance", "ledger"] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["finance"] }),
   });
 
   // Inline Cash/Bank edits, routed to the row's source record (invoice, bill,
@@ -173,7 +173,7 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
   const savePaymentType = useMutation({
     mutationFn: (b: { type: string; publicId: string; paymentType: string }) =>
       apiPut("/finance/ledger-entries/payment-type", b),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["finance", "ledger"] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["finance"] }),
   });
 
   const exportCsv = () => {
@@ -233,7 +233,7 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
           customer={stmt?.name ?? ""}
           format={(n) => money(n, currency)}
           onDone={() => {
-            queryClient.invalidateQueries({ queryKey: ["finance", "ledger"] });
+            queryClient.invalidateQueries({ queryKey: ["finance"] });
             setSettle(null);
           }}
         />
@@ -273,7 +273,7 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
                     <span className="block truncate text-[13px] font-bold text-foreground">{p.name}</span>
                     <span className="block text-[11px] text-muted-foreground">{p.code}</span>
                   </span>
-                  <span className="tabular text-[12px] font-bold" style={{ color: p.balance > 0 ? "#EA6C18" : "#2E9E6B" }}>
+                  <span className="tabular text-[12px] font-bold" title={p.balance === 0 ? "Settled" : isCustomer ? (p.balance > 0 ? "Receivable" : "Customer credit") : (p.balance < 0 ? "Payable" : "Supplier advance")} style={{ color: (isCustomer ? p.balance > 0 : p.balance < 0) ? "#EA6C18" : "#2E9E6B" }}>
                     {money(p.balance, currency, true)}
                   </span>
                 </button>

@@ -18,7 +18,8 @@ export const accountSchema = z.object({
     ])
     .optional(),
   currency: z.enum(["EUR", "USD", "GBP", "PKR", "AED"]),
-  openingBalance: z.number({ invalid_type_error: "Must be a number" }).optional(),
+  // Shown as Balance on the CoA table.
+  openingBalance: z.number({ invalid_type_error: "Must be a number" }),
   taxRate: z.number({ invalid_type_error: "Must be a number" }).optional(),
   parent: z.string().optional(),
   description: z.string().optional(),
@@ -31,7 +32,7 @@ export const journalEntrySchema = z.object({
   debit: z.number({ invalid_type_error: "Must be a number" }).positive("Must be greater than 0"),
   credit: z.number({ invalid_type_error: "Must be a number" }).positive("Must be greater than 0"),
   status: z.enum(["Draft", "Posted", "Void"]).default("Draft"),
-  date: z.string().optional(),
+  date: z.string().min(1, "Required"),
 });
 
 export const paymentSchema = z.object({
@@ -41,7 +42,7 @@ export const paymentSchema = z.object({
   method: z.enum(["Bank transfer", "Card", "Cash", "Cheque"]).optional(),
   reference: z.string().optional(),
   allocatedTo: z.string().optional(),
-  date: z.string().optional(),
+  date: z.string().min(1, "Required"),
   status: z.enum(["Pending", "Cleared", "Failed"]).default("Pending"),
   notes: z.string().optional(),
 });
@@ -50,7 +51,7 @@ export const billSchema = z.object({
   supplier: z.string().min(1, "Required"),
   poRef: z.string().optional(),
   amount: z.number({ invalid_type_error: "Must be a number" }).positive("Must be greater than 0"),
-  dueDate: z.string().optional(),
+  dueDate: z.string().min(1, "Required"),
   status: z.enum(["Open", "Scheduled", "Paid"]).default("Open"),
 });
 

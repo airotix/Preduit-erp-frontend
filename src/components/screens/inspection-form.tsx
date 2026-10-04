@@ -51,6 +51,7 @@ export function InspectionForm({
 
   const submit = () => {
     if (!order.trim()) { setError("Order reference is required."); return; }
+    if (!inspector.trim()) { setError("Inspector is required."); return; }
     setError(null);
     onSubmit({
       order: order.trim(), item: item || null, stage, inspectionType,
@@ -61,7 +62,7 @@ export function InspectionForm({
   return (
     <div className="flex-1 space-y-4 px-6 pb-6">
       <div className="space-y-1.5">
-        <Label htmlFor="order">Production order *</Label>
+        <Label htmlFor="order">Production order<span className="ml-0.5 text-brand-orange">*</span></Label>
         <Input id="order" value={order} placeholder="e.g. MO-3323"
           onChange={(e) => setOrder(e.target.value)}
           onBlur={(e) => loadItems(e.target.value)} />
@@ -89,21 +90,21 @@ export function InspectionForm({
 
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label>Stage</Label>
+          <Label>Stage<span className="ml-0.5 text-brand-orange">*</span></Label>
           <Select value={stage} onValueChange={setStage}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>{STAGES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label>Inspection type</Label>
+          <Label>Inspection type<span className="ml-0.5 text-brand-orange">*</span></Label>
           <Select value={inspectionType} onValueChange={setInspectionType}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>{TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label>AQL level</Label>
+          <Label>AQL level<span className="ml-0.5 text-brand-orange">*</span></Label>
           <Select value={aql} onValueChange={setAql}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>{AQLS.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
@@ -116,7 +117,7 @@ export function InspectionForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="inspector">Inspector</Label>
+        <Label htmlFor="inspector">Inspector<span className="ml-0.5 text-brand-orange">*</span></Label>
         <Input id="inspector" value={inspector} onChange={(e) => setInspector(e.target.value)} />
       </div>
 

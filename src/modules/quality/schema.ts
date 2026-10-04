@@ -3,10 +3,11 @@ import { z } from "zod";
 export const inspectionSchema = z.object({
   order: z.string().min(1, "Required"),
   stage: z.enum(["Pre-Production", "Inline", "During Production", "Final", "Pre-Shipment"]),
-  inspectionType: z.enum(["First Article", "In-line", "Final QC", "Pre-Shipment"]).optional(),
+  inspectionType: z.enum(["First Article", "In-line", "Final QC", "Pre-Shipment"]),
   aql: z.enum(["1.0", "1.5", "2.5", "4.0", "6.5"]),
   batchLot: z.string().optional(),
-  inspector: z.string().optional(),
+  // Shown on the inspections table.
+  inspector: z.string().min(1, "Required"),
 });
 
 export const defectTypeSchema = z.object({

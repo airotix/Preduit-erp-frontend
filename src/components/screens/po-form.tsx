@@ -120,15 +120,19 @@ function SupplierNameInput({
 export function PurchaseOrderForm({
   pending,
   onSubmit,
+  initialProduct,
 }: {
   pending?: boolean;
   onSubmit: (payload: POPayload) => void;
+  initialProduct?: { name: string; price: number; colors: ColorOption[] };
 }) {
   const [supplier, setSupplier] = React.useState("");
   const [expected, setExpected] = React.useState("");
   const [colors, setColors] = React.useState<ColorOption[]>([]);
   const [sizes, setSizes] = React.useState<string[]>([]);
-  const [lines, setLines] = React.useState<POLine[]>([newLine()]);
+  const [lines, setLines] = React.useState<POLine[]>([{ ...newLine(),
+    name: initialProduct?.name ?? "", price: initialProduct?.price ?? 0,
+    colorOptions: initialProduct?.colors ?? [], color: initialProduct?.colors[0]?.name ?? "" }]);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {

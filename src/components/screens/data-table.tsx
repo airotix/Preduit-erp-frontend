@@ -150,6 +150,7 @@ interface DataTableProps {
   actionDisabled?: boolean;
   actionDisabledReason?: string;
   onRowClick?: (row: Row) => void;
+  renderRowAction?: (rowIndex: number) => React.ReactNode;
   /** When provided, each row shows an Edit button that calls back with the
    *  row's original data index (aligned with the backend ids/records arrays). */
   onEditRow?: (rowIndex: number) => void;
@@ -178,6 +179,7 @@ export function DataTable({
   actionDisabled,
   actionDisabledReason,
   onRowClick,
+  renderRowAction,
   onEditRow,
   onStartRow,
   startableRows,
@@ -188,7 +190,7 @@ export function DataTable({
   onStatusChange,
   total,
 }: DataTableProps) {
-  const hasActions = !!onEditRow || !!onStatusChange || !!onStartRow || !!onShipRow;
+  const hasActions = !!onEditRow || !!onStatusChange || !!onStartRow || !!onShipRow || !!renderRowAction;
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = React.useState("");
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -321,6 +323,7 @@ export function DataTable({
                 ))}
                 {hasActions && (
                   <TableCell style={{ textAlign: "right" }}>
+                    <div className="inline-flex items-center justify-end gap-2 whitespace-nowrap">
                     {onShipRow && shippableRows?.[row.index] && (
                       <button
                         onClick={(e) => {
@@ -381,6 +384,8 @@ export function DataTable({
                         ))}
                       </select>
                     )}
+                    {renderRowAction?.(row.index)}
+                    </div>
                   </TableCell>
                 )}
               </TableRow>
@@ -388,7 +393,7 @@ export function DataTable({
           ) : (
             <TableRow>
               <TableCell
-                colSpan={columns.length + (onEditRow ? 1 : 0)}
+                colSpan={columns.length + (hasActions ? 1 : 0)}
                 className="py-16 text-center text-muted-foreground"
               >
                 No records match your search.

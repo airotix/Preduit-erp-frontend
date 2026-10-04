@@ -24,10 +24,7 @@ interface Ledger {
   rows: LedgerRow[];
 }
 
-/** Consolidated Cash or Bank ledger — every tagged line (invoices, bills,
- *  receipts/disbursements, credit notes, manual entries) across every
- *  customer and supplier, in one running-balance table. Same inline-edit
- *  behaviour as the customer/supplier ledgers. */
+/** Cleared money movements and manual entries in one running-balance table. */
 export function FinanceCashBankLedger({ kind }: { kind: "cash" | "bank" }) {
   const { currency } = useCurrency();
   const { canWrite } = useModuleAccess("finance");
@@ -43,7 +40,7 @@ export function FinanceCashBankLedger({ kind }: { kind: "cash" | "bank" }) {
   const [formOpen, setFormOpen] = React.useState(false);
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["finance", "ledger"] });
+    queryClient.invalidateQueries({ queryKey: ["finance"] });
   };
   const create = useMutation({
     mutationFn: (v: Record<string, string | number>) =>
@@ -86,8 +83,8 @@ export function FinanceCashBankLedger({ kind }: { kind: "cash" | "bank" }) {
         title={kind === "cash" ? "Cash ledger" : "Bank ledger"}
         subtitle={
           kind === "cash"
-            ? "Every line tagged Cash — invoices, bills, receipts, disbursements, credit notes and manual entries — across all customers and suppliers"
-            : "Every line tagged Bank — invoices, bills, receipts, disbursements, credit notes and manual entries — across all customers and suppliers"
+            ? "Cleared cash receipts, payments and manual entries. Credit = money in; Debit = money out."
+            : "Cleared bank receipts, payments and manual entries. Credit = money in; Debit = money out."
         }
         action="New entry"
         onAction={canWrite ? () => setFormOpen(true) : undefined}
