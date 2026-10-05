@@ -1,4 +1,6 @@
 "use client";
+import { Table as ResponsiveTable } from "@/components/ui/table";
+
 
 import * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -81,7 +83,7 @@ export function AiValidation() {
               <p className="text-[13px] text-muted-foreground">Compare metrics across scenarios before validating</p>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-[13px]">
+              <ResponsiveTable className="w-full text-[13px]">
                 <thead>
                   <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
                     <th className="px-5 py-3 text-left font-bold">Metric</th>
@@ -113,7 +115,7 @@ export function AiValidation() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </ResponsiveTable>
             </div>
           </Card>
 
@@ -278,7 +280,7 @@ function AccuracyTable({ title, cols, rows }: { title: string; cols: string[]; r
     <div>
       <p className="mb-2 text-[12px] font-semibold text-foreground">{title}</p>
       <div className="max-h-64 overflow-y-auto rounded-lg border border-border">
-        <table className="w-full text-[12px]">
+        <ResponsiveTable className="w-full text-[12px]">
           <thead className="sticky top-0 bg-muted/40">
             <tr className="text-[10px] uppercase tracking-wide text-muted-foreground">
               {cols.map((c, i) => <th key={c} className={cn("px-3 py-2", i === 0 ? "text-left" : "text-right", "font-bold")}>{c}</th>)}
@@ -292,7 +294,7 @@ function AccuracyTable({ title, cols, rows }: { title: string; cols: string[]; r
             ))}
             {rows.length === 0 && <tr><td colSpan={cols.length} className="py-4 text-center text-muted-foreground">No data.</td></tr>}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </div>
     </div>
   );

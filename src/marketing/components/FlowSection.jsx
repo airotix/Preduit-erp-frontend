@@ -46,7 +46,7 @@ export default function FlowSection({ stage, setStage }) {
           })}
         </div>
 
-        <div key={s.n} style={{ marginTop: 28, display: 'grid', gridTemplateColumns: 'minmax(0,1.05fr) minmax(0,.95fr)', gap: 0, border: '1px solid var(--border)', borderRadius: 'var(--radius-xl)', overflow: 'hidden', boxShadow: 'var(--shadow-md)', background: '#fff', animation: 'pdRise .45s cubic-bezier(0.22,1,0.36,1) both' }}>
+        <div id="pd-flow-grid" key={s.n} style={{ marginTop: 28, display: 'grid', gridTemplateColumns: 'minmax(0,1.05fr) minmax(0,.95fr)', gap: 0, border: '1px solid var(--border)', borderRadius: 'var(--radius-xl)', overflow: 'hidden', boxShadow: 'var(--shadow-md)', background: '#fff', animation: 'pdRise .45s cubic-bezier(0.22,1,0.36,1) both' }}>
           <div style={{ padding: '48px 44px' }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 9, padding: '6px 14px', borderRadius: 'var(--radius-pill)', background: 'var(--primary-soft)' }}>
               <i className={NAV[s.mod].iconFill} style={{ fontSize: 15, color: 'var(--primary)' }} />

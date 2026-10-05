@@ -76,3 +76,37 @@
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
 }
+
+/* Keep grid content and wide records within the ERP's scroll containers. */
+.erp-shell .grid > *, .erp-dialog .grid > * { min-width: 0; }
+.erp-shell :is(input, textarea, select), .erp-dialog :is(input, textarea, select) { max-width: 100%; }
+@media screen and (max-width: 639px) {
+  .erp-shell main > .erp-scroll { padding-left: 12px; padding-right: 12px; min-height: 0; }
+  .erp-shell :is(input, textarea, select), .erp-dialog :is(input, textarea, select),
+  .pd-landing :is(input, textarea, select) { font-size: 16px; }
+  .erp-dialog { padding-bottom: env(safe-area-inset-bottom); }
+  .erp-dialog > form { min-height: 0; }
+  .erp-dialog :is(input:not([type=checkbox]):not([type=radio]):not([type=file]), select, [role=combobox]) { min-height: 44px; }
+  .erp-shell table:not(.erp-record-table) :is(th, td) { min-width: 80px; }
+  .erp-record-table, .erp-record-table tbody { display: block; width: 100%; }
+  .erp-record-table thead { display: none; }
+  .erp-record-table tbody tr { display: block; padding: 12px; border-bottom: 1px solid hsl(var(--border)); }
+  .erp-record-table tbody td { display: grid; grid-template-columns: minmax(80px, 0.7fr) minmax(0, 1fr); gap: 12px; padding: 8px 0; text-align: left !important; overflow-wrap: anywhere; }
+  .erp-record-table tbody td::before { content: attr(data-label); font-size: 11px; font-weight: 700; color: hsl(var(--muted-foreground)); }
+  .erp-record-table tbody td[data-label=Actions] { display: block; }
+  .erp-record-table tbody td[data-label=Actions] > div { display: flex; flex-wrap: wrap; justify-content: flex-start; }
+  .erp-record-table tbody button { min-height: 44px; }
+  .erp-record-table tbody td[colspan] { display: block; }
+  .erp-shell .invoice-paper { padding: 16px; }
+  .erp-shell .invoice-paper > .grid { grid-template-columns: minmax(0,1fr); gap: 16px; }
+}
+@media print {
+  .erp-table-scroll { overflow: visible; }
+}
+@media (pointer: coarse) {
+  .erp-shell button, .erp-dialog button, .pd-landing button { min-height: 44px; }
+  .erp-shell button:has(> svg:only-child), .erp-dialog button:has(> svg:only-child) { min-width: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}

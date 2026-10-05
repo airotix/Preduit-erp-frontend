@@ -2,12 +2,14 @@
 
 import { useScreen } from "@/lib/use-screen";
 import { getColumns, getSchema } from "@/modules/registry";
-import { DashboardView } from "@/components/screens/dashboard-view";
-import { BoardView } from "@/components/screens/board-view";
-import { SettingsView } from "@/components/screens/settings-view";
-import { ListScreen } from "@/components/screens/list-screen";
+import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { TabDef } from "@/config/navigation";
+
+const DashboardView = dynamic(() => import("./dashboard-view").then((module) => module.DashboardView), { loading: () => <ScreenSkeleton kind="dashboard" /> });
+const BoardView = dynamic(() => import("./board-view").then((module) => module.BoardView), { loading: () => <ScreenSkeleton kind="board" /> });
+const SettingsView = dynamic(() => import("./settings-view").then((module) => module.SettingsView), { loading: () => <ScreenSkeleton kind="settings" /> });
+const ListScreen = dynamic(() => import("./list-screen").then((module) => module.ListScreen), { loading: () => <ScreenSkeleton kind="list" /> });
 
 export function ScreenRenderer({
   module,
@@ -53,12 +55,12 @@ function ScreenSkeleton({ kind }: { kind: string }) {
   if (kind === "dashboard") {
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-[128px] rounded-[14px]" />
           ))}
         </div>
-        <div className="grid grid-cols-[1.7fr_1fr] gap-4">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.7fr_1fr]">
           <Skeleton className="h-[340px] rounded-[14px]" />
           <Skeleton className="h-[340px] rounded-[14px]" />
         </div>
@@ -67,7 +69,7 @@ function ScreenSkeleton({ kind }: { kind: string }) {
   }
   if (kind === "board") {
     return (
-      <div className="flex gap-4">
+      <div className="erp-scroll flex gap-4 overflow-x-auto">
         {Array.from({ length: 4 }).map((_, i) => (
           <Skeleton key={i} className="h-[420px] w-[300px] rounded-[14px]" />
         ))}

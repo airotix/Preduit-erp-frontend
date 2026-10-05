@@ -5,7 +5,7 @@ export default function Faq() {
   const [open, setOpen] = useState(-1);
 
   return (
-    <section style={{ padding: '0 32px 96px', background: 'var(--bg)' }}>
+    <section id="faq" style={{ padding: '0 32px 96px', background: 'var(--bg)' }}>
       <div style={{ maxWidth: 900, margin: '0 auto' }}>
         <h2 data-reveal style={{ margin: '0 0 28px', fontSize: 34, fontWeight: 800, letterSpacing: '-0.02em', textAlign: 'center' }}>
           The questions you were going to ask on the call

@@ -23,7 +23,7 @@ export default function UnderTheHood() {
             </p>
             <div style={{ marginTop: 26, borderRadius: 'var(--radius-md)', background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
               {LEDGER.map((l, i) => (
-                <div key={`${l.je}-${i}`} style={{ display: 'grid', gridTemplateColumns: '76px minmax(0,1fr) minmax(0,84px) minmax(0,84px)', gap: 10, padding: '12px 18px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <div className="pd-ledger-row" key={`${l.je}-${i}`} style={{ display: 'grid', gridTemplateColumns: '76px minmax(0,1fr) minmax(0,84px) minmax(0,84px)', gap: 10, padding: '12px 18px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--orange-300)' }}>{l.je}</span>
                   <span style={{ fontSize: 12.5, color: 'var(--neutral-300)' }}>{l.acct}</span>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#fff', textAlign: 'right' }}>{l.dr}</span>

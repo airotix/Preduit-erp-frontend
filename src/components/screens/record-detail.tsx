@@ -1,4 +1,6 @@
 "use client";
+import { Table as ResponsiveTable } from "@/components/ui/table";
+
 
 import { Icon } from "@/components/icon";
 import { ToneBadge } from "@/components/tone-badge";
@@ -117,7 +119,7 @@ function Lines({
   return (
     <div>
       <SectionTitle>Line items</SectionTitle>
-      <table className="w-full text-[13px]">
+      <ResponsiveTable className="w-full text-[13px]">
         <thead>
           <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
             <th className="pb-2 text-left font-bold">Item</th>
@@ -139,7 +141,7 @@ function Lines({
             </tr>
           ))}
         </tbody>
-      </table>
+      </ResponsiveTable>
       <div className="mt-3 space-y-1.5 border-t border-border/60 pt-3">
         {totals.map((t) => (
           <div key={t.k} className="flex justify-between text-[13px] text-muted-foreground">
@@ -193,7 +195,7 @@ export function RecordDetail({
             <>
               <div>
                 <SectionTitle>Variant matrix · units on hand</SectionTitle>
-                <table className="w-full text-[13px]">
+                <ResponsiveTable className="w-full text-[13px]">
                   <thead>
                     <tr>
                       <th className="pb-2 text-left text-[11px] font-bold uppercase text-muted-foreground">
@@ -237,7 +239,7 @@ export function RecordDetail({
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </ResponsiveTable>
               </div>
               <div>
                 <SectionTitle>Specifications</SectionTitle>
@@ -270,7 +272,7 @@ export function RecordDetail({
             <>
               <div>
                 <SectionTitle>Ledger lines</SectionTitle>
-                <table className="w-full text-[13px]">
+                <ResponsiveTable className="w-full text-[13px]">
                   <thead>
                     <tr className="text-[11px] uppercase text-muted-foreground">
                       <th className="pb-2 text-left font-bold">Account</th>
@@ -295,7 +297,7 @@ export function RecordDetail({
                       <td className="py-2.5 text-right tabular">{d.journal.ledgerCredit}</td>
                     </tr>
                   </tbody>
-                </table>
+                </ResponsiveTable>
               </div>
               <div>
                 <SectionTitle>Source</SectionTitle>
@@ -311,7 +313,7 @@ export function RecordDetail({
             <>
               <div>
                 <SectionTitle>Received lines</SectionTitle>
-                <table className="w-full text-[13px]">
+                <ResponsiveTable className="w-full text-[13px]">
                   <thead>
                     <tr className="text-[11px] uppercase text-muted-foreground">
                       <th className="pb-2 text-left font-bold">Component</th>
@@ -337,7 +339,7 @@ export function RecordDetail({
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </ResponsiveTable>
               </div>
               <p className="text-[13px] leading-relaxed text-muted-foreground">
                 {d.receipt.note}

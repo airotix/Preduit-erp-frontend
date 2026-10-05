@@ -1,4 +1,6 @@
 "use client";
+import { Table as ResponsiveTable } from "@/components/ui/table";
+
 
 import * as React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -33,11 +35,12 @@ interface StatementRow {
 
 /** Inline Cash/Bank dropdown for a ledger row. */
 export function PaymentTypeCell({
-  value, editable, onSave,
+  value, editable, onSave, allowUnset = true,
 }: {
   value: "cash" | "bank" | null | undefined;
   editable: boolean;
   onSave: (v: "cash" | "bank" | "") => void;
+  allowUnset?: boolean;
 }) {
   if (!editable) {
     return (
@@ -52,7 +55,7 @@ export function PaymentTypeCell({
       onChange={(e) => onSave(e.target.value as "cash" | "bank" | "")}
       className="w-full min-w-[92px] rounded-md border border-border/70 bg-transparent px-2 py-1 text-[13px] text-foreground outline-none focus-visible:border-primary/60"
     >
-      <option value="">—</option>
+      {allowUnset && <option value="">—</option>}
       <option value="cash">Cash</option>
       <option value="bank">Bank</option>
     </select>
@@ -208,9 +211,10 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
         open={formOpen}
         onOpenChange={setFormOpen}
         title={`New entry${stmt?.name ? ` · ${stmt.name}` : ""}`}
-        description="Add a manual ledger entry — a debit and/or credit with a description."
+        description={isCustomer ? "Customer invoices are debits; payments received are credits. Enter one direction per entry." : "Supplier bills are credits; payments made to the supplier are debits. Enter one direction per entry."}
         submitLabel="Add entry"
         pending={create.isPending}
+        serverError={create.error instanceof Error ? create.error.message : undefined}
         onSubmit={(v) => create.mutate(v)}
         fields={[
           { name: "description", label: "Description", required: true },
@@ -328,7 +332,7 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
               </Card>
 
               <Card className="p-6">
-                <table className="w-full text-[13px]">
+                <ResponsiveTable className="w-full text-[13px]">
                   <thead>
                     <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
                       <th className="pb-2 text-left font-bold">Date</th>
@@ -362,6 +366,7 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
                         </td>
                         <td className="py-2.5 text-foreground">
                           <PaymentTypeCell
+                            allowUnset={r.editType !== "payment"}
                             value={r.paymentType}
                             editable={!!r.editId && canWrite}
                             onSave={(v) =>
@@ -398,7 +403,7 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
                       <td />
                     </tr>
                   </tbody>
-                </table>
+                </ResponsiveTable>
               </Card>
             </>
           )}

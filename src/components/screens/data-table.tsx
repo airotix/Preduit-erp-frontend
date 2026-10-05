@@ -168,6 +168,11 @@ interface DataTableProps {
   total?: number;
 }
 
+function columnLabel(column: { id: string; columnDef: { header?: unknown; meta?: unknown } }) {
+  const label = (column.columnDef.meta as { label?: string } | undefined)?.label;
+  return label || (typeof column.columnDef.header === "string" ? column.columnDef.header : column.id);
+}
+
 export function DataTable({
   columns,
   data,
@@ -219,16 +224,17 @@ export function DataTable({
   const grandTotal = total ?? data.length;
 
   return (
-    <div className="rounded-[14px] border border-border/70 bg-white shadow-erp-sm">
+    <div className="min-w-0 max-w-full rounded-[14px] border border-border/70 bg-white shadow-erp-sm">
       {/* toolbar */}
       <div className="flex flex-wrap items-center gap-2.5 border-b border-border/60 p-4">
-        <div className="flex w-[260px] items-center gap-2 rounded-full border border-border/70 bg-muted px-3.5 py-2 text-muted-foreground">
+        <div className="flex w-full min-w-0 items-center gap-2 rounded-full border border-border/70 bg-muted px-3.5 py-2 text-muted-foreground sm:w-[260px]">
           <Search size={16} strokeWidth={1.9} />
           <input
             value={globalFilter}
             onChange={(e) => setGlobalFilter(e.target.value)}
             placeholder={searchPlaceholder}
-            className="w-full border-0 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
+            aria-label={searchPlaceholder}
+            className="min-w-0 w-full border-0 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
           />
         </div>
 
@@ -250,6 +256,19 @@ export function DataTable({
           );
         })}
 
+        <label className="flex w-full items-center gap-2 text-xs font-semibold sm:hidden">
+          Sort by
+          <select className="min-h-11 min-w-0 flex-1 rounded-lg border bg-white px-2" aria-label="Sort records"
+            value={sorting[0] ? `${sorting[0].id}:${sorting[0].desc ? "desc" : "asc"}` : ""}
+            onChange={(event) => { const [id, direction] = event.target.value.split(":"); setSorting(id ? [{ id, desc: direction === "desc" }] : []); }}>
+            <option value="">Default order</option>
+            {table.getVisibleLeafColumns().filter((column) => column.getCanSort()).flatMap((column) =>
+              ["asc", "desc"].map((direction) => <option key={`${column.id}:${direction}`} value={`${column.id}:${direction}`}>
+                {columnLabel(column)} ({direction === "asc" ? "ascending" : "descending"})
+              </option>))}
+          </select>
+        </label>
+
         <div className="flex-1" />
 
         {(onAction || actionDisabled) && (
@@ -266,7 +285,7 @@ export function DataTable({
       </div>
 
       {/* table */}
-      <Table>
+      <Table className="erp-record-table sm:min-w-[640px]">
         <TableHeader>
           {table.getHeaderGroups().map((hg) => (
             <TableRow key={hg.id} className="hover:bg-transparent">
@@ -314,15 +333,17 @@ export function DataTable({
               <TableRow
                 key={row.id}
                 onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+                tabIndex={onRowClick ? 0 : undefined}
+                onKeyDown={onRowClick ? (event) => { if (event.target === event.currentTarget && event.key === "Enter") onRowClick(row.original); } : undefined}
                 className={onRowClick ? "cursor-pointer" : ""}
               >
                 {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id}>
+                  <TableCell key={cell.id} data-label={columnLabel(cell.column)}>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>
                 ))}
                 {hasActions && (
-                  <TableCell style={{ textAlign: "right" }}>
+                  <TableCell data-label="Actions" style={{ textAlign: "right" }}>
                     <div className="inline-flex items-center justify-end gap-2 whitespace-nowrap">
                     {onShipRow && shippableRows?.[row.index] && (
                       <button
@@ -404,9 +425,9 @@ export function DataTable({
       </Table>
 
       {/* footer */}
-      <div className="flex items-center justify-between border-t border-border/60 px-5 py-3.5 text-[13px] text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 px-4 py-3.5 text-[13px] text-muted-foreground">
         <span>
-          {rowCount > 0 ? "1" : "0"}–{rowCount} of{" "}
+          {rowCount > 0 ? table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1 : 0}–{Math.min((table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize, rowCount)} of{" "}
           <span className="font-semibold text-foreground">
             {grandTotal.toLocaleString()}
           </span>
@@ -415,7 +436,8 @@ export function DataTable({
           <Button
             variant="outline"
             size="icon"
-            className="h-8 w-8"
+            aria-label="Previous page"
+            className="h-11 w-11"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
           >
@@ -428,7 +450,8 @@ export function DataTable({
           <Button
             variant="outline"
             size="icon"
-            className="h-8 w-8"
+            aria-label="Next page"
+            className="h-11 w-11"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
           >

@@ -3,7 +3,8 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, Plus, Bell, Sparkles } from "lucide-react";
+import { Search, Plus, Bell, Sparkles, Menu } from "lucide-react";
+import { useNavigation } from "./navigation-context";
 import { getModule } from "@/config/navigation";
 import { QUICK_CREATE, NOTIFICATIONS } from "@/config/topbar-data";
 import { useAuth } from "@/lib/auth";
@@ -21,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { CopilotPanel } from "@/components/shell/copilot-panel";
 
 export function Topbar() {
+  const { setOpen } = useNavigation();
   const pathname = usePathname();
   const [, moduleId, tabId] = pathname.split("/");
   const mod = getModule(moduleId ?? "dashboard");
@@ -37,8 +39,9 @@ export function Topbar() {
   const unread = NOTIFICATIONS.filter((n) => n.unread).length;
 
   return (
-    <header className="flex flex-shrink-0 items-center gap-5 border-b border-border/70 px-[26px] py-3.5">
-      <div className="erp-scroll flex min-w-0 items-center gap-1.5 overflow-x-auto">
+    <header className="flex flex-shrink-0 flex-wrap items-center gap-2 border-b border-border/70 px-3 py-2 sm:px-5 lg:flex-nowrap lg:gap-5 lg:px-[26px] lg:py-3.5">
+      <button type="button" aria-label="Open navigation" onClick={() => setOpen(true)} className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-muted md:hidden"><Menu size={22} /></button>
+      <div className="erp-scroll order-last flex w-full min-w-0 items-center gap-1.5 overflow-x-auto lg:order-none lg:w-auto">
         {tabs.map((t) => {
           const active = t.id === tabId;
           return (
@@ -60,8 +63,8 @@ export function Topbar() {
 
       <div className="flex-1" />
 
-      <div className="flex flex-shrink-0 items-center gap-2.5">
-        <div className="flex w-[230px] items-center gap-2 rounded-full border border-border/70 bg-muted px-3.5 py-2 text-muted-foreground">
+      <div className="flex flex-shrink-0 items-center gap-2 lg:gap-2.5">
+        <div className="hidden w-[180px] items-center gap-2 rounded-full border border-border/70 bg-muted px-3.5 py-2 text-muted-foreground xl:flex xl:w-[230px]">
           <Search size={16} strokeWidth={1.9} />
           <input
             placeholder="Search anything…"
@@ -72,7 +75,8 @@ export function Topbar() {
         <button
           title="Quick create"
           onClick={() => setQuickOpen(true)}
-          className="flex h-[38px] w-[38px] items-center justify-center rounded-xl bg-secondary text-white transition-colors hover:bg-brand-ink"
+          aria-label="Quick create"
+          className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary text-white transition-colors hover:bg-brand-ink"
         >
           <Plus size={19} strokeWidth={2} />
         </button>
@@ -80,7 +84,8 @@ export function Topbar() {
         <button
           title="Notifications"
           onClick={() => setNotifOpen(true)}
-          className="relative flex h-[38px] w-[38px] items-center justify-center rounded-xl border border-border/70 bg-white text-[#4A4F61] transition-colors hover:bg-muted"
+          aria-label="Notifications"
+          className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-border/70 bg-white text-[#4A4F61] transition-colors hover:bg-muted"
         >
           <Bell size={18} strokeWidth={1.9} />
           {unread > 0 && (
@@ -90,8 +95,9 @@ export function Topbar() {
 
         <button
           onClick={() => setCopilotOpen(true)}
-          className="flex h-[38px] items-center gap-1.5 rounded-xl bg-gradient-to-br from-brand-orange to-brand-orange-d px-4 text-[13px] font-bold text-white transition-[filter] hover:brightness-95">
-          <Sparkles size={16} strokeWidth={2} /> Copilot
+          aria-label="Open Copilot"
+          className="flex h-11 items-center gap-1.5 rounded-xl bg-gradient-to-br from-brand-orange to-brand-orange-d px-3 text-[13px] font-bold text-white transition-[filter] hover:brightness-95">
+          <Sparkles size={16} strokeWidth={2} /> <span className="hidden sm:inline">Copilot</span>
         </button>
       </div>
 

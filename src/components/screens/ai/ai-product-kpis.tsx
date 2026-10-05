@@ -1,4 +1,6 @@
 "use client";
+import { Table as ResponsiveTable } from "@/components/ui/table";
+
 
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -127,7 +129,7 @@ export function AiProductKpis() {
           {/* Table */}
           <Card className="overflow-hidden p-0">
             <div className="overflow-x-auto">
-              <table className="w-full text-[13px]">
+              <ResponsiveTable className="w-full text-[13px]">
                 <thead>
                   <tr className="border-b border-border bg-muted/40 text-[11px] uppercase tracking-wide text-muted-foreground">
                     <th className="px-4 py-3 text-left font-bold">SKU</th>
@@ -171,7 +173,7 @@ export function AiProductKpis() {
                     <tr><td colSpan={8} className="py-12 text-center text-muted-foreground">No SKUs match your filters.</td></tr>
                   )}
                 </tbody>
-              </table>
+              </ResponsiveTable>
             </div>
           </Card>
         </div>

@@ -8,6 +8,7 @@ import { NAV } from '../data/nav.js';
 export default function AppWindow({ stage, innerRef }) {
   return (
     <div
+      className="pd-app-window"
       ref={innerRef}
       style={{ position: 'relative', borderRadius: 'var(--radius-lg)', background: '#fff', border: '1px solid var(--border)', boxShadow: '0 30px 80px rgba(26,25,22,0.16),0 4px 12px rgba(26,25,22,0.06)', overflow: 'hidden', transition: 'transform .25s cubic-bezier(0.22,1,0.36,1)', willChange: 'transform' }}
     >
@@ -20,7 +21,7 @@ export default function AppWindow({ stage, innerRef }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '186px 1fr', minHeight: 428 }}>
+      <div className="pd-app-layout" style={{ display: 'grid', gridTemplateColumns: '186px minmax(0,1fr)', minHeight: 428 }}>
         <div style={{ borderRight: '1px solid var(--border)', background: 'var(--neutral-50)', padding: '14px 10px', display: 'flex', flexDirection: 'column', gap: 2 }}>
           {NAV.map((m, i) => {
             const active = i === stage.mod;
@@ -49,7 +50,7 @@ export default function AppWindow({ stage, innerRef }) {
             </span>
           </div>
 
-          <div key={stage.n} style={{ padding: '16px 20px', animation: 'pdRowIn .4s cubic-bezier(0.22,1,0.36,1) both' }}>
+          <div className="pd-app-records" key={stage.n} style={{ padding: '16px 20px', animation: 'pdRowIn .4s cubic-bezier(0.22,1,0.36,1) both' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1.4fr .9fr .9fr', gap: 10, padding: '0 4px 9px' }}>
               {stage.cols.map(c => (
                 <span key={c} style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fg3)' }}>{c}</span>

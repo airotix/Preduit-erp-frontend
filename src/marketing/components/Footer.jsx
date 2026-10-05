@@ -3,7 +3,7 @@ import { FOOTER_COLS } from '../data/content.js';
 export default function Footer() {
   return (
     <footer style={{ padding: '56px 32px 40px', background: 'var(--neutral-50)', borderTop: '1px solid var(--border)' }}>
-      <div style={{ maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr', gap: 40 }}>
+      <div id="pd-footer-grid" style={{ maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr', gap: 40 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
             <span style={{ width: 32, height: 32, borderRadius: 10, background: 'linear-gradient(135deg,var(--orange-400),var(--orange-700))', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

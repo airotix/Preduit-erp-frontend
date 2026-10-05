@@ -9,8 +9,9 @@
  */
 
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-// Digits, spaces, dashes, parentheses, optional leading +. Must hold 7–15 digits.
-export const PHONE_RE = /^\+?[\d\s().-]{7,}$/;
+// Country-aware parsing is shared by bespoke forms, AutoForm, and invoice checks.
+import { checkPhone } from "./phone";
+export { PHONE_MAX_DIGITS, PHONE_ERROR } from "./phone";
 export const URL_RE = /^(https?:\/\/)?([\w-]+\.)+[\w-]{2,}(\/\S*)?$/i;
 export const SWIFT_RE = /^[A-Za-z]{6}[A-Za-z0-9]{2}([A-Za-z0-9]{3})?$/;
 
@@ -18,11 +19,29 @@ export function isEmail(v: string): boolean {
   return EMAIL_RE.test(v.trim());
 }
 
-export function isPhone(v: string): boolean {
-  const s = v.trim();
-  if (!PHONE_RE.test(s)) return false;
-  const digits = (s.match(/\d/g) || []).length;
-  return digits >= 7 && digits <= 15;
+export function isPhone(v: string, country?: string): boolean {
+  return !!checkPhone(v, country).number;
+}
+
+export function isPhoneField(name: string): boolean {
+  return /(phone|mobile|tel\b|telephone|contactnumber|whatsapp|fax|supportline)/.test(name.toLowerCase().replace(/[_\s-]/g, ""));
+}
+
+/** Invoice documents have editable phone fields inside party objects. */
+export function invoicePhoneError(doc: Record<string, any>): string | null {
+  if (doc.contactPhone) {
+    const error = fieldFormatError("phone", doc.contactPhone, doc.buyer?.country);
+    if (error) return error;
+  }
+  for (const party of ["exporter", "buyer", "supplier", "seller"]) {
+    for (const [name, value] of Object.entries(doc[party] || {})) {
+      if (isPhoneField(name)) {
+        const error = fieldFormatError(name, value, doc[party]?.country);
+        if (error) return error;
+      }
+    }
+  }
+  return null;
 }
 
 export function isWebsite(v: string): boolean {
@@ -31,15 +50,15 @@ export function isWebsite(v: string): boolean {
 
 /** Returns an error string for a value given its field name, or null if OK.
  *  Empty values pass here (the "required" check owns emptiness). */
-export function fieldFormatError(name: string, value: unknown): string | null {
+export function fieldFormatError(name: string, value: unknown, country?: string): string | null {
   if (value == null) return null;
   const v = String(value).trim();
   if (!v) return null;
   const n = name.toLowerCase();
 
   if (/e-?mail/.test(n)) return isEmail(v) ? null : "Enter a valid email address.";
-  if (/(phone|mobile|tel\b|telephone|contactnumber|whatsapp|fax|supportline)/.test(n))
-    return isPhone(v) ? null : "Enter a valid phone number.";
+  if (isPhoneField(name))
+    return checkPhone(v, country, /mobile/i.test(name)).error || null;
   if (/(website|^url$|homepage)/.test(n)) return isWebsite(v) ? null : "Enter a valid URL.";
   if (/(linkedin|instagram|facebook|twitter|^x$)/.test(n))
     // Social handles/URLs — light touch: reject spaces only.

@@ -1,4 +1,6 @@
 "use client";
+import { Table as ResponsiveTable } from "@/components/ui/table";
+
 
 import * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -52,7 +54,7 @@ export function ExchangeRatesCard() {
         </p>
         {msg && <p className="mb-3 rounded-md bg-muted/50 p-2.5 text-[12px] text-muted-foreground">{msg}</p>}
         <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
+          <ResponsiveTable className="w-full text-[13px]">
             <thead>
               <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
                 <th className="pb-2 text-left font-bold">From</th>
@@ -76,7 +78,7 @@ export function ExchangeRatesCard() {
                 <tr><td colSpan={5} className="py-6 text-center text-muted-foreground">No rates yet — click “Sync rates”.</td></tr>
               )}
             </tbody>
-          </table>
+          </ResponsiveTable>
         </div>
       </div>
     </Card>

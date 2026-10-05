@@ -1,4 +1,6 @@
 "use client";
+import { Table as ResponsiveTable } from "@/components/ui/table";
+
 
 import * as React from "react";
 import Link from "next/link";
@@ -159,7 +161,7 @@ function OrderPanel({ data }: { data: OrderTab }) {
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <Card className="p-6 lg:col-span-2">
         <h3 className="mb-4 text-[17px] font-extrabold tracking-tight text-foreground">Order line items</h3>
-        <table className="w-full text-[13px]">
+        <ResponsiveTable className="w-full text-[13px]">
           <thead>
             <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
               <th className="pb-2 text-left font-bold">Item</th>
@@ -190,7 +192,7 @@ function OrderPanel({ data }: { data: OrderTab }) {
               <td className="py-2.5 text-right tabular">{doc.grand}</td>
             </tr>
           </tbody>
-        </table>
+        </ResponsiveTable>
 
         <h3 className="mb-3 mt-8 text-[17px] font-extrabold tracking-tight text-foreground">{doc.partyTitle}</h3>
         <div className="rounded-xl border border-border/60 p-4 text-[13px]">
@@ -307,7 +309,7 @@ function QualityPanel({ data }: { data: QualityTab }) {
       </Card>
       <Card className="p-6">
         <h3 className="mb-4 text-[17px] font-extrabold tracking-tight text-foreground">Item inspections</h3>
-        <table className="w-full text-[13px]">
+        <ResponsiveTable className="w-full text-[13px]">
           <thead>
             <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
               <th className="pb-2 text-left font-bold">Inspection</th>
@@ -335,7 +337,7 @@ function QualityPanel({ data }: { data: QualityTab }) {
               <tr><td colSpan={5} className="py-6 text-center text-muted-foreground">No inspection items.</td></tr>
             )}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </Card>
     </div>
   );
@@ -349,7 +351,7 @@ function ShipmentPanel({ data }: { data: ShipmentTab }) {
       <Card className="p-6 lg:col-span-2">
         <MetaGrid meta={data.meta} />
         <h3 className="mb-3 mt-8 text-[17px] font-extrabold tracking-tight text-foreground">Contents</h3>
-        <table className="w-full text-[13px]">
+        <ResponsiveTable className="w-full text-[13px]">
           <thead>
             <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
               <th className="pb-2 text-left font-bold">Item</th>
@@ -369,7 +371,7 @@ function ShipmentPanel({ data }: { data: ShipmentTab }) {
               <tr><td colSpan={3} className="py-8 text-center text-muted-foreground">No contents recorded.</td></tr>
             )}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </Card>
       <Card className="p-6">
         <h3 className="mb-4 text-[17px] font-extrabold tracking-tight text-foreground">Tracking</h3>
@@ -386,7 +388,7 @@ function FinancePanel({ invoices }: { invoices: OrderInvoice[] }) {
     <Card className="p-6">
       <h3 className="mb-4 text-[17px] font-extrabold tracking-tight text-foreground">Invoices</h3>
       {invoices.length > 0 ? (
-        <table className="w-full text-[13px]">
+        <ResponsiveTable className="w-full text-[13px]">
           <thead>
             <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
               <th className="pb-2 text-left font-bold">Invoice</th>
@@ -416,7 +418,7 @@ function FinancePanel({ invoices }: { invoices: OrderInvoice[] }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </ResponsiveTable>
       ) : (
         <div className="py-8 text-center text-[13px] text-muted-foreground">
           No invoices generated for this order yet.

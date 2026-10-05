@@ -70,7 +70,7 @@ export default function ProductTour({ autoplay = true }) {
 
           <div style={{ borderRadius: 'var(--radius-xl)', overflow: 'hidden', background: 'var(--fg1)', border: '1px solid var(--neutral-800)', boxShadow: '0 24px 60px rgba(26,25,22,0.22)' }}>
             <div style={{ position: 'relative', background: '#fff' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 16px', borderBottom: '1px solid var(--border)', background: 'var(--neutral-50)' }}>
+              <div className="pd-tour-toolbar" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 16px', borderBottom: '1px solid var(--border)', background: 'var(--neutral-50)' }}>
                 {[0, 1, 2].map(i => <span key={i} style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--neutral-300)' }} />)}
                 <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
                   <span style={{ padding: '4px 14px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg3)', background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--radius-pill)' }}>{t.url}</span>
@@ -153,7 +153,7 @@ export default function ProductTour({ autoplay = true }) {
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 20px', background: 'var(--fg1)' }}>
+            <div className="pd-tour-controls" style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 20px', background: 'var(--fg1)' }}>
               <button
                 type="button"
                 aria-label={playing ? 'Pause tour' : 'Play tour'}

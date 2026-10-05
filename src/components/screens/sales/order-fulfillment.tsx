@@ -1,4 +1,6 @@
 "use client";
+import { Table as ResponsiveTable } from "@/components/ui/table";
+
 
 import * as React from "react";
 import Link from "next/link";
@@ -74,12 +76,12 @@ export function OrderFulfillmentPanel({ data, orderId, onSaved }: { data: OrderF
       {data.canCreatePO && <CreateShortagePOButton orderId={orderId} onSaved={onSaved} />}
     </div>
     <p className="mb-4 text-sm text-muted-foreground">Available quantities stay on hold for this order. The full order ships after final QC and inventory receipt of the missing items.</p>
-    <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr>
+    <div className="overflow-x-auto"><ResponsiveTable className="w-full text-left text-sm"><thead><tr>
       <th>Item</th><th>Color / size</th><th className="text-right">Ordered</th><th className="text-right">Reserved</th><th className="text-right">Missing</th>
     </tr></thead><tbody>{data.lines.map((line) => <tr key={line.lineId} className="border-t">
       <td className="py-2">{line.name}</td><td>{[line.color, line.size].filter(Boolean).join(" / ") || "—"}</td>
       <td className="text-right">{line.ordered}</td><td className="text-right">{line.reserved}</td><td className="text-right">{line.missing}</td>
-    </tr>)}</tbody></table></div>
+    </tr>)}</tbody></ResponsiveTable></div>
     <div className="mt-4 flex flex-wrap gap-4">
       {data.purchaseOrders.map((po) => <Link className="text-sm font-semibold text-primary" key={po.publicId} href={`/procurement/pos/${po.publicId}`}>Open {po.poNo}</Link>)}
       {data.shipment && <Link className="text-sm font-semibold text-primary" href={`/shipments/shipments/${data.shipment.publicId}`}>Open {data.shipment.shipmentNo}</Link>}

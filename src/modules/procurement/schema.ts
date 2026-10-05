@@ -15,9 +15,15 @@ export const goodsReceiptSchema = z.object({
 
 export const supplierSchema = z.object({
   name: z.string().min(1, "Required"),
-  region: z.string().min(1, "Required"),
+  region: z.string().optional(),
+  country: z.string().optional(),
+  state: z.string().optional(),
+  city: z.string().optional(),
   leadTime: z.string().min(1, "Required"),
   category: z.string().min(1, "Required"),
+  email: z.string().optional(),
+  phone: z.string().optional(),
+  address: z.string().optional(),
   vatNumber: z.string().optional(),
   contactPerson: z.string().optional(),
   bankDetails: z.string().optional(),

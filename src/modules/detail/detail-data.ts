@@ -164,6 +164,7 @@ export interface DetailModel {
       bankSwift: string; bankIban: string;
     };
     supplierForm?: {
+      country?: string; state?: string; city?: string;
       name: string; region: string; leadTime: string; category: string;
       email: string; phone: string; address: string; contactPerson: string;
       vatNumber: string; bankName: string; bankAccountTitle: string;
@@ -175,6 +176,7 @@ export interface DetailModel {
       terms: string; currency: string; taxId: string; bank: string; account: string;
     };
     customerForm?: {
+      country?: string; state?: string; city?: string;
       name: string; type: string; region: string; email: string; phone: string; address: string;
       code: string; terms: string; currency: string; taxId: string; bankName: string;
       bankAccount: string; contactTitle: string;

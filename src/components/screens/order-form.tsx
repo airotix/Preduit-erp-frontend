@@ -1,4 +1,5 @@
 "use client";
+import { LocationFields } from "@/components/ui/location-fields";
 
 import * as React from "react";
 import { Plus, Trash2 } from "lucide-react";
@@ -76,6 +77,7 @@ interface OrderApiLine {
  *  same field set as the customer detail card, minus name (the main Customer
  *  field already carries that). Matches backend CustomerCreate's camelCase. */
 interface NewCustomerFields {
+  country: string; state: string; city: string;
   email: string;
   phone: string;
   address: string;
@@ -87,7 +89,7 @@ interface NewCustomerFields {
 }
 
 const emptyNewCustomer = (): NewCustomerFields => ({
-  email: "", phone: "", address: "", code: "", terms: "", taxId: "", bankName: "", bankAccount: "",
+  country: "", state: "", city: "", email: "", phone: "", address: "", code: "", terms: "", taxId: "", bankName: "", bankAccount: "",
 });
 
 interface OrderPayload {
@@ -350,7 +352,7 @@ export function OrderForm({
     if (apiLines.length === 0)
       return setError("Add at least one item and enter a quantity for one or more sizes.");
     if (isNewCustomer) {
-      const bad = fieldFormatError("email", newCustomer.email) || fieldFormatError("phone", newCustomer.phone);
+      const bad = fieldFormatError("email", newCustomer.email) || fieldFormatError("phone", newCustomer.phone, newCustomer.country);
       if (bad) return setError(bad);
     }
     setError(null);
@@ -367,7 +369,7 @@ export function OrderForm({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="erp-scroll flex-1 space-y-4 overflow-y-auto px-6 pb-6">
+      <div className="erp-scroll flex-1 space-y-4 overflow-y-auto px-4 pb-6 sm:px-6">
         <div className="space-y-1.5">
           <Label htmlFor="customer">
             Customer<span className="ml-0.5 text-brand-orange">*</span>
@@ -387,13 +389,14 @@ export function OrderForm({
             </p>
 
             <div className="space-y-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3"><LocationFields value={newCustomer} onChange={patchNewCustomer} /></div>
               <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
                 Reach
               </span>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <Input placeholder="Email" type="email" value={newCustomer.email}
                   onChange={(e) => patchNewCustomer({ email: e.target.value })} />
-                <Input placeholder="Phone" value={newCustomer.phone}
+                <Input type="tel" country={newCustomer.country} placeholder="Phone" value={newCustomer.phone}
                   onChange={(e) => patchNewCustomer({ phone: e.target.value })} />
                 <Input placeholder="Address" value={newCustomer.address}
                   onChange={(e) => patchNewCustomer({ address: e.target.value })} />

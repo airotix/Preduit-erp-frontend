@@ -109,6 +109,8 @@ export interface DashboardConfig {
 /* ---------- Board (kanban) ---------- */
 
 export interface BoardCard {
+  href?: string;
+  techPacks?: ({ lineId: string; name: string } & import("@/components/screens/tech-pack-panel").TechPack)[];
   ref: string;
   public_id?: string;
   title: string;

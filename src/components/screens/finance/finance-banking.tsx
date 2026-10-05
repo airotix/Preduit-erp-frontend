@@ -1,4 +1,6 @@
 "use client";
+import { Table as ResponsiveTable } from "@/components/ui/table";
+
 
 import * as React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -16,10 +18,12 @@ interface Acct { public_id: string; name: string; account_no: string; currency: 
 interface Txn {
   public_id: string; date: string; description: string; amount: number;
   status: string; matchedRef: string | null;
+  debit: number; credit: number; balance: number;
 }
 interface Detail {
   name: string; account_no: string; currency: string; statementBalance: number;
   matched: number; reconciled: number; unmatched: number; rows: Txn[];
+  opening: number; totalDebit: number; totalCredit: number;
 }
 
 const STATUS_TONE: Record<string, Tone> = {
@@ -74,7 +78,7 @@ export function FinanceBanking() {
     <div>
       <FinanceHeader
         title="Bank reconciliation"
-        subtitle="Match imported statement lines to recorded payments"
+        subtitle="Match statement lines to cleared bank payments. Credit = money in; Debit = money out."
         action="New account"
         onAction={() => setAcctOpen(true)}
         actionDisabled={!canWrite}
@@ -106,6 +110,9 @@ export function FinanceBanking() {
           ) : (
             <>
               <Card className="p-6">
+                {(autoMatch.error || reconcile.error) && (
+                  <p role="alert" className="mb-3 text-sm text-destructive">{String((autoMatch.error || reconcile.error)?.message)}</p>
+                )}
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="text-[18px] font-extrabold tracking-tight text-foreground">{detail.name}</div>
@@ -126,6 +133,9 @@ export function FinanceBanking() {
                 <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {[
                     { k: "Statement balance", v: money(detail.statementBalance, currency), c: "#1A1D26" },
+                    { k: "Opening balance", v: money(detail.opening, currency), c: "#1A1D26" },
+                    { k: "Debit · money out", v: money(detail.totalDebit, currency), c: "#C0392B" },
+                    { k: "Credit · money in", v: money(detail.totalCredit, currency), c: "#2E9E6B" },
                     { k: "Unmatched", v: String(detail.unmatched), c: "#D29A22" },
                     { k: "Matched", v: String(detail.matched), c: "#3A4256" },
                     { k: "Reconciled", v: String(detail.reconciled), c: "#2E9E6B" },
@@ -139,12 +149,14 @@ export function FinanceBanking() {
               </Card>
 
               <Card className="p-6">
-                <table className="w-full text-[13px]">
+                <ResponsiveTable className="w-full text-[13px]">
                   <thead>
                     <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
                       <th className="pb-2 text-left font-bold">Date</th>
                       <th className="pb-2 text-left font-bold">Description</th>
-                      <th className="pb-2 text-right font-bold">Amount</th>
+                      <th className="pb-2 text-right font-bold">Debit · out</th>
+                      <th className="pb-2 text-right font-bold">Credit · in</th>
+                      <th className="pb-2 text-right font-bold">Balance</th>
                       <th className="pb-2 text-left font-bold">Status</th>
                       <th className="pb-2 text-left font-bold">Matched</th>
                     </tr>
@@ -154,16 +166,18 @@ export function FinanceBanking() {
                       <tr key={t.public_id} className="border-t border-border/50">
                         <td className="py-2.5 whitespace-nowrap text-muted-foreground">{t.date}</td>
                         <td className="py-2.5 text-foreground">{t.description}</td>
-                        <td className={"py-2.5 text-right tabular font-semibold " + (t.amount >= 0 ? "text-[#2E9E6B]" : "text-[#C0392B]")}>{money(t.amount, currency)}</td>
+                        <td className="py-2.5 text-right tabular text-[#C0392B]">{t.debit ? money(t.debit, currency) : "—"}</td>
+                        <td className="py-2.5 text-right tabular text-[#2E9E6B]">{t.credit ? money(t.credit, currency) : "—"}</td>
+                        <td className="py-2.5 text-right tabular font-semibold">{money(t.balance, currency)}</td>
                         <td className="py-2.5"><ToneBadge tone={STATUS_TONE[t.status] ?? "neutral"} dot={false}>{t.status}</ToneBadge></td>
                         <td className="py-2.5 tabular text-muted-foreground">{t.matchedRef ?? "—"}</td>
                       </tr>
                     ))}
                     {detail.rows.length === 0 && (
-                      <tr><td colSpan={5} className="py-8 text-center text-muted-foreground">No statement lines. Add one to reconcile.</td></tr>
+                      <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">No statement lines. Add one to reconcile.</td></tr>
                     )}
                   </tbody>
-                </table>
+                </ResponsiveTable>
               </Card>
             </>
           )}
@@ -174,6 +188,7 @@ export function FinanceBanking() {
         open={acctOpen} onOpenChange={setAcctOpen}
         title="New bank account" description="Add a bank account to reconcile."
         submitLabel="Add account" pending={createAcct.isPending}
+        serverError={createAcct.error instanceof Error ? createAcct.error.message : undefined}
         onSubmit={(v) => createAcct.mutate(v)}
         fields={[
           { name: "name", label: "Account name", required: true, placeholder: "Main current account" },
@@ -184,8 +199,9 @@ export function FinanceBanking() {
       />
       <FinanceFormSheet
         open={lineOpen} onOpenChange={setLineOpen}
-        title="Add statement line" description="Positive = deposit, negative = withdrawal."
+        title="Add statement line" description="Positive = Credit (money in). Negative = Debit (money out)."
         submitLabel="Add line" pending={addLine.isPending}
+        serverError={addLine.error instanceof Error ? addLine.error.message : undefined}
         onSubmit={(v) => addLine.mutate(v)}
         fields={[
           { name: "txn_date", label: "Date", type: "date" },

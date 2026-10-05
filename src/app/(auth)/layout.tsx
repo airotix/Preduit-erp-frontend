@@ -6,7 +6,7 @@ import { AuthTopBar, AuthAside } from "@/components/auth/auth-chrome";
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen w-full bg-white">
-      <div className="flex w-full flex-col px-8 py-8 lg:w-[58%] lg:px-14">
+      <div className="flex w-full flex-col px-4 py-5 sm:px-8 sm:py-8 lg:w-[58%] lg:px-14">
         <AuthTopBar />
         <div className="flex flex-1 items-center">
           <div className="mx-auto w-full max-w-[420px]">{children}</div>

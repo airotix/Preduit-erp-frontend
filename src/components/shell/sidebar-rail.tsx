@@ -9,6 +9,8 @@ import { Icon } from "@/components/icon";
 import { apiGet, USE_BACKEND } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { useNavigation } from "./navigation-context";
 
 const STORAGE_KEY = "erp-sidebar-expanded";
 
@@ -20,9 +22,24 @@ function initials(name: string): string {
 }
 
 export function SidebarRail() {
+  const { open, setOpen } = useNavigation();
+  return <>
+    <div className="hidden min-h-0 shrink-0 md:flex"><SidebarNavigation /></div>
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetContent side="left" className="w-[min(320px,90vw)] border-0 bg-brand-ink p-0 text-white sm:max-w-[320px]">
+        <SheetTitle className="sr-only">Main navigation</SheetTitle>
+        <SheetDescription className="sr-only">Choose an ERP module or open your company profile.</SheetDescription>
+        <SidebarNavigation mobile onNavigate={() => setOpen(false)} />
+      </SheetContent>
+    </Sheet>
+  </>;
+}
+
+function SidebarNavigation({ mobile = false, onNavigate }: { mobile?: boolean; onNavigate?: () => void }) {
   const pathname = usePathname();
   const activeModule = pathname.split("/")[1] ?? "dashboard";
-  const [expanded, setExpanded] = React.useState(false);
+  const [storedExpanded, setExpanded] = React.useState(false);
+  const expanded = mobile || storedExpanded;
   const { logout, user, hasPermission } = useAuth();
 
   // Team/admin tools are only shown to workspace admins (and Super Admins).
@@ -52,7 +69,7 @@ export function SidebarRail() {
   const { data } = useQuery({
     queryKey: ["me"],
     queryFn: () => apiGet<{ businessName: string | null }>("/me"),
-    enabled: USE_BACKEND,
+    enabled: USE_BACKEND && !!user,
     staleTime: 5 * 60 * 1000,
   });
   const businessName = data?.businessName || "SYS ERP";
@@ -82,8 +99,8 @@ export function SidebarRail() {
   return (
     <aside
       className={cn(
-        "flex flex-shrink-0 flex-col bg-brand-ink py-[18px] transition-[width] duration-200",
-        expanded ? "w-[184px] px-3" : "w-[78px] items-center"
+        "flex min-h-0 h-full flex-shrink-0 flex-col bg-brand-ink py-[18px] transition-[width] duration-200",
+        mobile ? "w-full px-4" : expanded ? "w-[184px] px-3" : "w-[78px] items-center"
       )}
     >
       {/* Brand — business name from signup */}
@@ -104,7 +121,7 @@ export function SidebarRail() {
       </div>
 
       {/* Collapse / expand toggle */}
-      <button
+      {!mobile && <button
         type="button"
         onClick={toggle}
         title={expanded ? "Collapse sidebar" : "Expand sidebar"}
@@ -117,16 +134,18 @@ export function SidebarRail() {
       >
         <Icon name={expanded ? "ChevronsLeft" : "ChevronsRight"} width={18} height={18} strokeWidth={1.75} />
         {expanded && <span>Collapse</span>}
-      </button>
+      </button>}
 
       {/* Modules */}
-      <nav className={cn("mt-4 flex flex-1 flex-col", expanded ? "gap-1" : "items-center gap-2")}>
+      <nav aria-label="ERP modules" className={cn("erp-scroll mt-4 flex min-h-0 flex-1 flex-col overflow-y-auto", expanded ? "gap-1" : "items-center gap-2")}>
         {modules.map((m) => {
           const active = m.id === activeModule;
           return (
             <Link
               key={m.id}
               href={`/${m.id}/${m.tabs[0].id}`}
+              onClick={onNavigate}
+              aria-current={active ? "page" : undefined}
               title={expanded ? undefined : m.label}
               className={cn(
                 "flex rounded-xl transition-colors",
@@ -134,8 +153,8 @@ export function SidebarRail() {
                   ? "bg-white/10 text-white"
                   : "text-white/55 hover:bg-white/[0.08] hover:text-white",
                 expanded
-                  ? "h-[42px] items-center gap-3 px-3"
-                  : "h-[46px] w-[46px] items-center justify-center"
+                  ? "min-h-[44px] shrink-0 items-center gap-3 px-3"
+                  : "h-[46px] w-[46px] shrink-0 items-center justify-center"
               )}
             >
               <Icon name={m.icon} width={21} height={21} strokeWidth={1.75} className="shrink-0" />
@@ -158,6 +177,7 @@ export function SidebarRail() {
       >
         <Link
           href="/company-profile"
+          onClick={onNavigate}
           title="Company profile"
           className={cn(
             "flex items-center rounded-lg transition-colors hover:bg-white/[0.08]",

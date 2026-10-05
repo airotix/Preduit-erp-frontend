@@ -1,4 +1,5 @@
 "use client";
+import { LocationSelector } from "@/components/ui/location-selector";
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
@@ -223,11 +224,11 @@ export function StepOutlets(p: {
           </div>
           <div>
             <label className={LABEL}>Country</label>
-            <input className={INPUT} placeholder="Pakistan" value={p.country} onChange={(e) => p.setCountry(e.target.value)} />
+            <LocationSelector className={INPUT} value={p.country} onValueChange={(country) => { p.setCountry(country); p.setCity(""); }} />
           </div>
           <div>
             <label className={LABEL}>City</label>
-            <input className={INPUT} placeholder="Lahore" value={p.city} onChange={(e) => p.setCity(e.target.value)} />
+            <LocationSelector kind="city" className={INPUT} value={p.city} country={p.country} onValueChange={p.setCity} />
           </div>
         </div>
 

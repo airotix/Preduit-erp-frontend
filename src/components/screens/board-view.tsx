@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { avatarColor, initials } from "@/lib/tone";
 import { apiPost, USE_BACKEND } from "@/lib/api-client";
 import type { BoardConfig } from "@/lib/screen-types";
+import Link from "next/link";
+import { TechPackPanel } from "@/components/screens/tech-pack-panel";
 
 /** module/tab → per-card status endpoint (approve/reject on the board). */
 const CARD_STATUS_ENDPOINTS: Record<string, (id: string) => string> = {
@@ -25,6 +27,8 @@ export function BoardView({
 }) {
   const queryClient = useQueryClient();
   const [busyId, setBusyId] = React.useState<string | null>(null);
+  const [selectedStage, setSelectedStage] = React.useState("");
+  const mobileStage = config.columns.some((column) => column.title === selectedStage) ? selectedStage : config.columns[0]?.title;
   const key = `${module}/${tab}`;
   const statusBuilder = CARD_STATUS_ENDPOINTS[key];
 
@@ -46,11 +50,18 @@ export function BoardView({
   };
 
   return (
+    <div className="min-w-0">
+      <label className="mb-4 flex items-center gap-3 text-sm font-semibold sm:hidden">
+        Stage
+        <select aria-label="Board stage" className="min-h-11 min-w-0 flex-1 rounded-lg border bg-white px-3" value={mobileStage || ""} onChange={(event) => setSelectedStage(event.target.value)}>
+          {config.columns.map((column) => <option key={column.title} value={column.title}>{column.title} ({column.count})</option>)}
+        </select>
+      </label>
     <div className="flex gap-4 overflow-x-auto erp-scroll pb-2">
       {config.columns.map((col) => (
         <div
           key={col.title}
-          className="flex w-[300px] flex-shrink-0 flex-col rounded-[14px] bg-muted/60 p-3"
+          className={`${col.title === mobileStage ? "flex" : "hidden"} w-full min-w-0 flex-shrink-0 flex-col rounded-[14px] bg-muted/60 p-3 sm:flex sm:w-[300px]`}
         >
           <div className="mb-3 flex items-center gap-2 px-1">
             <span
@@ -77,8 +88,12 @@ export function BoardView({
                   </span>
                   {c.tag && <ToneBadge tone={c.tone} dot={false}>{c.tag}</ToneBadge>}
                 </div>
-                <div className="mt-1.5 font-bold text-foreground">{c.title}</div>
+                <div className="mt-1.5 font-bold text-foreground">{c.href ? <Link className="hover:underline" href={c.href}>{c.title}</Link> : c.title}</div>
                 <div className="text-[13px] text-muted-foreground">{c.sub}</div>
+                {c.techPacks?.map((pack) => <div key={pack.lineId} className="mt-3 border-t pt-3">
+                  <div className="mb-2 text-xs font-semibold">{pack.name}</div>
+                  <TechPackPanel lineId={pack.lineId} initialData={pack} />
+                </div>)}
 
                 <div className="mt-3 flex items-center justify-between">
                   <span className="flex items-center gap-1.5 text-[13px] font-semibold text-[#3A4150]">
@@ -124,6 +139,7 @@ export function BoardView({
           </div>
         </div>
       ))}
+    </div>
     </div>
   );
 }

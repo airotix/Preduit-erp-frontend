@@ -9,8 +9,9 @@ import {
 } from "@/components/ui/sheet";
 import { apiPost } from "@/lib/api-client";
 
-export const STAGE_NAMES = ["Trims", "Lining", "Cutting", "Sewing", "Finishing", "Packed"];
+export const STAGE_NAMES = ["Tech Pack", "Trims", "Lining", "Cutting", "Sewing", "Finishing", "Packed"];
 const DEFAULT_DAYS: Record<string, number> = {
+  "Tech Pack": 0,
   Trims: 2, Lining: 2, Cutting: 3, Sewing: 10, Finishing: 3, Packed: 1,
 };
 

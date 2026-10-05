@@ -1,4 +1,6 @@
 "use client";
+import { Table as ResponsiveTable } from "@/components/ui/table";
+
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
@@ -94,7 +96,7 @@ export function FinanceProfitability() {
               </div>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-[13px]">
+              <ResponsiveTable className="w-full text-[13px]">
                 <thead>
                   <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
                     <th className="pb-2 text-left font-bold">Segment</th>
@@ -137,7 +139,7 @@ export function FinanceProfitability() {
                     <td className="py-3 text-right tabular">{data.totals.nmPct}%</td>
                   </tr>
                 </tbody>
-              </table>
+              </ResponsiveTable>
             </div>
           </Card>
         </div>

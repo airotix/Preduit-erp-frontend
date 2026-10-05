@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
+import { PhoneInput } from "@/components/ui/phone-input";
+import { fieldFormatError } from "@/lib/validators";
 import { Box } from '../lib/css.jsx';
 import { NAV } from '../data/nav.js';
 import { useEscape } from '../hooks/index.js';
@@ -69,6 +71,8 @@ export default function SetupModal({ open, onClose }) {
     if (!email) next.email = 'We need an email to send the sandbox link.';
     else if (!EMAIL.test(email)) next.email = 'That does not look like a valid email.';
     else if (FREE_MAIL.test(email)) next.email = 'Please use your work email.';
+    const phoneError = fieldFormatError("phone", form.phone);
+    if (phoneError) next.phone = phoneError;
     if (!form.company.trim()) next.company = 'Which business are we setting up?';
     if (Object.keys(next).length) { setErrors(next); return; }
     setErrors({});
@@ -139,7 +143,8 @@ export default function SetupModal({ open, onClose }) {
                     <label htmlFor="pd-phone" style={label}>
                       Phone <span style={{ fontWeight: 500, color: 'var(--fg3)' }}>(optional)</span>
                     </label>
-                    <Box as="input" id="pd-phone" className="pd-input" css={field} placeholder="+92 300 0000000" value={form.phone} onChange={e => set('phone', e.target.value)} />
+                    <Box as={PhoneInput} id="pd-phone" className="pd-input" css={field} placeholder="+92 300 0000000" value={form.phone} onChange={e => set('phone', e.target.value)} />
+                    <Err>{errors.phone}</Err>
                   </div>
                 </div>
               </div>

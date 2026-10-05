@@ -5,8 +5,16 @@ export function useCycle(length, ms, playing = true) {
   const [i, setI] = useState(0);
   useEffect(() => {
     if (!playing || length < 2) return undefined;
-    const t = setInterval(() => setI(prev => (prev + 1) % length), ms);
-    return () => clearInterval(t);
+    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let timer;
+    const update = () => {
+      clearInterval(timer);
+      if (!document.hidden && !motion.matches) timer = setInterval(() => setI(prev => (prev + 1) % length), ms);
+    };
+    update();
+    document.addEventListener('visibilitychange', update);
+    motion.addEventListener('change', update);
+    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', update); motion.removeEventListener('change', update); };
   }, [length, ms, playing]);
   return [i, setI];
 }
@@ -18,7 +26,7 @@ export function useCycle(length, ms, playing = true) {
  */
 export function useReveal(enabled = true) {
   useEffect(() => {
-    if (!enabled) return undefined;
+    if (!enabled || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
     const els = Array.from(document.querySelectorAll('[data-reveal]'));
     const io = new IntersectionObserver(
       entries => {
@@ -71,7 +79,7 @@ function countUp(node) {
 export function useTilt(hostId, enabled = true) {
   const ref = useRef(null);
   useEffect(() => {
-    if (!enabled) return undefined;
+    if (!enabled || !window.matchMedia('(hover: hover) and (pointer: fine)').matches || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
     const host = document.getElementById(hostId);
     if (!host) return undefined;
     const onMove = e => {

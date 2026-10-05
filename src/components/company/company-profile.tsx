@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import { LocationSelector } from "@/components/ui/location-selector";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -153,7 +155,7 @@ export function CompanyProfilePage() {
       ["facebook", form.facebook], ["x", form.x],
     ];
     for (const [n, v] of checks) {
-      const msg = fieldFormatError(n, v);
+      const msg = fieldFormatError(n, v, form.country);
       if (msg) { setSaveError(`${msg}`); setActive(/mail|phone|support/.test(n) ? "contact" : "social"); return; }
     }
     setSaveError(null);
@@ -161,6 +163,8 @@ export function CompanyProfilePage() {
     try {
       const res = await saveCompanyProfile(form);
       setSaved(res); setForm(res);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Could not save the company profile.");
     } finally { setSaving(false); }
   };
 
@@ -373,9 +377,9 @@ export function CompanyProfilePage() {
               </div>
             </div>
             <div className="mt-4 grid grid-cols-2 gap-5 sm:grid-cols-4">
-              <div><label className={LABEL}>Country</label><input className={INPUT} placeholder="Pakistan" value={form.country} onChange={(e) => set("country", e.target.value)} readOnly={!canEdit} /></div>
-              <div><label className={LABEL}>City</label><input className={INPUT} placeholder="Lahore" value={form.city} onChange={(e) => set("city", e.target.value)} readOnly={!canEdit} /></div>
-              <div><label className={LABEL}>State / province</label><input className={INPUT} placeholder="Punjab" value={form.state} onChange={(e) => set("state", e.target.value)} readOnly={!canEdit} /></div>
+              <div><label className={LABEL}>Country</label><LocationSelector className={INPUT} value={form.country} onValueChange={(country) => setForm(prev => prev ? { ...prev, country, state: "", city: "" } : prev)} readOnly={!canEdit} /></div>
+              <div><label className={LABEL}>State / province</label><LocationSelector kind="state" className={INPUT} value={form.state} country={form.country} onValueChange={(state) => setForm(prev => prev ? { ...prev, state, city: "" } : prev)} readOnly={!canEdit} /></div>
+              <div><label className={LABEL}>City</label><LocationSelector kind="city" className={INPUT} value={form.city} country={form.country} state={form.state} onValueChange={(city) => set("city", city)} readOnly={!canEdit} /></div>
               <div><label className={LABEL}>Postal code</label><input className={INPUT} placeholder="54660" value={form.postal} onChange={(e) => set("postal", e.target.value)} readOnly={!canEdit} /></div>
             </div>
           </section>
@@ -386,8 +390,8 @@ export function CompanyProfilePage() {
             <p className={SUB}>Where customers and suppliers reach the business — not your personal login.</p>
             <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
               <div><label className={LABEL}>Business email</label><input className={INPUT} placeholder="hello@northgate.co" value={form.businessEmail} onChange={(e) => set("businessEmail", e.target.value)} readOnly={!canEdit} /></div>
-              <div><label className={LABEL}>Phone</label><input className={INPUT} placeholder="+92 42 111 000 111" value={form.phone} onChange={(e) => set("phone", e.target.value)} readOnly={!canEdit} /></div>
-              <div><label className={LABEL}>Support line <span className="font-normal text-[#b3ab9e]">— optional</span></label><input className={INPUT} placeholder="+92 300 000 0000" value={form.supportLine} onChange={(e) => set("supportLine", e.target.value)} readOnly={!canEdit} /></div>
+              <div><label className={LABEL}>Phone</label><PhoneInput country={form.country} className={INPUT} placeholder="+92 42 111 000 111" value={form.phone} onChange={(e) => set("phone", e.target.value)} readOnly={!canEdit} /></div>
+              <div><label className={LABEL}>Support line <span className="font-normal text-[#b3ab9e]">— optional</span></label><PhoneInput country={form.country} className={INPUT} placeholder="+92 300 000 0000" value={form.supportLine} onChange={(e) => set("supportLine", e.target.value)} readOnly={!canEdit} /></div>
               <div><label className={LABEL}>Opening hours <span className="font-normal text-[#b3ab9e]">— optional</span></label><input className={INPUT} placeholder="Mon–Sat, 10am–9pm" value={form.openingHours} onChange={(e) => set("openingHours", e.target.value)} readOnly={!canEdit} /></div>
             </div>
           </section>

@@ -1,4 +1,6 @@
 "use client";
+import { Table as ResponsiveTable } from "@/components/ui/table";
+
 
 import * as React from "react";
 import Link from "next/link";
@@ -14,6 +16,7 @@ import { apiGet, apiPost, USE_BACKEND } from "@/lib/api-client";
 import { FinanceFormSheet, type FinanceField } from "@/components/screens/finance/finance-form-sheet";
 import { ProductionStartModal } from "@/components/screens/production/production-start-modal";
 import { useModuleAccess } from "@/lib/module-access";
+import { TechPackPanel, type TechPack } from "@/components/screens/tech-pack-panel";
 import type { Tone } from "@/lib/tone";
 
 interface Stage {
@@ -24,6 +27,7 @@ interface OrderLine {
   item: string; color: string; size: string; qty: number; price: string; total: string;
 }
 interface LineTL {
+  techPack?: TechPack;
   publicId: string; name: string; qty: number; started: boolean; progress: number;
   statusLabel: string; statusTone: Tone;
   alert: { type: string; message: string } | null; stages: Stage[];
@@ -42,7 +46,7 @@ interface Detail {
 }
 
 const STATUS_TONE: Record<string, Tone> = {
-  Completed: "green", "In Progress": "accent", Pending: "neutral",
+  Received: "green", Completed: "green", "In Progress": "accent", Pending: "neutral",
 };
 
 const ALERT_STYLE: Record<string, { bg: string; fg: string }> = {
@@ -57,7 +61,7 @@ const TAB_CLS =
   "mr-1 whitespace-nowrap rounded-none border-b-2 border-transparent bg-transparent px-3.5 pb-3 pt-0 text-[14px] data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground";
 
 const stepColor = (s: Stage) =>
-  s.status === "Completed" ? "#2E9E6B" : s.status === "In Progress" ? "#2563EB" : "#E3E5EA";
+  (s.status === "Completed" || s.status === "Received") ? "#2E9E6B" : s.status === "In Progress" ? "#2563EB" : "#E3E5EA";
 
 /** One style's production timeline (stepper + stage cards), or a start prompt. */
 function LineTimeline({
@@ -74,9 +78,13 @@ function LineTimeline({
   if (!line.started) {
     return (
       <Card className="flex flex-col items-center gap-3 p-14 text-center">
+        <div className="w-full border-b pb-4 text-left">
+          <h3 className="mb-3 font-bold">1. Tech Pack</h3>
+          <TechPackPanel lineId={line.publicId} initialData={line.techPack} />
+        </div>
         <div className="text-[15px] font-semibold text-foreground">Production hasn’t started</div>
         <p className="max-w-md text-[13px] text-muted-foreground">
-          Start production to lay out the stage timeline (Trims → Lining → Cutting → Sewing →
+          Start production to lay out the stage timeline (Tech Pack → Trims → Lining → Cutting → Sewing →
           Finishing → Packed) for <span className="font-semibold">{line.name}</span>. Each item
           runs on its own timeline.
         </p>
@@ -102,13 +110,17 @@ function LineTimeline({
         </div>
       )}
       {/* Stepper */}
+      {!line.stages.some((stage) => stage.name === "Tech Pack") && <Card className="mb-4 p-4">
+        <h3 className="mb-3 text-sm font-extrabold uppercase">Tech Pack</h3>
+        <TechPackPanel lineId={line.publicId} initialData={line.techPack} />
+      </Card>}
       <Card className="p-6">
-        <div className="flex items-start">
+        <div className="flex flex-col items-start gap-3 pb-2 sm:flex-row sm:gap-0 sm:overflow-x-auto">
           {line.stages.map((s, i) => (
             <React.Fragment key={s.public_id}>
-              <div className="flex min-w-[80px] flex-col items-center text-center">
+              <div className="flex w-full min-w-0 flex-row flex-wrap items-center gap-2 text-left sm:w-auto sm:min-w-[80px] sm:flex-col sm:gap-0 sm:text-center">
                 <span className="flex h-8 w-8 items-center justify-center rounded-full text-[13px] font-bold text-white" style={{ background: stepColor(s) }}>
-                  {s.status === "Completed" ? "✓" : s.seq}
+                  {(s.status === "Completed" || s.status === "Received") ? "✓" : i + 1}
                 </span>
                 <span className="mt-1.5 text-[11px] font-bold uppercase tracking-wide text-foreground">{s.name}</span>
                 <span className="text-[11px] text-muted-foreground">{s.duration_days} days</span>
@@ -119,7 +131,7 @@ function LineTimeline({
                 </span>
               </div>
               {i < line.stages.length - 1 && (
-                <div className="mt-4 h-0.5 flex-1" style={{ background: s.status === "Completed" ? "#2E9E6B" : "#E3E5EA" }} />
+                <div className="mt-4 hidden h-0.5 flex-1 sm:block" style={{ background: (s.status === "Completed" || s.status === "Received") ? "#2E9E6B" : "#E3E5EA" }} />
               )}
             </React.Fragment>
           ))}
@@ -129,9 +141,12 @@ function LineTimeline({
       {/* Stage cards */}
       <div className="mt-4 space-y-2.5">
         {line.stages.map((s) => (
-          <Card key={s.public_id} className="p-4">
+          s.name === "Tech Pack" ? <Card key={s.public_id} className="p-4">
+            <h3 className="mb-3 text-sm font-extrabold uppercase">Tech Pack</h3>
+            <TechPackPanel lineId={line.publicId} initialData={line.techPack} />
+          </Card> : <Card key={s.public_id} className="p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-[240px]">
+              <div className="min-w-0 sm:min-w-[240px]">
                 <div className="flex items-center gap-2">
                   <span className="text-[14px] font-extrabold uppercase tracking-wide text-foreground">{s.name}</span>
                   <ToneBadge tone={STATUS_TONE[s.status] ?? "neutral"} dot={false}>{s.status}</ToneBadge>
@@ -304,7 +319,7 @@ export function ProductionOrderDetail({
                   {data.sourcePurchaseOrder ? "Purchase order line items" : "Order line items"}
                 </div>
                 {data.orderLines && data.orderLines.length > 0 ? (
-                  <table className="w-full text-[13px]">
+                  <ResponsiveTable className="w-full text-[13px]">
                     <thead>
                       <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
                         <th className="pb-2 text-left font-bold">Item</th>
@@ -331,7 +346,7 @@ export function ProductionOrderDetail({
                         <td className="py-2.5 text-right tabular">{data.orderTotal}</td>
                       </tr>
                     </tbody>
-                  </table>
+                  </ResponsiveTable>
                 ) : (
                   <div className="py-8 text-center text-[13px] text-muted-foreground">
                     No source order line items are available for this legacy work order.
@@ -363,7 +378,7 @@ export function ProductionOrderDetail({
             <TabsContent value="materials">
               <Card className="p-6">
                 <h3 className="mb-3 text-[17px] font-extrabold tracking-tight text-foreground">Bill of materials</h3>
-                <table className="w-full text-[13px]">
+                <ResponsiveTable className="w-full text-[13px]">
                   <thead>
                     <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
                       <th className="pb-2 text-left font-bold">Component</th>
@@ -385,7 +400,7 @@ export function ProductionOrderDetail({
                       <tr><td colSpan={4} className="py-8 text-center text-muted-foreground">No bill of materials linked.</td></tr>
                     )}
                   </tbody>
-                </table>
+                </ResponsiveTable>
               </Card>
             </TabsContent>
           </Tabs>

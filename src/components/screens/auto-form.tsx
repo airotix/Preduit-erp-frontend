@@ -4,6 +4,8 @@ import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { LocationSelector } from "@/components/ui/location-selector";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -16,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SheetFooter, SheetClose } from "@/components/ui/sheet";
-import { fieldFormatError } from "@/lib/validators";
+import { fieldFormatError, isPhoneField } from "@/lib/validators";
 
 type Field = {
   name: string;
@@ -159,7 +161,7 @@ export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
     () =>
       schema.superRefine((val: Record<string, unknown>, ctx) => {
         for (const [k, v] of Object.entries(val)) {
-          const msg = fieldFormatError(k, v);
+          const msg = fieldFormatError(k, v, String(val.country || val.region || ""));
           if (msg) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [k], message: msg });
           const prefix = numericPrefixes?.[k];
           if (prefix && (typeof v !== "string" || !v.startsWith(prefix) || !/^\d+$/.test(v.slice(prefix.length)))) {
@@ -186,7 +188,7 @@ export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
       onSubmit={handleSubmit((v) => onSubmit?.(v as z.infer<T>))}
       className="flex flex-1 flex-col overflow-hidden"
     >
-      <div className="erp-scroll flex-1 space-y-4 overflow-y-auto px-6 pb-6">
+      <div className="erp-scroll flex-1 space-y-4 overflow-y-auto px-4 pb-6 sm:px-6">
         {serverError && (
           <p className="rounded-md bg-[#FDECEA] px-3 py-2 text-xs font-semibold text-[#C0392B]">
             {serverError}
@@ -199,7 +201,18 @@ export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
               {!f.optional && <span className="ml-0.5 text-brand-orange">*</span>}
             </Label>
 
-            {f.kind === "boolean" ? (
+            {["country", "state", "city"].includes(f.name) ? (
+              <LocationSelector id={f.name} kind={f.name as "country" | "state" | "city"}
+                value={String(watch(f.name) || "")} country={String(watch("country") || "")} state={String(watch("state") || "")}
+                onValueChange={val => {
+                  setValue(f.name, val, { shouldDirty: true, shouldValidate: true });
+                  if (f.name === "country") { setValue("state", ""); setValue("city", ""); }
+                  if (f.name === "state") setValue("city", "");
+                }} />
+            ) : isPhoneField(f.name) ? (
+              <PhoneInput {...register(f.name)} id={f.name} country={String(watch("country") || watch("region") || "")}
+                value={String(watch(f.name) || "")} className="h-11 w-full rounded-lg border border-input px-3 text-base sm:text-sm" />
+            ) : f.kind === "boolean" ? (
               <div className="flex items-center gap-3 pt-1">
                 <Switch
                   id={f.name}
@@ -251,7 +264,7 @@ export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
               <>
               <Input
                 id={f.name}
-                type={f.kind === "number" ? "number" : "text"}
+                type={f.kind === "number" ? "number" : isPhoneField(f.name) ? "tel" : "text"}
                 step={f.kind === "number" ? "any" : undefined}
                 list={textSuggestions?.[f.name] ? `${f.name}-suggestions` : undefined}
                 {...register(

@@ -83,8 +83,8 @@ export function JournalEditor({
           <SheetTitle>New journal entry</SheetTitle>
         </SheetHeader>
 
-        <div className="erp-scroll flex-1 space-y-4 overflow-y-auto px-6 pb-6">
-          <div className="grid grid-cols-2 gap-3">
+        <div className="erp-scroll flex-1 space-y-4 overflow-y-auto px-4 pb-6 sm:px-6">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="ref">Reference</Label>
               <Input id="ref" placeholder="Auto (JE-…)" value={reference} onChange={(e) => setReference(e.target.value)} />
@@ -101,23 +101,25 @@ export function JournalEditor({
 
           <div className="space-y-2">
             <Label>Lines</Label>
-            <div className="grid grid-cols-[1fr_100px_100px_auto] gap-2 text-[11px] font-bold uppercase text-muted-foreground">
+            <div className="hidden grid-cols-[1fr_100px_100px_auto] gap-2 text-[11px] font-bold uppercase text-muted-foreground sm:grid">
               <span>Account</span><span className="text-right">Debit</span><span className="text-right">Credit</span><span />
             </div>
             {lines.map((l, i) => (
-              <div key={i} className="grid grid-cols-[1fr_100px_100px_auto] items-center gap-2">
+              <div key={i} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_44px] items-center gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_100px_100px_auto] sm:border-0 sm:p-0">
+                <div className="col-span-3 sm:col-span-1">
                 <Select value={l.account} onValueChange={(v) => patch(i, { account: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
+                  <SelectTrigger aria-label={`Account for line ${i + 1}`}><SelectValue placeholder="Select account" /></SelectTrigger>
                   <SelectContent>
                     {(accounts ?? []).map((a) => (
                       <SelectItem key={a.code} value={a.label}>{a.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <Input type="number" min={0} step="any" className="text-right" value={l.debit}
-                  onChange={(e) => patch(i, { debit: e.target.value, credit: "" })} />
-                <Input type="number" min={0} step="any" className="text-right" value={l.credit}
-                  onChange={(e) => patch(i, { credit: e.target.value, debit: "" })} />
+                </div>
+                <label className="text-xs"><span className="sm:hidden">Debit</span><Input aria-label={`Debit for line ${i + 1}`} type="number" min={0} step="any" className="text-right" value={l.debit}
+                  onChange={(e) => patch(i, { debit: e.target.value, credit: "" })} /></label>
+                <label className="text-xs"><span className="sm:hidden">Credit</span><Input aria-label={`Credit for line ${i + 1}`} type="number" min={0} step="any" className="text-right" value={l.credit}
+                  onChange={(e) => patch(i, { credit: e.target.value, debit: "" })} /></label>
                 <button type="button" onClick={() => setLines((ls) => ls.length > 2 ? ls.filter((_, j) => j !== i) : ls)}
                   className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-red-600 disabled:opacity-40"
                   disabled={lines.length <= 2} aria-label="Remove line">
@@ -131,7 +133,7 @@ export function JournalEditor({
             </button>
           </div>
 
-          <div className="flex items-center justify-between rounded-xl bg-muted/60 px-4 py-3 text-[13px]">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/60 px-4 py-3 text-[13px]">
             <span className="font-semibold text-muted-foreground">
               Debits {totalDebit.toLocaleString()} · Credits {totalCredit.toLocaleString()}
             </span>

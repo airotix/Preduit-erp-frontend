@@ -1,6 +1,11 @@
 "use client";
+import { Table as ResponsiveTable } from "@/components/ui/table";
+
 
 import * as React from "react";
+import { invoicePhoneError } from "@/lib/validators";
+import { LocationSelector } from "@/components/ui/location-selector";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileText, Plus, ArrowLeft, Save, Printer, Loader2, Search } from "lucide-react";
@@ -156,7 +161,7 @@ function InvoiceList({ onOpen }: { onOpen: (doc: Doc, publicId: string | null) =
       </div>
 
       <Card className="overflow-hidden p-0">
-        <table className="w-full text-[13px]">
+        <ResponsiveTable className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-border bg-muted/40 text-[11px] uppercase tracking-wide text-muted-foreground">
               <th className="px-4 py-3 text-left font-bold">Invoice</th>
@@ -189,7 +194,7 @@ function InvoiceList({ onOpen }: { onOpen: (doc: Doc, publicId: string | null) =
               </td></tr>
             )}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </Card>
 
       <Sheet open={genOpen} onOpenChange={setGenOpen}>
@@ -247,6 +252,7 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
   const { canWrite, reason: writeReason } = useModuleAccess("sales");
   const [doc, setDoc] = React.useState<Doc>(initial);
   const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
   const [savedId, setSavedId] = React.useState<string | null>(publicId);
   const ccy = doc.currency || "USD";
   const totals = React.useMemo(() => computeTotals(doc), [doc]);
@@ -271,12 +277,17 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
   };
 
   const save = async () => {
+    const phoneError = invoicePhoneError(doc);
+    if (phoneError) { setError(phoneError); return; }
+    setError(null);
     setSaving(true);
     try {
       const payload = finalize();
       if (savedId) await apiPut(`/sales/invoice-docs/${savedId}`, payload);
       else { const res = await apiPost<{ publicId: string }>("/sales/invoice-docs", payload); setSavedId(res.publicId); }
       qc.invalidateQueries({ queryKey: ["sales", "invoice-docs"] });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save the invoice. Please try again.");
     } finally { setSaving(false); }
   };
 
@@ -293,6 +304,7 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
         </div>
       </div>
 
+      {error && <p role="alert" className="text-sm font-semibold text-destructive">{error}</p>}
       {doc.layout === "wholesale"
         ? <WholesalePaper doc={doc} ccy={ccy} totals={totals} update={update} />
         : <RetailPaper doc={doc} ccy={ccy} totals={totals} update={update} />}
@@ -359,7 +371,8 @@ function RetailPaper({ doc, ccy, totals, update }: {
           <input className={cn(FIELD, "border-b-0 text-center text-[11px] font-normal text-[#555]")} value={doc.exporter?.address || ""}
                  placeholder="Address · City" onChange={(e) => update((d) => { d.exporter.address = e.target.value; })} />
           <div className="mt-1 grid grid-cols-2 gap-x-3">
-            <div><span className={LBL}>Tél / tel</span><input className={FIELD} value={doc.exporter?.tel || ""} onChange={(e) => update((d) => { d.exporter.tel = e.target.value; })} /></div>
+            <div><span className={LBL}>Country</span><LocationSelector className={FIELD} value={doc.exporter?.country || ""} onValueChange={country => update(d => { d.exporter.country = country; d.exporter.state = ""; d.exporter.city = ""; })} /></div>
+            <div><span className={LBL}>Tél / tel</span><PhoneInput country={doc.exporter?.country} className={FIELD} value={doc.exporter?.tel || ""} onValueChange={(value) => update((d) => { d.exporter.tel = value; })} /></div>
             <div><span className={LBL}>Email</span><input className={FIELD} value={doc.exporter?.email || ""} onChange={(e) => update((d) => { d.exporter.email = e.target.value; })} /></div>
             <div className="col-span-2"><span className={LBL}>NTN / GST</span><input className={FIELD} value={doc.exporter?.taxId || ""} onChange={(e) => update((d) => { d.exporter.taxId = e.target.value; })} /></div>
           </div>
@@ -377,7 +390,8 @@ function RetailPaper({ doc, ccy, totals, update }: {
             <span className={LBL}>Client / Customer</span>
             <input className={cn(FIELD, "font-bold")} value={doc.buyer?.name || ""} onChange={(e) => update((d) => { d.buyer.name = e.target.value; })} />
             <div className="mt-2 grid grid-cols-2 gap-x-3">
-              <div><span className={LBL}>Phone</span><input className={FIELD} value={doc.buyer?.phone || ""} onChange={(e) => update((d) => { d.buyer.phone = e.target.value; })} /></div>
+              <div><span className={LBL}>Country</span><LocationSelector className={FIELD} value={doc.buyer?.country || ""} onValueChange={country => update(d => { d.buyer.country = country; d.buyer.state = ""; d.buyer.city = ""; })} /></div>
+              <div><span className={LBL}>Phone</span><PhoneInput country={doc.buyer?.country} className={FIELD} value={doc.buyer?.phone || ""} onValueChange={(value) => update((d) => { d.buyer.phone = value; })} /></div>
               <div><span className={LBL}>Email</span><input className={FIELD} value={doc.buyer?.email || ""} onChange={(e) => update((d) => { d.buyer.email = e.target.value; })} /></div>
             </div>
           </div>
@@ -392,7 +406,7 @@ function RetailPaper({ doc, ccy, totals, update }: {
       </div>
 
       {/* flat line table (read-only, from the order) */}
-      <table className="mt-5 w-full border-collapse text-[11.5px]">
+      <ResponsiveTable className="mt-5 w-full border-collapse text-[11.5px]">
         <thead>
           <tr className="bg-[#ededed] text-[10px] uppercase tracking-wide text-[#333]">
             <th className="border border-[#c9c9c9] px-2 py-1.5 text-left font-bold">Article · Item</th>
@@ -421,7 +435,7 @@ function RetailPaper({ doc, ccy, totals, update }: {
             <td className="border border-[#c9c9c9] px-2 py-1.5 text-right tabular">{num(totals.subtotal)}</td>
           </tr>
         </tbody>
-      </table>
+      </ResponsiveTable>
 
       {/* note + bank details | totals */}
       <div className="mt-4 grid grid-cols-[1.4fr_1fr] gap-4">
@@ -482,7 +496,8 @@ function WholesalePaper({ doc, ccy, totals, update }: {
                  placeholder="Warehouse · Industrial estate · City" onChange={(e) => update((d) => { d.exporter.address = e.target.value; })} />
           <div className="mt-1 grid grid-cols-2 gap-x-3">
             <div><span className={LBL}>Email</span><input className={FIELD} value={doc.exporter?.email || ""} onChange={(e) => update((d) => { d.exporter.email = e.target.value; })} /></div>
-            <div><span className={LBL}>Tél / tel</span><input className={FIELD} value={doc.exporter?.tel || ""} onChange={(e) => update((d) => { d.exporter.tel = e.target.value; })} /></div>
+            <div><span className={LBL}>Country</span><LocationSelector className={FIELD} value={doc.exporter?.country || ""} onValueChange={country => update(d => { d.exporter.country = country; d.exporter.state = ""; d.exporter.city = ""; })} /></div>
+            <div><span className={LBL}>Tél / tel</span><PhoneInput country={doc.exporter?.country} className={FIELD} value={doc.exporter?.tel || ""} onValueChange={(value) => update((d) => { d.exporter.tel = value; })} /></div>
             <div className="col-span-2"><span className={LBL}>NTN / GST</span><input className={FIELD} value={doc.exporter?.taxId || ""} onChange={(e) => update((d) => { d.exporter.taxId = e.target.value; })} /></div>
           </div>
         </div>
@@ -579,7 +594,7 @@ function ArticleBlock({ a, ccy, onChange }: {
         </div>
       </div>
 
-      <table className="w-full border-collapse text-[11.5px]">
+      <ResponsiveTable className="w-full border-collapse text-[11.5px]">
         <thead>
           <tr className="bg-[#ededed] text-[10px] uppercase tracking-wide text-[#333]">
             <th className="border border-[#c9c9c9] px-2 py-1.5 text-left font-bold">Couleur / Colour</th>
@@ -613,7 +628,7 @@ function ArticleBlock({ a, ccy, onChange }: {
             <td className="border border-[#c9c9c9] px-2 py-1.5 text-right tabular">{num(subAmt)}</td>
           </tr>
         </tbody>
-      </table>
+      </ResponsiveTable>
     </div>
   );
 }

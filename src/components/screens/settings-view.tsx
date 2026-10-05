@@ -61,7 +61,7 @@ export function SettingsView({
             {g.items.map((it) => (
               <div
                 key={it.label}
-                className="flex items-center justify-between px-5 py-4"
+                className="flex items-center justify-between gap-4 px-5 py-4"
               >
                 <div>
                   <div className="font-semibold text-foreground">{it.label}</div>

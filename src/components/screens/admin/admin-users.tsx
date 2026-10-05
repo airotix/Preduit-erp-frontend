@@ -1,4 +1,6 @@
 "use client";
+import { Table as ResponsiveTable } from "@/components/ui/table";
+
 
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -118,7 +120,7 @@ export function AdminUsers() {
         <div className="border-b border-[#F0ECE3] px-5 py-4">
           <h2 className="text-[15px] font-extrabold text-[#211f1c]">Team members</h2>
         </div>
-        <table className="w-full text-[13.5px]">
+        <ResponsiveTable className="w-full text-[13.5px]">
           <thead>
             <tr className="border-b border-[#F0ECE3] text-left text-[11px] font-bold uppercase tracking-wide text-[#a39c8f]">
               <th className="px-5 py-2.5">Member</th>
@@ -165,7 +167,7 @@ export function AdminUsers() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </section>
 
       {/* Pending invitations */}
@@ -178,7 +180,7 @@ export function AdminUsers() {
             <Mail size={16} /> No invitations waiting to be accepted.
           </div>
         ) : (
-          <table className="w-full text-[13.5px]">
+          <ResponsiveTable className="w-full text-[13.5px]">
             <tbody>
               {pending.map((i) => (
                 <tr key={i.id} className="border-b border-[#F5F2EB] last:border-0">
@@ -194,7 +196,7 @@ export function AdminUsers() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </ResponsiveTable>
         )}
       </section>
     </div>

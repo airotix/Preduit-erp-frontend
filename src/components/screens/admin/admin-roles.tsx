@@ -1,4 +1,6 @@
 "use client";
+import { Table as ResponsiveTable } from "@/components/ui/table";
+
 
 import { useQuery } from "@tanstack/react-query";
 import { ShieldCheck } from "lucide-react";
@@ -36,7 +38,7 @@ export function AdminRoles() {
       </div>
 
       <section className={CARD}>
-        <table className="w-full text-[13.5px]">
+        <ResponsiveTable className="w-full text-[13.5px]">
           <thead>
             <tr className="border-b border-[#F0ECE3] text-left text-[11px] font-bold uppercase tracking-wide text-[#a39c8f]">
               <th className="px-5 py-2.5">Role</th>
@@ -60,7 +62,7 @@ export function AdminRoles() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </section>
     </div>
   );

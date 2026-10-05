@@ -35,6 +35,7 @@ export function FinanceFormSheet({
   submitLabel,
   pending,
   onSubmit,
+  serverError,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -44,6 +45,7 @@ export function FinanceFormSheet({
   submitLabel: string;
   pending?: boolean;
   onSubmit: (values: Record<string, string | number>) => void;
+  serverError?: string;
 }) {
   const [values, setValues] = React.useState<Record<string, string>>({});
   const [error, setError] = React.useState<string | null>(null);
@@ -66,7 +68,27 @@ export function FinanceFormSheet({
     const out: Record<string, string | number> = {};
     for (const f of fields) {
       const raw = values[f.name] ?? "";
-      out[f.name] = f.type === "number" ? Number(raw) || 0 : raw;
+      if (f.type === "number" && !Number.isFinite(Number(raw))) {
+        setError(`${f.label} must be a valid number.`);
+        return;
+      }
+      out[f.name] = f.type === "number" ? Number(raw) : raw;
+    }
+    if ("debit" in out && "credit" in out) {
+      const debit = Number(out.debit ?? 0);
+      const credit = Number(out.credit ?? 0);
+      const hasDebit = debit !== 0;
+      const hasCredit = credit !== 0;
+
+      if (!hasDebit && !hasCredit) {
+        setError("Enter an amount in either Debit or Credit.");
+        return;
+      }
+
+      if (hasDebit && hasCredit) {
+        setError("Use either Debit or Credit, not both.");
+        return;
+      }
     }
     setError(null);
     onSubmit(out);
@@ -79,7 +101,7 @@ export function FinanceFormSheet({
           <SheetTitle>{title}</SheetTitle>
           {description && <SheetDescription>{description}</SheetDescription>}
         </SheetHeader>
-        <div className="erp-scroll flex-1 space-y-4 overflow-y-auto px-6 pb-6">
+        <div className="erp-scroll min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-6">
           {fields.map((f) => (
             <div key={f.name} className="space-y-1.5">
               <Label htmlFor={f.name}>
@@ -110,8 +132,8 @@ export function FinanceFormSheet({
               )}
             </div>
           ))}
-          {error && (
-            <div className="rounded-md bg-[#FBEAEA] p-3 text-sm font-semibold text-[#C0392B]">{error}</div>
+          {(error || serverError) && (
+            <div role="alert" className="rounded-md bg-[#FBEAEA] p-3 text-sm font-semibold text-[#C0392B]">{error || serverError}</div>
           )}
         </div>
         <SheetFooter>

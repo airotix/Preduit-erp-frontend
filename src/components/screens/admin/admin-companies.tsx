@@ -1,4 +1,6 @@
 "use client";
+import { Table as ResponsiveTable } from "@/components/ui/table";
+
 
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -35,7 +37,7 @@ export function AdminCompanies() {
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Stat label="Companies" value={rows.length} />
         <Stat label="Total users" value={totalUsers} />
         <Stat label="Active subscriptions" value={rows.filter((c) => c.subscriptionStatus && c.subscriptionStatus !== "cancelled").length} />
@@ -49,7 +51,7 @@ export function AdminCompanies() {
             <Plus size={15} strokeWidth={2.5} /> Add workspace
           </button>
         </div>
-        <table className="w-full text-[13.5px]">
+        <ResponsiveTable className="w-full text-[13.5px]">
           <thead>
             <tr className="border-b border-[#F0ECE3] text-left text-[11px] font-bold uppercase tracking-wide text-[#a39c8f]">
               <th className="px-5 py-2.5">Company</th>
@@ -93,7 +95,7 @@ export function AdminCompanies() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </section>
 
       {adding && (

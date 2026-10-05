@@ -35,14 +35,14 @@ export function FinanceOverview() {
   const { canWrite, reason: writeReason } = useModuleAccess("finance");
   const queryClient = useQueryClient();
   const [entryOpen, setEntryOpen] = React.useState(false);
-  const { data } = useQuery<OverviewData>({
+  const { data, error, isError, refetch } = useQuery<OverviewData>({
     queryKey: ["finance", "overview", currency],
     queryFn: () => apiGet<OverviewData>(`/finance/overview?currency=${currency}`),
     enabled: USE_BACKEND,
   });
 
   const onPosted = () => {
-    queryClient.invalidateQueries({ queryKey: ["finance", "overview"] });
+    queryClient.invalidateQueries({ queryKey: ["finance"] });
     setEntryOpen(false);
   };
 
@@ -80,7 +80,13 @@ export function FinanceOverview() {
 
       <JournalEditor open={entryOpen} onOpenChange={setEntryOpen} onPosted={onPosted} />
 
-      {!data ? (
+      {isError ? (
+        <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-5">
+          <p className="font-semibold text-destructive">Could not load finance overview</p>
+          <p className="mt-2 text-sm">{error.message}</p>
+          <button type="button" className="mt-3 min-h-11 rounded-lg border px-4 text-sm font-semibold" onClick={() => refetch()}>Retry</button>
+        </div>
+      ) : !data ? (
         <div className="py-20 text-center text-muted-foreground">Loading…</div>
       ) : (
         <div className="space-y-4">

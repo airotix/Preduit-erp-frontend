@@ -1,4 +1,6 @@
 "use client";
+import { Table as ResponsiveTable } from "@/components/ui/table";
+
 
 import * as React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -120,7 +122,7 @@ export function FinanceReports() {
                   {data.balanceSheet.balanced ? "Balanced ✓" : "Check"}
                 </ToneBadge>
               </div>
-              <table className="w-full text-[13px]">
+              <ResponsiveTable className="w-full text-[13px]">
                 <tbody>
                   <tr><td className="pb-1 pt-2 text-[11px] font-bold uppercase text-muted-foreground" colSpan={2}>Assets</td></tr>
                   {data.balanceSheet.assets.map((l, i) => <Row key={"a" + i} l={l} />)}
@@ -129,7 +131,7 @@ export function FinanceReports() {
                   {data.balanceSheet.liabilities.map((l, i) => <Row key={"l" + i} l={l} />)}
                   <Total label="Total liabilities" v={data.balanceSheet.totalLiabilities} strong={false} />
                 </tbody>
-              </table>
+              </ResponsiveTable>
             </Card>
           </TabsContent>
 
@@ -137,12 +139,12 @@ export function FinanceReports() {
           <TabsContent value="cf">
             <Card className="p-6">
               <h3 className="mb-3 text-[17px] font-extrabold text-foreground">Cash flow (summary)</h3>
-              <table className="w-full text-[13px]">
+              <ResponsiveTable className="w-full text-[13px]">
                 <tbody>
                   <Total label="Net profit (operating)" v={data.cashFlow.netProfit} strong={false} />
                   <Total label="Cash & bank on hand" v={data.cashFlow.endingCash} />
                 </tbody>
-              </table>
+              </ResponsiveTable>
               <p className="mt-4 text-[12px] text-muted-foreground">
                 Summary view. A full direct/indirect cash-flow statement with working-capital
                 movements comes with period close (Phase D–E).
@@ -155,7 +157,7 @@ export function FinanceReports() {
             <Card className="p-6">
               <h3 className="mb-3 text-[17px] font-extrabold text-foreground">VAT return</h3>
               {vat && (
-                <table className="w-full max-w-lg text-[13px]">
+                <ResponsiveTable className="w-full max-w-lg text-[13px]">
                   <tbody>
                     <Total label={`Output VAT (${vat.ratePct}% on sales)`} v={vat.output} strong={false} />
                     <Total label={`Input VAT (${vat.ratePct}% on costs)`} v={vat.input} strong={false} />
@@ -164,7 +166,7 @@ export function FinanceReports() {
                       <td className="py-3 text-right tabular">{money(vat.net, currency)}</td>
                     </tr>
                   </tbody>
-                </table>
+                </ResponsiveTable>
               )}
               <p className="mt-4 text-[12px] text-muted-foreground">
                 Computed at the standard rate on P&amp;L revenue and deductible costs. Per-line tax
@@ -177,7 +179,7 @@ export function FinanceReports() {
           <TabsContent value="budget">
             <Card className="p-6">
               <h3 className="mb-3 text-[17px] font-extrabold text-foreground">Budget vs actual · FY{budget?.fiscalYear}</h3>
-              <table className="w-full text-[13px]">
+              <ResponsiveTable className="w-full text-[13px]">
                 <thead>
                   <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
                     <th className="pb-2 text-left font-bold">Account</th>
@@ -207,7 +209,7 @@ export function FinanceReports() {
                     </tr>
                   )}
                 </tbody>
-              </table>
+              </ResponsiveTable>
             </Card>
           </TabsContent>
 
@@ -221,7 +223,7 @@ export function FinanceReports() {
                   New asset
                 </Button>
               </div>
-              <table className="w-full text-[13px]">
+              <ResponsiveTable className="w-full text-[13px]">
                 <thead>
                   <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
                     <th className="pb-2 text-left font-bold">Asset</th>
@@ -253,7 +255,7 @@ export function FinanceReports() {
                     <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">No assets registered yet.</td></tr>
                   )}
                 </tbody>
-              </table>
+              </ResponsiveTable>
             </Card>
           </TabsContent>
         </Tabs>

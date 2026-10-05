@@ -79,6 +79,8 @@ async function request<T>(path: string, init: RequestInit, retried = false): Pro
     try {
       const j = await res.json();
       if (typeof j?.detail === "string") detail = j.detail;
+      else if (Array.isArray(j?.detail)) detail = j.detail.map((issue: { loc?: string[]; msg?: string }) =>
+        `${issue.loc?.slice(1).join(".") || "Input"}: ${(issue.msg || "Invalid value").replace(/^Value error, /, "")}`).join("; ");
     } catch {
       /* ignore */
     }

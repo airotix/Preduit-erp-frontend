@@ -1,0 +1,12 @@
+.field { container-type: inline-size; container-name: phone-field; min-width: 0; }
+.controls { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.country { width: 112px; flex-shrink: 0; min-width: 0; }
+@container phone-field (max-width: 240px) {
+  .controls { flex-direction: column; gap: 4px; }
+  .country { width: 100%; }
+}
+@media print {
+  .country { display: none; }
+  .controls { display: block; }
+  .field { container-type: normal; }
+}

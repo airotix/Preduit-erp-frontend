@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import { fieldFormatError } from "@/lib/validators";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { apiPost } from "@/lib/api-client";
 
@@ -24,6 +26,8 @@ export default function WorkspaceRequestPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!valid) { setError("Please fill in all required fields."); return; }
+    const phoneError = fieldFormatError("contactNumber", form.contactNumber);
+    if (phoneError) { setError(phoneError); return; }
     setBusy(true); setError(null);
     try {
       await apiPost("/auth/workspace-request", form);
@@ -63,7 +67,7 @@ export default function WorkspaceRequestPage() {
         </div>
         <div>
           <label htmlFor="contactNumber" className={LABEL}>Contact number *</label>
-          <input id="contactNumber" type="tel" className={INPUT} placeholder="+1 234 567 8900" value={form.contactNumber} onChange={set("contactNumber")} required />
+          <PhoneInput id="contactNumber" type="tel" className={INPUT} placeholder="+1 234 567 8900" value={form.contactNumber} onChange={set("contactNumber")} required />
         </div>
         <div>
           <label htmlFor="email" className={LABEL}>Email address *</label>

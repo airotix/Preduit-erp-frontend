@@ -3,7 +3,9 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
-import MarketingApp from "@/marketing/App";
+import dynamic from "next/dynamic";
+
+const MarketingApp = dynamic(() => import("@/marketing/App"));
 
 /** ERP front door: landing for guests, dashboard for signed-in users. */
 export default function Home() {

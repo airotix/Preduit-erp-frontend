@@ -1,4 +1,6 @@
 "use client";
+import { Table as ResponsiveTable } from "@/components/ui/table";
+
 
 import {
   Bar,
@@ -26,7 +28,7 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
   return (
     <div className="space-y-4">
       {/* metric tiles */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {config.metrics.map((m) => (
           <Card key={m.label} className="p-5">
             <div className="flex items-start justify-between">
@@ -62,7 +64,7 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
       </div>
 
       {/* chart + donut */}
-      <div className="grid grid-cols-[1.7fr_1fr] gap-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.7fr_1fr]">
         <Card className="p-5">
           <div className="mb-1 text-base font-extrabold text-foreground">
             {config.chartTitle}
@@ -155,12 +157,12 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
       </div>
 
       {/* table + activity */}
-      <div className="grid grid-cols-[1.7fr_1fr] gap-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.7fr_1fr]">
         <Card className="p-5">
           <div className="mb-4 text-base font-extrabold text-foreground">
             {config.tableTitle}
           </div>
-          <table className="w-full text-sm">
+          <ResponsiveTable className="w-full text-sm">
             <thead>
               <tr>
                 {config.tableCols.map((c) => (
@@ -203,7 +205,7 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
                 );
               })}
             </tbody>
-          </table>
+          </ResponsiveTable>
         </Card>
 
         <Card className="p-5">

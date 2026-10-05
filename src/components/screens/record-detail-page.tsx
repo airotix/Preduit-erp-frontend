@@ -1,6 +1,10 @@
 "use client";
+import { Table as ResponsiveTable } from "@/components/ui/table";
+
 
 import * as React from "react";
+import { LocationFields } from "@/components/ui/location-fields";
+import { PhoneInput } from "@/components/ui/phone-input";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -12,6 +16,7 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { avatarColor, initials, tone as toneOf } from "@/lib/tone";
 import { DocumentsPanel } from "@/components/screens/documents-panel";
+import { TechPackPanel } from "@/components/screens/tech-pack-panel";
 import { OrderFulfillmentPanel } from "@/components/screens/sales/order-fulfillment";
 import { CatalogPOButton } from "@/components/screens/catalog-po-button";
 import { QCReopenDialog } from "@/components/screens/qc-reopen-dialog";
@@ -175,6 +180,7 @@ type SupplierCardData = {
 };
 type SupplierFormData = {
   name: string; region: string; leadTime: string; category: string;
+  country?: string; state?: string; city?: string;
   email: string; phone: string; address: string; contactPerson: string;
   vatNumber: string; bankName: string; bankAccountTitle: string;
   bankAccountNumber: string; bankSwift: string; bankIban: string;
@@ -200,12 +206,12 @@ function SupplierDetailsEditor({
   const set = (k: keyof SupplierFormData, v: string) => setF((p) => ({ ...p, [k]: v }));
   const save = async () => {
     if (!f.name.trim()) { setError("Name is required."); return; }
-    const bad = fieldFormatError("email", f.email) || fieldFormatError("phone", f.phone);
+    const bad = fieldFormatError("email", f.email) || fieldFormatError("phone", f.phone, f.country || f.region);
     if (bad) { setError(bad); return; }
     setSaving(true); setError(null);
     try {
       await apiPut(`/procurement/suppliers/${recordId}`, {
-        name: f.name.trim(), region: f.region || null, leadTime: f.leadTime || null,
+        name: f.name.trim(), country: f.country || null, state: f.state || null, city: f.city || null, region: f.region || null, leadTime: f.leadTime || null,
         category: f.category || null, email: f.email || null, phone: f.phone || null,
         address: f.address || null, contactPerson: f.contactPerson || null,
         vatNumber: f.vatNumber || null,
@@ -214,7 +220,7 @@ function SupplierDetailsEditor({
         bankIban: f.bankIban || null,
       });
       onSaved();
-    } catch { setError("Could not save changes. Please try again."); setSaving(false); }
+    } catch (error) { setError(error instanceof Error ? error.message : "Could not save changes. Please try again."); setSaving(false); }
   };
   return (
     <div className="rounded-2xl border border-border/60 p-5">
@@ -230,7 +236,7 @@ function SupplierDetailsEditor({
         </div>
         <div>
           <label className={_PF_LBL}>Phone</label>
-          <input className={_PF_INPUT} value={f.phone} onChange={(e) => set("phone", e.target.value)} />
+          <PhoneInput country={f.country || f.region} className={_PF_INPUT} value={f.phone} onChange={(e) => set("phone", e.target.value)} />
         </div>
         <div>
           <label className={_PF_LBL}>Contact ID</label>
@@ -270,9 +276,10 @@ function SupplierDetailsEditor({
                  onChange={(e) => set("bankIban", e.target.value)} />
         </div>
         <div className="sm:col-span-2">
-          <label className={_PF_LBL}>Location / region</label>
+          <label className={_PF_LBL}>Sales region (optional)</label>
           <input className={_PF_INPUT} value={f.region} onChange={(e) => set("region", e.target.value)} />
         </div>
+        <LocationFields value={{ country: f.country || "", state: f.state || "", city: f.city || "" }} className={_PF_INPUT} onChange={patch => setF(prev => ({ ...prev, ...patch }))} />
       </div>
       {error && <div className="mt-3 rounded-md bg-[#FBEAEA] p-3 text-sm font-semibold text-[#C0392B]">{error}</div>}
       <div className="mt-4 flex justify-end gap-2">
@@ -380,7 +387,7 @@ function Lines({ lines, totals, grand }: NonNullable<DetailModel["doc"]>) {
   return (
     <div>
       <SectionTitle>Line items</SectionTitle>
-      <table className="w-full text-[13px]">
+      <ResponsiveTable className="w-full text-[13px]">
         <thead>
           <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
             <th className="pb-2 text-left font-bold">Item</th>
@@ -404,7 +411,7 @@ function Lines({ lines, totals, grand }: NonNullable<DetailModel["doc"]>) {
             </tr>
           ))}
         </tbody>
-      </table>
+      </ResponsiveTable>
       <div className="mt-3 space-y-1.5 border-t border-border/60 pt-3">
         {totals.map((t) => (
           <div
@@ -428,7 +435,7 @@ function Lines({ lines, totals, grand }: NonNullable<DetailModel["doc"]>) {
 
 function VariantMatrix({ product }: { product: NonNullable<DetailModel["product"]> }) {
   return (
-    <table className="w-full text-[13px]">
+    <ResponsiveTable className="w-full text-[13px]">
       <thead>
         <tr>
           <th className="pb-2 text-left text-[11px] font-bold uppercase text-muted-foreground">
@@ -472,7 +479,7 @@ function VariantMatrix({ product }: { product: NonNullable<DetailModel["product"
           </tr>
         ))}
       </tbody>
-    </table>
+    </ResponsiveTable>
   );
 }
 
@@ -788,7 +795,7 @@ function StockMatrix({ stock }: { stock: NonNullable<DetailModel["stock"]> }) {
   return (
     <Panel title="Stock by color & size" sub="Units on hand by color and size">
       <div className="overflow-x-auto">
-        <table className="w-full text-[13px]">
+        <ResponsiveTable className="w-full text-[13px]">
           <thead>
             <tr>
               <th className="pb-2 text-left text-[11px] font-bold uppercase text-muted-foreground">
@@ -849,7 +856,7 @@ function StockMatrix({ stock }: { stock: NonNullable<DetailModel["stock"]> }) {
               </td>
             </tr>
           </tbody>
-        </table>
+        </ResponsiveTable>
       </div>
     </Panel>
   );
@@ -963,7 +970,7 @@ function StockMatrixEditor({
     <Panel title={title ?? "Edit stock by color & size"} sub={sub ?? "Update quantities by size; changes sync with Catalogue"}>
       {locationDialog}
       <div className="overflow-x-auto">
-        <table className="w-full text-[13px]">
+        <ResponsiveTable className="w-full text-[13px]">
           <thead>
             <tr>
               <th className="pb-2 text-left text-[11px] font-bold uppercase text-muted-foreground">
@@ -1033,7 +1040,7 @@ function StockMatrixEditor({
               </tr>
             ))}
           </tbody>
-        </table>
+        </ResponsiveTable>
         <datalist id={colorListId}>
           {Array.from(new Set([...savedColors.map((c) => c?.name).filter((name) => typeof name === "string" && name.trim()), "Black", "White", "Pink", "Navy", "Sky blue", "Cream", "Burgundy", "Sage"]))
             .map((name) => <option key={name} value={name} />)}
@@ -1080,6 +1087,7 @@ type CustomerCardData = {
 };
 type CustomerFormData = {
   name: string; type: string; region: string; email: string; phone: string; address: string;
+  country?: string; state?: string; city?: string;
   code: string; terms: string; currency: string; taxId: string; bankName: string;
   bankAccount: string; contactTitle: string;
 };
@@ -1093,27 +1101,30 @@ function CustomerDetailsEditor({
   const set = (k: keyof CustomerFormData, v: string) => setF((p) => ({ ...p, [k]: v }));
   const save = async () => {
     if (!f.name.trim()) { setError("Name is required."); return; }
-    const bad = fieldFormatError("email", f.email) || fieldFormatError("phone", f.phone);
+    const bad = fieldFormatError("email", f.email) || fieldFormatError("phone", f.phone, f.country || f.region);
     if (bad) { setError(bad); return; }
     setSaving(true); setError(null);
     try {
       await apiPut(`/sales/customers/${recordId}`, {
-        name: f.name.trim(), type: f.type || "Retail", region: f.region || null,
+        name: f.name.trim(), type: f.type || "Retail", country: f.country || null, state: f.state || null, city: f.city || null, region: f.region || null,
         email: f.email || null, phone: f.phone || null, address: f.address || null,
         code: f.code || null, terms: f.terms || null, currency: f.currency || null,
         taxId: f.taxId || null, bankName: f.bankName || null,
         bankAccount: f.bankAccount || null, contactTitle: f.contactTitle || null,
       });
       onSaved();
-    } catch { setError("Could not save changes. Please try again."); setSaving(false); }
+    } catch (error) { setError(error instanceof Error ? error.message : "Could not save changes. Please try again."); setSaving(false); }
   };
-  const fld = (label: string, k: keyof CustomerFormData, ph?: string) => (
-    <div>
-      <label className={_PF_LBL}>{label}</label>
-      <input className={_PF_INPUT} value={f[k]} placeholder={ph}
-             onChange={(e) => set(k, e.target.value)} />
-    </div>
-  );
+  const fld = (label: string, k: keyof CustomerFormData, ph?: string) => {
+    const Component = k === "phone" ? PhoneInput : "input";
+    return (
+      <div>
+        <label className={_PF_LBL}>{label}</label>
+        <Component {...(k === "phone" ? { country: f.country || f.region } : {})} className={_PF_INPUT} value={f[k]} placeholder={ph}
+                   onChange={(e) => set(k, e.target.value)} />
+      </div>
+    );
+  };
   return (
     <div className="rounded-2xl border border-border/60 p-5">
       <SectionTitle>Edit contact</SectionTitle>
@@ -1123,7 +1134,8 @@ function CustomerDetailsEditor({
           <input className={_PF_INPUT} value={f.name} onChange={(e) => set("name", e.target.value)} />
         </div>
         {fld("Contact title", "contactTitle", "e.g. Procurement lead")}
-        {fld("Location / region", "region")}
+        {fld("Sales region (optional)", "region")}
+        <LocationFields value={{ country: f.country || "", state: f.state || "", city: f.city || "" }} className={_PF_INPUT} onChange={patch => setF(prev => ({ ...prev, ...patch }))} />
         {fld("Email", "email")}
         {fld("Phone", "phone")}
         <div className="sm:col-span-2">
@@ -1431,7 +1443,7 @@ function InspectionWorkspace({
 
       {/* Checklist */}
       <Panel title="Checklist" sub="Each criterion must resolve (no Pending) before completion. Numeric target ± tolerance auto-scores.">
-        <table className="w-full text-[13px]">
+        <ResponsiveTable className="w-full text-[13px]">
           <thead>
             <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
               <th className="pb-2 text-left font-bold">Criterion</th>
@@ -1475,7 +1487,7 @@ function InspectionWorkspace({
               <tr><td colSpan={5} className="py-4 text-center text-muted-foreground">No checklist items yet.</td></tr>
             )}
           </tbody>
-        </table>
+        </ResponsiveTable>
         {inProgress && (
           <div className="mt-3 flex flex-wrap items-end gap-2">
             <input disabled={busy || !canWrite} value={chk.criterion} onChange={(e) => setChk({ ...chk, criterion: e.target.value })}
@@ -1491,7 +1503,7 @@ function InspectionWorkspace({
 
       {/* Defects */}
       <Panel title="Defects" sub="Select a saved defect or enter a new name. New defects ask for details before being saved and added.">
-        <table className="w-full text-[13px]">
+        <ResponsiveTable className="w-full text-[13px]">
           <thead>
             <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
               <th className="pb-2 text-left font-bold">Ref</th>
@@ -1531,7 +1543,7 @@ function InspectionWorkspace({
               <tr><td colSpan={6} className="py-4 text-center text-muted-foreground">No defects logged.</td></tr>
             )}
           </tbody>
-        </table>
+        </ResponsiveTable>
         {inProgress && (
           <div className="mt-3 flex flex-wrap items-end gap-2">
             <div className="min-w-[220px] flex-1">
@@ -1612,7 +1624,7 @@ function InspectionWorkspace({
         <div className="mt-4 space-y-4">
       {/* AQL sampling */}
       <Panel title="Size breakdown & ratio" sub={`Quantities from ${data.sizeBreakdown?.source.toLowerCase() ?? "production"} for this inspection.`}>
-        {data.sizeBreakdown?.sizes.length ? <div className="overflow-x-auto"><table className="w-full text-sm">
+        {data.sizeBreakdown?.sizes.length ? <div className="overflow-x-auto"><ResponsiveTable className="w-full text-sm">
           <thead><tr><th className="p-2 text-left">Article / colour</th>
             {data.sizeBreakdown.sizes.map((size) => <th key={size} className="p-2 text-right">{size}</th>)}<th className="p-2 text-right">Total</th></tr></thead>
           <tbody>{data.sizeBreakdown.rows.map((row, index) => <tr key={index} className="border-t">
@@ -1621,7 +1633,7 @@ function InspectionWorkspace({
           <tfoot><tr className="border-t font-semibold"><td className="p-2">Total units</td>
             {data.sizeBreakdown.totals.map((qty, i) => <td key={i} className="p-2 text-right">{qty}</td>)}<td className="p-2 text-right">{data.sizeBreakdown.total}</td></tr>
             <tr className="border-t"><td className="p-2">Size ratio</td>{data.sizeBreakdown.ratio.map((qty, i) => <td key={i} className="p-2 text-right">{qty}</td>)}<td /></tr></tfoot>
-        </table></div> : <p className="text-sm text-muted-foreground">No size quantities are recorded for this production item.</p>}
+        </ResponsiveTable></div> : <p className="text-sm text-muted-foreground">No size quantities are recorded for this production item.</p>}
       </Panel>
       <Panel title="AQL sampling" sub={aql.codeLetter ? `Code letter ${aql.codeLetter} · General Level II` : undefined}>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -1666,7 +1678,7 @@ function InspectionWorkspace({
 
       {/* Inspection history */}
       <details className="rounded-xl border p-4"><summary className="cursor-pointer text-sm font-semibold">Inspection history ({data.history.length})</summary><div className="mt-3">
-        <table className="w-full text-[13px]">
+        <ResponsiveTable className="w-full text-[13px]">
           <thead>
             <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
               <th className="pb-2 text-left font-bold">Inspection</th>
@@ -1692,7 +1704,7 @@ function InspectionWorkspace({
               <tr><td colSpan={6} className="py-6 text-center text-muted-foreground">No inspection history for this order.</td></tr>
             )}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </div></details>
     </div>
   );
@@ -1915,6 +1927,9 @@ function tabContentFor(
             <VariantMatrix product={p} />
           </Panel>
           <div className="space-y-4">
+            {ctx.recordId && USE_BACKEND && <Panel title="Tech Pack" sub="Article specification file shared with production">
+              <TechPackPanel articleId={ctx.recordId} />
+            </Panel>}
             {p.image && (
               <Panel title="Image">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1935,7 +1950,7 @@ function tabContentFor(
       ),
       Inventory: (
         <Panel title="Inventory" sub="Units on hand across all locations">
-          <table className="w-full text-[13px]">
+          <ResponsiveTable className="w-full text-[13px]">
             <thead>
               <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
                 <th className="pb-2 text-left font-bold">Color</th>
@@ -1964,7 +1979,7 @@ function tabContentFor(
                 <td className="py-2.5 text-right tabular">{onHand}</td>
               </tr>
             </tbody>
-          </table>
+          </ResponsiveTable>
         </Panel>
       ),
       Pricing: (
@@ -2060,7 +2075,7 @@ function tabContentFor(
     const invoicesPanel = (
       <Panel title="Invoices" sub="Commercial invoices generated for this order">
         {doc.orderInvoices && doc.orderInvoices.length > 0 ? (
-          <table className="w-full text-[13px]">
+          <ResponsiveTable className="w-full text-[13px]">
             <thead>
               <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
                 <th className="pb-2 text-left font-bold">Invoice</th>
@@ -2088,7 +2103,7 @@ function tabContentFor(
                 </tr>
               ))}
             </tbody>
-          </table>
+          </ResponsiveTable>
         ) : (
           <div className="py-8 text-center text-[13px] text-muted-foreground">
             No invoices generated for this order yet.
@@ -2112,7 +2127,7 @@ function tabContentFor(
     const j = d.journal;
     const ledger = (
       <Panel title="Ledger lines">
-        <table className="w-full text-[13px]">
+        <ResponsiveTable className="w-full text-[13px]">
           <thead>
             <tr className="text-[11px] uppercase text-muted-foreground">
               <th className="pb-2 text-left font-bold">Account</th>
@@ -2137,7 +2152,7 @@ function tabContentFor(
               <td className="py-2.5 text-right tabular">{j.ledgerCredit}</td>
             </tr>
           </tbody>
-        </table>
+        </ResponsiveTable>
       </Panel>
     );
     const source = (
@@ -2159,7 +2174,7 @@ function tabContentFor(
     const r = d.receipt;
     const node = (
       <Panel title="Received lines">
-        <table className="w-full text-[13px]">
+        <ResponsiveTable className="w-full text-[13px]">
           <thead>
             <tr className="text-[11px] uppercase text-muted-foreground">
               <th className="pb-2 text-left font-bold">Component</th>
@@ -2187,7 +2202,7 @@ function tabContentFor(
               </tr>
             ))}
           </tbody>
-        </table>
+        </ResponsiveTable>
         <p className="mt-4 text-[13px] leading-relaxed text-muted-foreground">
           {r.note}
         </p>
@@ -2346,7 +2361,7 @@ function tabContentFor(
     const p = d.porder;
     const materials = (
       <Panel title="Bill of materials" sub="Components used for this style">
-        <table className="w-full text-[13px]">
+        <ResponsiveTable className="w-full text-[13px]">
           <thead>
             <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
               <th className="pb-2 text-left font-bold">Component</th>
@@ -2372,7 +2387,7 @@ function tabContentFor(
               </tr>
             )}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </Panel>
     );
     const timelinePanel = (
@@ -2429,7 +2444,7 @@ function tabContentFor(
     );
     const contentsPanel = (
       <Panel title="Contents" sub="Items in this shipment">
-        <table className="w-full text-[13px]">
+        <ResponsiveTable className="w-full text-[13px]">
           <thead>
             <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
               <th className="pb-2 text-left font-bold">Item</th>
@@ -2453,7 +2468,7 @@ function tabContentFor(
               </tr>
             )}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </Panel>
     );
     const map: Record<string, React.ReactNode> = {};
@@ -2469,7 +2484,7 @@ function tabContentFor(
     const byColor = <StockMatrix stock={stock} />;
     const byLocation = (
       <Panel title="By location" sub="Units held at each location">
-        <table className="w-full text-[13px]">
+        <ResponsiveTable className="w-full text-[13px]">
           <thead>
             <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
               <th className="pb-2 text-left font-bold">Location</th>
@@ -2497,7 +2512,7 @@ function tabContentFor(
               </tr>
             )}
           </tbody>
-        </table>
+        </ResponsiveTable>
       </Panel>
     );
     const map: Record<string, React.ReactNode> = {};
@@ -2664,7 +2679,7 @@ export function RecordDetailPage({
             <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#9499A6]">
               {d.ref}
             </div>
-            <div className="mt-1 flex items-center gap-3">
+            <div className="mt-1 flex flex-wrap items-center gap-3">
               <h1 className="text-[26px] font-extrabold tracking-tight text-foreground">
                 {d.title}
               </h1>

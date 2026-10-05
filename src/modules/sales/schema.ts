@@ -17,7 +17,10 @@ export const customerSchema = z.object({
   name: z.string().min(1, "Required"),
   email: z.string().email("Enter a valid email"),
   type: z.enum(["Wholesale", "Retail"]),
-  region: z.string().min(1, "Required"),
+  region: z.string().optional(),
+  country: z.string().optional(),
+  state: z.string().optional(),
+  city: z.string().optional(),
   phone: z.string().optional(),
   address: z.string().optional(),
 });
