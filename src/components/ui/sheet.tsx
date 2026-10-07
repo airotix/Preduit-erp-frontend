@@ -34,9 +34,9 @@ const sheetVariants = cva(
         top: "inset-x-0 top-0 border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top",
         bottom:
           "inset-x-0 bottom-0 border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
-        left: "inset-y-0 left-0 h-dvh w-full border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm",
+        left: "inset-y-0 left-0 h-full w-3/4 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm",
         right:
-          "inset-y-0 right-0 h-dvh w-full border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-md",
+          "inset-y-0 right-0 h-full w-3/4 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-md",
       },
     },
     defaultVariants: { side: "right" },
@@ -55,11 +55,11 @@ const SheetContent = React.forwardRef<
     <SheetOverlay />
     <SheetPrimitive.Content
       ref={ref}
-      className={cn(sheetVariants({ side }), "erp-dialog flex min-h-0 max-w-full flex-col overflow-y-auto overscroll-contain", className)}
+      className={cn(sheetVariants({ side }), "flex flex-col", className)}
       {...props}
     >
       {children}
-      <SheetPrimitive.Close className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+      <SheetPrimitive.Close className="absolute right-5 top-5 rounded-full opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none">
         <X className="h-5 w-5" />
         <span className="sr-only">Close</span>
       </SheetPrimitive.Close>
@@ -85,7 +85,7 @@ const SheetFooter = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "sticky bottom-0 z-10 mt-auto flex flex-col-reverse gap-2 border-t bg-background/95 p-6 backdrop-blur-sm sm:flex-row sm:justify-end",
+      "mt-auto flex flex-col-reverse gap-2 border-t p-6 sm:flex-row sm:justify-end",
       className
     )}
     {...props}
