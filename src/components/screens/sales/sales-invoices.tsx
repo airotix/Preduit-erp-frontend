@@ -360,6 +360,7 @@ function RetailPaper({ doc, ccy, totals, update }: {
     ["Invoice no", "invoiceNo"], ["Date", "invoiceDate"],
     ["Payment method", "paymentMethod"], ["Order ref", "orderRef"],
     ["Cashier", "cashier"], ["Status", "status"],
+    ["Prepared by", "preparedBy"], ["Preparer email", "preparedByEmail"],
   ];
   return (
     <div className="invoice-paper mx-auto w-full max-w-[900px] border border-[#e2e2e2] bg-white p-8 text-[#111] shadow-erp-lg">
@@ -479,6 +480,7 @@ function WholesalePaper({ doc, ccy, totals, update }: {
   const META: [string, string][] = [
     ["Invoice no", "invoiceNo"], ["PO no", "poNo"], ["Order date", "orderDate"],
     ["Payment terms", "paymentTerms"], ["Sales rep", "salesRep"], ["Ship to", "shipTo"],
+    ["Prepared by", "preparedBy"], ["Preparer email", "preparedByEmail"],
   ];
   const REMIT = REMIT_ROWS;
   return (

@@ -28,6 +28,7 @@ export function TechPackPanel({ articleId, lineId, initialData }: {
   });
   const upload = useMutation({
     mutationFn: (file: File) => {
+      if (!file.name.toLowerCase().endsWith(".pdf")) throw new Error("Tech packs must be PDF files.");
       const form = new FormData();
       form.append("file", file);
       return apiUpload<TechPack>(path, form);
@@ -48,13 +49,13 @@ export function TechPackPanel({ articleId, lineId, initialData }: {
         </ToneBadge>
         {data?.document && <span className="break-all text-sm font-semibold">{data.document.filename}</span>}
       </div>
-      {!data?.document && <p className="text-sm text-muted-foreground">Upload the tech pack to mark this stage Received.</p>}
+      {!data?.document && <p className="text-sm text-muted-foreground">Upload a PDF tech pack to mark this stage Received.</p>}
       <div className="flex flex-wrap items-center gap-2">
         <label title={!canWrite ? reason || undefined : undefined}
           className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-xs font-semibold ${canWrite && !upload.isPending ? "cursor-pointer hover:bg-muted" : "opacity-50"}`}>
           <Upload size={14} /> {upload.isPending ? "Uploading…" : data?.document ? "Replace tech pack" : "Upload tech pack"}
           <input type="file" className="hidden" disabled={!USE_BACKEND || !canWrite || upload.isPending}
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.csv,.txt"
+            accept=".pdf,application/pdf"
             onChange={(event) => { const file = event.target.files?.[0]; if (file) upload.mutate(file); event.target.value = ""; }} />
         </label>
         {data?.document && <a href={apiUrl(`/documents/${data.document.public_id}/download`)}

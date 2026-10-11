@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { notFound } from "next/navigation";
+import { notFound, useParams } from "next/navigation";
 import { getModule, getTab } from "@/config/navigation";
 import { detailTypeFor } from "@/config/detail-types";
 import { fetchScreen } from "@/modules/registry";
@@ -36,11 +36,8 @@ const BACKEND_DETAILS: Record<string, (id: string) => string> = {
  *
  * Route: /<module>/<tab>/<recordId>  (recordId = row index in the store)
  */
-export default function RecordPage({
-  params,
-}: {
-  params: { module: string; tab: string; recordId: string };
-}) {
+export default function RecordPage() {
+  const params = useParams<{ module: string; tab: string; recordId: string }>();
   const mod = getModule(params.module);
   const tab = getTab(params.module, params.tab);
   const type = detailTypeFor(params.module, params.tab);

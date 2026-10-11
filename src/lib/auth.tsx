@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { setTokens, getAccessToken, clearTokens } from "@/lib/auth-token";
 
@@ -93,6 +94,7 @@ async function authFetch<T>(path: string, opts: RequestInit = {}, token?: string
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [user, setUser] = React.useState<AuthUser | null>(null);
   const [loading, setLoading] = React.useState(true);
 
@@ -112,6 +114,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           const r = await authFetch<{ accessToken: string; user: AuthUser }>(
             "/auth/refresh", { method: "POST" });
+          await queryClient.cancelQueries();
+          queryClient.clear();
           setTokens(r.accessToken);
           if (!cancelled) setUser(r.user);
         } catch {
@@ -122,7 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [queryClient]);
 
   const login = React.useCallback(async (email: string, password: string, remember = true, businessName?: string): Promise<AuthUser> => {
     const res = await fetch(`${API_BASE}/auth/login`, {
@@ -156,10 +160,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const data = r as { accessToken: string; user: AuthUser };
     // "Keep me signed in" unchecked → session-only storage for the access token
     // (the refresh cookie's lifetime is set server-side from the same flag).
+    await queryClient.cancelQueries();
+    queryClient.clear();
     setTokens(data.accessToken, remember);
     setUser(data.user);
     return data.user;
-  }, []);
+  }, [queryClient]);
 
   const listBusinesses = React.useCallback(async () => {
     const r = await authFetch<{ businesses: Business[] }>("/auth/businesses", {}, getAccessToken());
@@ -169,26 +175,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const switchBusiness = React.useCallback(async (businessId: string) => {
     const r = await authFetch<{ accessToken: string; user: AuthUser }>(
       "/auth/switch-business", { method: "POST", body: JSON.stringify({ businessId }) }, getAccessToken());
+    await queryClient.cancelQueries();
+    queryClient.clear();
     setTokens(r.accessToken);
     setUser(r.user);
     return r.user;
-  }, []);
+  }, [queryClient]);
 
   const register = React.useCallback(async (p: RegisterPayload) => {
     const r = await authFetch<{ accessToken: string; user: AuthUser }>(
       "/auth/register-company", { method: "POST", body: JSON.stringify(p) });
+    await queryClient.cancelQueries();
+    queryClient.clear();
     setTokens(r.accessToken);
     setUser(r.user);
     return r.user;
-  }, []);
+  }, [queryClient]);
 
   const verifyEmail = React.useCallback(async (email: string, code: string) => {
     const r = await authFetch<{ accessToken: string; user: AuthUser }>(
       "/auth/verify-email", { method: "POST", body: JSON.stringify({ email, code }) });
+    await queryClient.cancelQueries();
+    queryClient.clear();
     setTokens(r.accessToken);
     setUser(r.user);
     return r.user;
-  }, []);
+  }, [queryClient]);
 
   const resendVerification = React.useCallback(async (email: string) => {
     return await authFetch<{ devCode?: string }>(
@@ -198,10 +210,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const acceptInvite = React.useCallback(async (token: string, name: string, password: string) => {
     const r = await authFetch<{ accessToken: string; user: AuthUser }>(
       "/auth/invitations/accept", { method: "POST", body: JSON.stringify({ token, name, password }) });
+    await queryClient.cancelQueries();
+    queryClient.clear();
     setTokens(r.accessToken);
     setUser(r.user);
     return r.user;
-  }, []);
+  }, [queryClient]);
 
   const completeSetup = React.useCallback(async (p: CompanySetupPayload) => {
     const r = await authFetch<{ user: AuthUser; invited: unknown[] }>(
@@ -217,10 +231,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       method: "POST", headers: { "Content-Type": "application/json" },
       credentials: "include", keepalive: true,
     }).catch(() => { /* ignore */ });
+    void queryClient.cancelQueries();
+    queryClient.clear();
     clearTokens();
     setUser(null);
     router.push("/login");
-  }, [router]);
+  }, [router, queryClient]);
 
   const hasPermission = React.useCallback(
     (perm: string) => {

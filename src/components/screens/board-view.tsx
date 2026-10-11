@@ -40,6 +40,11 @@ export function BoardView({
     onSettled: () => {
       setBusyId(null);
       queryClient.invalidateQueries({ queryKey: ["screen", module, tab] });
+      if (module === "procurement") {
+        for (const key of [["screen", "production"], ["production"], ["screen", "quality"], ["screen", "sales"], ["screen", "procurement"], ["detail"]]) {
+          queryClient.invalidateQueries({ queryKey: key });
+        }
+      }
     },
   });
 

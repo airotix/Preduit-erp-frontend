@@ -1,4 +1,5 @@
 "use client";
+import { BatchWorkspace } from "./batch-workspace";
 import { Table as ResponsiveTable } from "@/components/ui/table";
 
 
@@ -37,6 +38,7 @@ interface Detail {
   meta: { k: string; v: string }[];
   started: boolean; progress: number; stageNames: string[];
   canInspect?: boolean; inspected?: boolean;
+  batchManaged?: boolean;
   alert: { type: string; message: string } | null;
   stages: Stage[]; materials: { component: string; material: string; qty: string; cost: string }[];
   orderLines?: OrderLine[];
@@ -251,7 +253,7 @@ export function ProductionOrderDetail({
     : modal?.kind === "notes" ? [{ name: "notes", label: "Notes", required: false }]
     : [{ name: "days", label: "Extra days", type: "number", required: true }];
 
-  const lines = data?.lines ?? [];
+  const lines = data?.batchManaged ? [] : data?.lines ?? [];
 
   return (
     <div className="mx-auto w-full max-w-[1180px]">
@@ -302,6 +304,8 @@ export function ProductionOrderDetail({
               ))}
             </div>
           </Card>
+
+          <BatchWorkspace orderId={publicId} />
 
           <Tabs defaultValue="summary" className="mt-4">
             <TabsList className="erp-scroll mb-4 w-full justify-start gap-0 overflow-x-auto border-b border-border/70">

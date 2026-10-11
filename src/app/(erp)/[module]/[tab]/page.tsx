@@ -16,13 +16,14 @@ export function generateStaticParams() {
   );
 }
 
-export default function ScreenPage({
+export default async function ScreenPage({
   params,
 }: {
-  params: { module: string; tab: string };
+  params: Promise<{ module: string; tab: string }>;
 }) {
-  const mod = getModule(params.module);
-  const tab = getTab(params.module, params.tab);
+  const { module, tab: tabId } = await params;
+  const mod = getModule(module);
+  const tab = getTab(module, tabId);
   if (!mod || !tab) notFound();
 
   // Finance dashboards/ledgers are a bespoke redesign; the ledger/accounting

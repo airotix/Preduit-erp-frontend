@@ -4,7 +4,7 @@ import * as React from "react";
 import { LocationSelector } from "@/components/ui/location-selector";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Store, Image as ImageIcon, Building2, Tag, MapPin, Phone, Globe, ShieldCheck,
   Linkedin, Instagram, Facebook, Twitter, CheckCircle2, Loader2, BadgeCheck, ArrowLeft,
@@ -81,7 +81,9 @@ export function CompanyProfilePage() {
   const { user, hasPermission } = useAuth();
   const canEdit = hasPermission("admin.users");
 
-  const { data } = useQuery({ queryKey: ["company-profile"], queryFn: getCompanyProfile });
+  const queryClient = useQueryClient();
+  const profileKey = ["company-profile", user?.company.id];
+  const { data } = useQuery({ queryKey: profileKey, queryFn: getCompanyProfile, enabled: !!user?.company.id });
 
   const [form, setForm] = React.useState<CompanyProfile | null>(null);
   const [saved, setSaved] = React.useState<CompanyProfile | null>(null);
@@ -91,6 +93,8 @@ export function CompanyProfilePage() {
   const [saveError, setSaveError] = React.useState<string | null>(null);
   const [imgError, setImgError] = React.useState<string | null>(null);
   const fetchedRef = React.useRef<string>("");
+
+  React.useEffect(() => { setForm(null); setSaved(null); setPreview({}); fetchedRef.current = ""; }, [user?.company.id]);
 
   React.useEffect(() => {
     if (data && !form) { setForm(data); setSaved(data); }
@@ -162,6 +166,7 @@ export function CompanyProfilePage() {
     setSaving(true);
     try {
       const res = await saveCompanyProfile(form);
+      queryClient.setQueryData(profileKey, res);
       setSaved(res); setForm(res);
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Could not save the company profile.");

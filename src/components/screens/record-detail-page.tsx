@@ -1,4 +1,5 @@
 "use client";
+import { BatchWorkspace, BatchShipmentPanel } from "./production/batch-workspace";
 import { Table as ResponsiveTable } from "@/components/ui/table";
 
 
@@ -2729,6 +2730,10 @@ export function RecordDetailPage({
           ))}
         </div>
       </Card>
+
+      {recordId && USE_BACKEND && module === "sales" && d.variant === "order" && <BatchWorkspace orderId={recordId} kind="sales" />}
+      {recordId && USE_BACKEND && module === "procurement" && d.variant === "order" && <BatchWorkspace orderId={recordId} kind="procurement" />}
+      {recordId && USE_BACKEND && d.variant === "shipment" && <BatchShipmentPanel shipmentId={recordId} />}
 
       {/* Order-level shipment (inspection group): locked until all items pass */}
       {d.variant === "order" && d.fulfillment && recordId && (

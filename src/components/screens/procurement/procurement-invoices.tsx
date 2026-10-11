@@ -301,6 +301,11 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
 
       {/* ===== PAPER ===== */}
       <div className="invoice-paper mx-auto w-full max-w-[900px] border border-[#e2e2e2] bg-white p-8 text-[#111] shadow-erp-lg">
+        <div className="mb-3 text-[11px]">
+          <label>Prepared by <input className={FIELD} value={doc.preparedBy || ""} onChange={(e) => update((d) => { d.preparedBy = e.target.value; })} /></label>
+          <label>Preparer email <input className={FIELD} value={doc.preparedByEmail || ""} onChange={(e) => update((d) => { d.preparedByEmail = e.target.value; })} /></label>
+          <div>Company banking: {[doc.companyBank?.title, doc.companyBank?.bank, doc.companyBank?.account, doc.companyBank?.iban, doc.companyBank?.swift].filter(Boolean).join(" · ")}</div>
+        </div>
         <div className="mb-1 flex items-center justify-between text-[9px] text-[#8a8a8a]">
           <span>{doc.exporter?.name || "Commercial invoice"}</span><span>Page 1 / 1</span>
         </div>

@@ -73,7 +73,10 @@ export function StockReceiptForm({
     if (!location.trim()) return setError("Location is required.");
     const apiLines: ApiLine[] = [];
     for (const l of lines) {
-      if (!l.name.trim()) continue;
+      if (!l.name.trim()) return setError("Select a catalog item for every row.");
+      if (!l.color.trim()) return setError(`Select a color for ${l.name}.`);
+      if (Object.values(l.sizeQty).some((q) => !Number.isInteger(Number(q)) || Number(q) < 0)) return setError("Quantities must be whole numbers of zero or more.");
+      if (!lineUnits(l)) return setError(`Enter a quantity for ${l.name}.`);
       for (const size of sizes) {
         const q = Math.floor(Number(l.sizeQty[size]) || 0);
         if (q > 0) apiLines.push({ name: l.name.trim(), color: l.color.trim() || null, size, sku: null, qty: q });
@@ -150,7 +153,7 @@ export function StockReceiptForm({
                           <div key={s} className="space-y-0.5">
                             <span className="block text-center text-[10px] font-bold uppercase text-muted-foreground">{s}</span>
                             <input type="number" min={0} value={l.sizeQty[s] ?? 0}
-                              onChange={(e) => setSize(i, s, Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                              onChange={(e) => setSize(i, s, Number(e.target.value) || 0)}
                               className="w-full rounded-lg border border-border/60 py-1.5 text-center text-[13px] font-bold tabular outline-none focus:border-primary" />
                           </div>
                         ))}

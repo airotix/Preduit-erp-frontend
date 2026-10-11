@@ -13,19 +13,31 @@ import { useModuleAccess } from "@/lib/module-access";
 
 export type OrderFulfillment = {
   canCreatePO: boolean;
-  lines: { lineId: number; name: string; color: string | null; size: string | null; ordered: number; reserved: number; missing: number }[];
+  lines: { lineId: number; productId?: number | null; name: string; color: string | null; size: string | null; ordered: number; reserved: number; missing: number; toPurchase?: number }[];
   purchaseOrders: { publicId: string; poNo: string }[];
   shipment: { publicId: string; shipmentNo: string } | null;
 };
 
 export function CreateShortagePOButton({ orderId, onSaved }: { orderId: string; onSaved?: () => void }) {
   const [open, setOpen] = React.useState(false);
-  const [supplierId, setSupplierId] = React.useState("");
+  const [supplierIds, setSupplierIds] = React.useState<Record<string, string>>({});
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState("");
   const queryClient = useQueryClient();
   const sales = useModuleAccess("sales");
   const procurement = useModuleAccess("procurement");
+  const { data: detail, isLoading: loadingItems, error: itemsError } = useQuery<{ fulfillment: OrderFulfillment | null }>({
+    queryKey: ["sales", "shortage-items", orderId],
+    queryFn: () => apiGet(`/sales/orders/${orderId}/detail`),
+    enabled: open, staleTime: 0,
+  });
+  const items = React.useMemo(() => {
+    const groups: Record<string, OrderFulfillment["lines"]> = {};
+    for (const line of detail?.fulfillment?.lines ?? []) {
+      if ((line.toPurchase ?? line.missing) > 0) (groups[String(line.productId ?? line.name)] ??= []).push(line);
+    }
+    return Object.entries(groups);
+  }, [detail]);
   const { data: suppliers = [], isLoading, error: suppliersError } = useQuery({
     queryKey: ["sales", "shortage-suppliers"],
     queryFn: () => apiGet<{ publicId: string; name: string }[]>("/sales/shortage-suppliers"),
@@ -34,7 +46,9 @@ export function CreateShortagePOButton({ orderId, onSaved }: { orderId: string; 
   const create = async () => {
     setPending(true); setError("");
     try {
-      await apiPost(`/sales/orders/${orderId}/create-po`, { supplierId });
+      await apiPost(`/sales/orders/${orderId}/create-po`, {
+        assignments: items.flatMap(([name, lines]) => lines.map((line) => ({ lineId: line.lineId, supplierId: supplierIds[name] }))),
+      });
       for (const key of [["screen", "sales"], ["screen", "inventory"], ["screen", "procurement"],
         ["screen", "production"], ["screen", "shipments"], ["sales"], ["inventory"], ["production"], ["finance"], ["procurement", "invoices"]]) {
         queryClient.invalidateQueries({ queryKey: key });
@@ -51,18 +65,25 @@ export function CreateShortagePOButton({ orderId, onSaved }: { orderId: string; 
       <Dialog.Portal>
       <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40" onClick={(e) => e.stopPropagation()} />
       <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-lg -translate-x-1/2 -translate-y-1/2 space-y-4 rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-          <Dialog.Title className="text-lg font-bold">Create PO for missing stock</Dialog.Title>
-          <Dialog.Description className="text-sm text-muted-foreground">Select a supplier. The PO uses only missing quantities and saved supplier prices. Expected delivery uses the supplier’s lead time, or 30 days if unset.</Dialog.Description>
-        <label htmlFor={`shortage-supplier-${orderId}`} className="text-sm font-medium">Supplier</label>
-        <Select value={supplierId} onValueChange={setSupplierId}>
-          <SelectTrigger id={`shortage-supplier-${orderId}`}><SelectValue placeholder={isLoading ? "Loading suppliers…" : "Select supplier"} /></SelectTrigger>
-          <SelectContent>{suppliers.map((supplier) => <SelectItem key={supplier.publicId} value={supplier.publicId}>{supplier.name}</SelectItem>)}</SelectContent>
-        </Select>
+          <Dialog.Title className="text-lg font-bold">Create POs for missing stock</Dialog.Title>
+          <Dialog.Description className="text-sm text-muted-foreground">Choose a supplier for each item. Each item gets a separate PO containing its missing colors and sizes at saved supplier prices.</Dialog.Description>
+        <div className="max-h-[45vh] space-y-4 overflow-y-auto">
+          {loadingItems && <p className="text-sm">Loading missing items…</p>}
+          {items.map(([name, lines], index) => <div key={name} className="space-y-2">
+            <label htmlFor={`shortage-supplier-${orderId}-${index}`} className="text-sm font-medium">{lines[0].name} · {lines.reduce((sum, line) => sum + (line.toPurchase ?? line.missing), 0)} units</label>
+            <p className="text-xs text-muted-foreground">{lines.map((line) => `${[line.color, line.size].filter(Boolean).join(" / ")}: ${line.toPurchase ?? line.missing}`).join(" · ")}</p>
+            <Select disabled={pending} value={supplierIds[name] ?? ""} onValueChange={(value) => setSupplierIds((current) => ({ ...current, [name]: value }))}>
+              <SelectTrigger id={`shortage-supplier-${orderId}-${index}`}><SelectValue placeholder={isLoading ? "Loading suppliers…" : "Select supplier"} /></SelectTrigger>
+              <SelectContent>{suppliers.map((supplier) => <SelectItem key={supplier.publicId} value={supplier.publicId}>{supplier.name}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>)}
+          {!loadingItems && detail && !items.length && <p className="text-sm">All shortages are already covered by stock or active POs.</p>}
+        </div>
         {!isLoading && !suppliers.length && !suppliersError && <p className="text-sm text-muted-foreground">Add a supplier in Procurement first.</p>}
-        {(error || suppliersError) && <p role="alert" className="text-sm text-destructive">{error || String(suppliersError)}</p>}
+        {(error || suppliersError || itemsError) && <p role="alert" className="text-sm text-destructive">{error || String(suppliersError || itemsError)}</p>}
         <div className="flex justify-end gap-2">
           <Button variant="outline" disabled={pending} onClick={() => setOpen(false)}>Cancel</Button>
-          <Button disabled={!supplierId || pending || !!suppliersError} onClick={create}>{pending ? "Creating…" : "Create PO"}</Button>
+          <Button disabled={pending || isLoading || loadingItems || !!suppliersError || !!itemsError || !items.length || items.some(([name]) => !supplierIds[name])} onClick={create}>{pending ? "Creating…" : `Create ${items.length} PO${items.length === 1 ? "" : "s"}`}</Button>
         </div>
       </Dialog.Content>
       </Dialog.Portal>
@@ -75,7 +96,7 @@ export function OrderFulfillmentPanel({ data, orderId, onSaved }: { data: OrderF
     <div className="mb-3 flex items-center justify-between"><h3 className="font-bold">Inventory allocation</h3>
       {data.canCreatePO && <CreateShortagePOButton orderId={orderId} onSaved={onSaved} />}
     </div>
-    <p className="mb-4 text-sm text-muted-foreground">Available quantities stay on hold for this order. The full order ships after final QC and inventory receipt of the missing items.</p>
+    <p className="mb-4 text-sm text-muted-foreground">Available quantities stay on hold for this order. Use the batch workspace to dispatch approved, received quantities in separate shipments.</p>
     <div className="overflow-x-auto"><ResponsiveTable className="w-full text-left text-sm"><thead><tr>
       <th>Item</th><th>Color / size</th><th className="text-right">Ordered</th><th className="text-right">Reserved</th><th className="text-right">Missing</th>
     </tr></thead><tbody>{data.lines.map((line) => <tr key={line.lineId} className="border-t">

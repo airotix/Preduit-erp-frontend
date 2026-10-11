@@ -1,4 +1,5 @@
 "use client";
+import { BatchWorkList } from "./production/batch-workspace";
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
@@ -197,7 +198,16 @@ export function ListScreen({
       await delay(400);
       return values;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (module === "inventory" && tab === "stock") {
+        setActionResult(`Received ${(result as { received?: number })?.received ?? 0} units into inventory.`);
+      }
+      if (module === "inventory" && tab === "transfers") {
+        setActionResult("Stock transferred successfully.");
+        for (const key of [["screen", "inventory"], ["screen", "catalog"], ["inventory"], ["catalog"], ["detail"]]) {
+          queryClient.invalidateQueries({ queryKey: key });
+        }
+      }
       queryClient.invalidateQueries({ queryKey: ["screen", module, tab] });
       if (module === "finance" || isPOCreate || isReorderPOCreate) {
         queryClient.invalidateQueries({ queryKey: ["finance"] });
@@ -273,6 +283,11 @@ export function ListScreen({
       return null;
     },
     onSuccess: (_, variables) => {
+      if (module === "procurement" && tab === "pos") {
+        for (const key of [["screen", "production"], ["production"], ["screen", "quality"], ["screen", "sales"], ["detail"]]) {
+          queryClient.invalidateQueries({ queryKey: key });
+        }
+      }
       if (module === "finance") queryClient.invalidateQueries({ queryKey: ["finance"] });
       if (module === "quality" && tab === "inspections" && variables.status === "Fail") {
         setFailedInspectionId(config.ids?.[variables.index] ?? null);
@@ -338,6 +353,8 @@ export function ListScreen({
   });
   return (
     <>
+      {USE_BACKEND && module === "production" && tab === "porders" && <BatchWorkList kind="production" />}
+      {USE_BACKEND && module === "quality" && tab === "inspections" && <BatchWorkList kind="quality" />}
       {failedInspectionId && <QCReopenDialog inspectionId={failedInspectionId} open onOpenChange={(value) => { if (!value) setFailedInspectionId(null); }}
         canReopenProduction={failedInspection?.inspection?.items.some((item) => item.publicId === failedInspectionId && !item.placeholder && item.canReopenProduction)}
         onSaved={() => {
