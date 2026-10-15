@@ -25,6 +25,7 @@ export interface InspectionPlaceholder {
   header: { inspectionNo: string; stage: string; result: string; product: string };
 }
 export interface InspectionItem {
+  batchQuantities?: { assessed: number; sampleSize: number; approved: number; held: number; rejected: number; findings: string; kind: string } | null;
   historical?: boolean;
   publicId: string;
   item: string;
@@ -75,6 +76,8 @@ export interface InspectionItem {
   }[];
 }
 export interface DetailModel {
+  batchManaged?: boolean;
+  batchId?: string | null;
   fulfillment?: import("@/components/screens/sales/order-fulfillment").OrderFulfillment | null;
   variant:
     | "product"
@@ -102,6 +105,10 @@ export interface DetailModel {
     matrix: { name: string; hex: string; cells: { q: number; tone: "red" | "amber" | "neutral" }[] }[];
     specs: MetaItem[];
     prices?: { retail: string; wholesale: string; online: string; supplier: string };
+    variants?: { id: string; sku: string; gtin: string | null;
+      color: string; size: string; currency: string;
+      retailPrice: number | null; wholesalePrice: number | null;
+      onlinePrice: number | null; supplierPrice: number | null }[];
     image?: string | null;
     /** Raw values to prefill the in-place edit form. */
     form?: {
@@ -204,6 +211,12 @@ export interface DetailModel {
   };
   bomOrders?: { a: string; b: string; c: string; tone: Tone; s: string }[];
   shipment?: {
+      ordinaryPacking?: boolean;
+      packedAt?: string | null;
+      packedBy?: string | null;
+    inventoryDispatched?: boolean;
+    dispatchedAt?: string | null;
+    deliveredAt?: string | null;
     tracking: TimelineItem[];
     contents: { name: string; sku: string; qty: number }[];
     form?: { carrier: string; destination: string; eta: string; status: string };

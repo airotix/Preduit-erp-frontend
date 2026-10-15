@@ -18,11 +18,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { avatarColor, initials, tone as toneOf } from "@/lib/tone";
 import { DocumentsPanel } from "@/components/screens/documents-panel";
 import { TechPackPanel } from "@/components/screens/tech-pack-panel";
+import { StockMovementHistory } from "@/components/screens/stock-movement-history";
 import { OrderFulfillmentPanel } from "@/components/screens/sales/order-fulfillment";
+import { ShipmentPacking } from "@/components/screens/sales/shipment-packing";
 import { CatalogPOButton } from "@/components/screens/catalog-po-button";
+import { CatalogArticleActions } from "@/components/screens/catalog-article-actions";
 import { QCReopenDialog } from "@/components/screens/qc-reopen-dialog";
 import { InspectionDefectDialog, type NewInspectionDefect } from "@/components/screens/inspection-defect-dialog";
-import { useMatrixLocationSave } from "@/components/screens/matrix-location-dialog";
+import { StockActionDialog } from "@/components/screens/stock-action-dialog";
 import { colorFromName, NEUTRAL_COLOR, type SavedColor } from "@/lib/color-name";
 import { ImageField } from "@/components/screens/auto-form";
 import { apiGet, apiPut, apiPost, apiDelete, apiUpload, apiUrl, USE_BACKEND } from "@/lib/api-client";
@@ -507,8 +510,7 @@ function ProductImageEditor({
   );
 }
 
-/** In-place product details editor (title, status, category, season, prices,
- *  image with remove). Self-contained — no Sheet/Dialog context needed. */
+/** In-place product details and variant editor. Prices have their own table. */
 const _PF_INPUT = "w-full h-10 rounded-lg border border-border/70 bg-white px-3 text-[13px] text-foreground outline-none focus:border-primary";
 const _PF_LBL = "mb-1 block text-[12px] font-semibold text-muted-foreground";
 // Fallback shown only until the live category list (GET /catalog/categories)
@@ -531,7 +533,6 @@ function ProductDetailsEditor({
   const form = product.form;
   const sizes = product.sizes;
   const [matrixSizes, setMatrixSizes] = React.useState(sizes);
-  const { saveWithLocation, locationDialog } = useMatrixLocationSave();
   const [originalSizes, setOriginalSizes] = React.useState<(string | null)[]>(sizes);
   const stockShape: NonNullable<DetailModel["stock"]> = {
     sizes,
@@ -548,10 +549,6 @@ function ProductDetailsEditor({
     category: form?.category ?? "",
     season: form?.season ?? "",
     status: form?.status ?? "Active",
-    retailPrice: form?.retailPrice ?? ("" as number | ""),
-    wholesalePrice: form?.wholesalePrice ?? ("" as number | ""),
-    onlinePrice: form?.onlinePrice ?? ("" as number | ""),
-    supplierPrice: form?.supplierPrice ?? ("" as number | ""),
     imageUrl: form?.imageUrl ?? "",
     composition: form?.composition ?? "",
     fabric: form?.fabric ?? "",
@@ -585,7 +582,6 @@ function ProductDetailsEditor({
   const opts = (list: string[], cur: string) =>
     (cur && !list.includes(cur) ? [cur, ...list] : list);
 
-  const num = (v: number | "") => (v === "" ? null : Number(v));
   const save = async () => {
     // Validate the colour matrix (unique colour names) before saving.
     const named = rows.filter((r) => r.name.trim());
@@ -602,38 +598,21 @@ function ProductDetailsEditor({
     setSaving(true);
     setError(null);
     try {
-      await saveWithLocation(async (location) => {
-      // 1) Product details + specs + image.
-      await apiPut(`/catalog/products/${recordId}`, {
-        title: f.title.trim(),
-        category: f.category || null,
-        season: f.season || null,
-        status: f.status,
-        retailPrice: num(f.retailPrice),
-        wholesalePrice: num(f.wholesalePrice),
-        onlinePrice: num(f.onlinePrice),
-        supplierPrice: num(f.supplierPrice),
-        imageUrl: f.imageUrl,
-        composition: f.composition.trim() || null,
-        fabric: f.fabric.trim() || null,
-        gauge: f.gauge.trim() || null,
-        care: f.care.trim() || null,
-        origin: f.origin.trim() || null,
-        hsCode: f.hsCode.trim() || null,
-        weight: f.weight.trim() || null,
-      });
-      // 2) Colour × size matrix.
-      await apiPut(`/catalog/products/${recordId}/matrix`, {
-        location,
+      const details: Record<string, string | null> = {};
+      for (const key of ["title", "category", "season", "status", "imageUrl",
+        "composition", "fabric", "gauge", "care", "origin", "hsCode", "weight"] as const) {
+        const value = f[key].trim();
+        if (value !== (form?.[key] ?? "")) details[key] = value || (key === "imageUrl" ? "" : null);
+      }
+      await apiPut(`/catalog/products/${recordId}/editor`, { details, matrix: {
         colors: named.map((r) => ({
           color: r.name.trim(),
           originalColor: r.originalColor,
           hex: r.hex,
-          cells: matrixSizes.map((s, i) => ({ size: s.trim(), originalSize: originalSizes[i], qty: Number(r.cells[i]) || 0 })),
+          cells: matrixSizes.map((s, i) => ({ size: s.trim(), originalSize: originalSizes[i] })),
         })),
-      });
+      } });
       onSaved();
-      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save changes. Please try again.");
       setSaving(false);
@@ -644,8 +623,7 @@ function ProductDetailsEditor({
 
   return (
     <div className="space-y-4">
-      {locationDialog}
-      <Panel title="Edit product" sub="Update details, pricing, specifications & image">
+      <Panel title="Edit product" sub="Update article details, specifications and colour/size variants">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <label className={_PF_LBL}>Title</label>
@@ -670,27 +648,9 @@ function ProductDetailsEditor({
           <select className={_PF_INPUT} value={f.status} onChange={(e) => set("status", e.target.value)}>
             {opts(_PF_STATUSES, f.status).map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
+          <p className="mt-1 text-[11px] text-muted-foreground">Active requires an active category, season, saved colour and size variant, SKU, and positive channel prices. Draft and Discontinued articles cannot be added to new orders.</p>
         </div>
-        <div>
-          <label className={_PF_LBL}>Retail price (€)</label>
-          <input type="number" min={0} step="any" placeholder="0" className={_PF_INPUT} value={zeroToBlank(f.retailPrice)}
-                 onChange={(e) => set("retailPrice", e.target.value === "" ? "" : Number(e.target.value))} />
-        </div>
-        <div>
-          <label className={_PF_LBL}>Wholesale price (€)</label>
-          <input type="number" min={0} step="any" placeholder="0" className={_PF_INPUT} value={zeroToBlank(f.wholesalePrice)}
-                 onChange={(e) => set("wholesalePrice", e.target.value === "" ? "" : Number(e.target.value))} />
-        </div>
-        <div>
-          <label className={_PF_LBL}>Online price (€)</label>
-          <input type="number" min={0} step="any" placeholder="0" className={_PF_INPUT} value={zeroToBlank(f.onlinePrice)}
-                 onChange={(e) => set("onlinePrice", e.target.value === "" ? "" : Number(e.target.value))} />
-        </div>
-        <div>
-          <label className={_PF_LBL}>Supplier price (€)</label>
-          <input type="number" min={0} step="any" placeholder="0" className={_PF_INPUT} value={zeroToBlank(f.supplierPrice)}
-                 onChange={(e) => set("supplierPrice", e.target.value === "" ? "" : Number(e.target.value))} />
-        </div>
+        <p className="sm:col-span-2 text-xs text-muted-foreground">Set prices for each colour and size in the Pricing tab after saving variants.</p>
         <div className="sm:col-span-2">
           <label className={_PF_LBL}>Product image</label>
           <ImageField value={f.imageUrl} onChange={(v) => set("imageUrl", v)} />
@@ -736,7 +696,9 @@ function ProductDetailsEditor({
         endpoint={`/catalog/products/${recordId}/matrix`}
         hideActions
         title="Colours & sizes"
-        sub="Update quantities by size; changes sync with Inventory"
+        sub="Define colours and sizes here. Click a quantity to record an Inventory receipt or count correction."
+        productTitle={form?.title ?? ""}
+        onSaved={onSaved}
         onRowsChange={onMatrixChange}
       />
 
@@ -770,6 +732,128 @@ function Specs({ specs }: { specs: MetaItem[] }) {
       ))}
     </div>
   );
+}
+
+type PriceVariant = NonNullable<NonNullable<DetailModel["product"]>["variants"]>[number];
+type PriceField = "retailPrice" | "wholesalePrice" | "onlinePrice" | "supplierPrice";
+const PRICE_FIELDS: { key: PriceField; label: string }[] = [
+  { key: "retailPrice", label: "Retail" },
+  { key: "wholesalePrice", label: "Wholesale" },
+  { key: "onlinePrice", label: "Online" },
+  { key: "supplierPrice", label: "Supplier" },
+];
+
+function VariantPricingEditor({ variants, status, recordId, canWrite, onSaved }: {
+  variants: PriceVariant[]; status: string; recordId: string;
+  canWrite: boolean; onSaved: () => void;
+}) {
+  const toRows = React.useCallback((items: PriceVariant[]) => items.map((variant) => ({
+    id: variant.id,
+    retailPrice: variant.retailPrice == null ? "" : String(variant.retailPrice),
+    wholesalePrice: variant.wholesalePrice == null ? "" : String(variant.wholesalePrice),
+    onlinePrice: variant.onlinePrice == null ? "" : String(variant.onlinePrice),
+    supplierPrice: variant.supplierPrice == null ? "" : String(variant.supplierPrice),
+  })), []);
+  const [rows, setRows] = React.useState(() => toRows(variants));
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  React.useEffect(() => { setRows(toRows(variants)); }, [variants, toRows]);
+  const original = toRows(variants);
+  const changed = rows.filter((row) => {
+    const previous = original.find((entry) => entry.id === row.id);
+    return previous && PRICE_FIELDS.some(({ key }) => row[key] !== previous[key]);
+  });
+  const save = async () => {
+    for (const row of changed) {
+      for (const { key, label } of PRICE_FIELDS) {
+        const value = row[key].trim();
+        if ((value && !/^\d+(\.\d{1,4})?$/.test(value)) || (status === "Active" && (!value || Number(value) <= 0))) {
+          setError(`${label} price must be ${status === "Active" ? "positive" : "a non-negative amount with up to four decimals"} for every edited variant.`);
+          return;
+        }
+      }
+    }
+    setSaving(true); setError(null);
+    try {
+      await apiPut(`/catalog/products/${recordId}/variant-prices`, { variants: changed.map((row) => ({
+        variantId: row.id,
+        ...Object.fromEntries(PRICE_FIELDS.map(({ key }) => [key, row[key].trim() || null])),
+      })) });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save variant prices.");
+    } finally { setSaving(false); }
+  };
+  return <Panel title="Prices by colour and size" sub="Each row is independent. Saving a product detail never copies the lowest price across variants.">
+    {variants.length === 0 ? <p className="text-sm text-muted-foreground">Save colour and size variants before entering prices.</p> : <>
+      <div className="overflow-x-auto"><ResponsiveTable className="w-full min-w-[720px] text-[13px]">
+        <thead><tr className="text-left text-[11px] uppercase text-muted-foreground">
+          <th className="pb-2">Variant</th><th>SKU</th>
+          {PRICE_FIELDS.map(({ key, label }) => <th key={key}>{label}</th>)}
+        </tr></thead>
+        <tbody>{variants.map((variant, index) => <tr key={variant.id} className="border-t border-border/50">
+          <td className="py-2 font-semibold">{variant.color} / {variant.size}</td>
+          <td className="tabular">{variant.sku}</td>
+          {PRICE_FIELDS.map(({ key, label }) => <td key={key} className="py-1.5 pr-2">
+            <input type="number" min="0" step="0.0001" aria-label={`${variant.color} ${variant.size} ${label} price`}
+              value={rows[index]?.[key] ?? ""} disabled={!canWrite || saving}
+              onChange={(event) => setRows((current) => current.map((row, i) => i === index
+                ? { ...row, [key]: event.target.value } : row))}
+              className="w-24 rounded-md border border-border/70 px-2 py-1.5 tabular outline-none focus:border-primary" />
+          </td>)}</tr>)}</tbody>
+      </ResponsiveTable></div>
+      {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
+      {canWrite && <div className="mt-4 flex justify-end">
+        <Button variant="navy" size="sm" onClick={save} disabled={saving || changed.length === 0}>
+          {saving ? "Saving…" : "Save variant prices"}
+        </Button>
+      </div>}
+    </>}
+  </Panel>;
+}
+
+function VariantGtinEditor({ variants, recordId, canWrite, onSaved }: {
+  variants: PriceVariant[]; recordId: string; canWrite: boolean; onSaved: () => void;
+}) {
+  const [values, setValues] = React.useState<Record<string, string>>(() =>
+    Object.fromEntries(variants.map((variant) => [variant.id, variant.gtin ?? ""])));
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    setValues(Object.fromEntries(variants.map((variant) => [variant.id, variant.gtin ?? ""])));
+  }, [variants]);
+  const changed = variants.filter((variant) => (values[variant.id] ?? "").trim() !== (variant.gtin ?? ""));
+  const save = async () => {
+    const invalid = changed.find((variant) => {
+      const value = (values[variant.id] ?? "").trim();
+      return value && (!/^\d+$/.test(value) || ![8, 12, 13, 14].includes(value.length));
+    });
+    if (invalid) { setError("Enter a GTIN with 8, 12, 13 or 14 digits, or leave it blank."); return; }
+    setSaving(true); setError(null);
+    try {
+      await apiPut(`/catalog/products/${recordId}/variant-gtins`, { variants: changed.map((variant) => ({
+        variantId: variant.id, gtin: (values[variant.id] ?? "").trim() || null,
+      })) });
+      onSaved();
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not save GTINs."); }
+    finally { setSaving(false); }
+  };
+  return <Panel title="Variant GTINs" sub="Optional trade barcodes. Each colour and size needs its own unique GTIN when used for retail scanning.">
+    {variants.length === 0 ? <p className="text-sm text-muted-foreground">Save colour and size variants first.</p> : <>
+      <div className="space-y-2">{variants.map((variant) => <div key={variant.id}
+        className="flex flex-wrap items-center gap-3 border-b border-border/50 py-2 text-sm">
+        <span className="w-44 font-semibold">{variant.color} / {variant.size}</span>
+        <span className="w-32 text-muted-foreground">{variant.sku}</span>
+        <input type="text" inputMode="numeric" maxLength={14} aria-label={`${variant.color} ${variant.size} GTIN`}
+          value={values[variant.id] ?? ""} disabled={!canWrite || saving}
+          onChange={(event) => setValues((current) => ({ ...current, [variant.id]: event.target.value }))}
+          placeholder="Optional GTIN" className="w-44 rounded-md border border-border/70 px-2 py-1.5 tabular outline-none focus:border-primary" />
+      </div>)}</div>
+      {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
+      {canWrite && <div className="mt-4 flex justify-end"><Button variant="navy" size="sm"
+        onClick={save} disabled={saving || changed.length === 0}>{saving ? "Saving…" : "Save GTINs"}</Button></div>}
+    </>}
+  </Panel>;
 }
 
 /* ---------- stock article: color × size matrix with per-color totals ---------- */
@@ -863,6 +947,10 @@ function StockMatrix({ stock }: { stock: NonNullable<DetailModel["stock"]> }) {
   );
 }
 
+function StockHistory({ recordId }: { recordId: string }) {
+  return <StockMovementHistory productId={recordId} />;
+}
+
 /* ---------- stock article: editable color × size grid ---------- */
 
 interface EditRow {
@@ -882,6 +970,7 @@ function StockMatrixEditor({
   onRowsChange,
   title,
   sub,
+  productTitle,
 }: {
   stock: NonNullable<DetailModel["stock"]>;
   recordId: string;
@@ -895,9 +984,9 @@ function StockMatrixEditor({
   onRowsChange?: (rows: EditRow[], sizes: string[], originals: (string | null)[]) => void;
   title?: string;
   sub?: string;
+  productTitle?: string;
 }) {
   const sizes = stock.sizes;
-  const { saveWithLocation, locationDialog } = useMatrixLocationSave();
   const { data: savedColors = [] } = useQuery<SavedColor[]>({
     queryKey: ["catalog", "color-options"],
     queryFn: () => apiGet<SavedColor[]>("/catalog/colors"),
@@ -921,14 +1010,6 @@ function StockMatrixEditor({
 
   const patch = (ri: number, next: Partial<EditRow>) =>
     setRows((rs) => rs.map((r, i) => (i === ri ? { ...r, ...next } : r)));
-  const setCell = (ri: number, ci: number, val: number) =>
-    setRows((rs) =>
-      rs.map((r, i) =>
-        i === ri
-          ? { ...r, cells: r.cells.map((q, j) => (j === ci ? val : q)) }
-          : r
-      )
-    );
   const addColor = () =>
     setRows((rs) => [...rs, { name: "", hex: "#CBD1DC", cells: sizes.map(() => 0) }]);
   const removeRow = (ri: number) => setRows((rs) => rs.filter((_, i) => i !== ri));
@@ -947,18 +1028,15 @@ function StockMatrixEditor({
     setSaving(true);
     setError(null);
     try {
-      await saveWithLocation(async (location) => {
       await apiPut(endpoint ?? `/inventory/stock/${recordId}/matrix`, {
-        location,
         colors: named.map((r) => ({
           color: r.name.trim(),
           originalColor: r.originalColor,
           hex: r.hex,
-          cells: sizes.map((s, i) => ({ size: s.trim(), originalSize: originalSizes[i], qty: Number(r.cells[i]) || 0 })),
+          cells: sizes.map((s, i) => ({ size: s.trim(), originalSize: originalSizes[i] })),
         })),
       });
       onSaved?.();
-      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save changes. Please try again.");
       setSaving(false);
@@ -968,8 +1046,7 @@ function StockMatrixEditor({
   };
 
   return (
-    <Panel title={title ?? "Edit stock by color & size"} sub={sub ?? "Update quantities by size; changes sync with Catalogue"}>
-      {locationDialog}
+    <Panel title={title ?? "Edit colors & sizes"} sub={sub ?? "Define variants here. Click a quantity to record an Inventory movement."}>
       <div className="overflow-x-auto">
         <ResponsiveTable className="w-full text-[13px]">
           <thead>
@@ -1016,16 +1093,12 @@ function StockMatrixEditor({
                 </td>
                 {r.cells.map((q, ci) => (
                   <td key={ci} className="px-1 py-1.5">
-                    <input
-                      type="number"
-                      min={0}
-                      placeholder="0"
-                      value={zeroToBlank(q)}
-                      onChange={(e) =>
-                        setCell(ri, ci, Math.max(0, Math.floor(Number(e.target.value) || 0)))
-                      }
-                      className="w-full min-w-[52px] rounded-lg border border-border/60 py-1.5 text-center font-bold tabular outline-none focus:border-primary"
-                    />
+                    {r.originalColor && originalSizes[ci] ?
+                      <StockActionDialog productId={recordId} productTitle={productTitle ?? ""}
+                        color={r.originalColor} size={originalSizes[ci]!} onSaved={() => onSaved?.()}>
+                        {q}
+                      </StockActionDialog> :
+                      <span title="Save this variant before recording stock" className="block min-w-[52px] rounded-lg border border-border/60 py-1.5 text-center font-bold tabular">{q}</span>}
                   </td>
                 ))}
                 <td className="py-1.5 pl-1 text-right">
@@ -1438,7 +1511,7 @@ function InspectionWorkspace({
           </div>)}
         </div>
         {data.shipmentRef && <p className="mt-3 text-sm text-green-700">Shipment created: {data.shipmentRef}</p>}
-        {h.result === "Pass" && !data.shipmentRef && <p className="mt-3 text-sm text-muted-foreground">Inspection passed. Inventory receipt waits for every production item to finish TNA and pass final QC; fully stocked sales orders then go to Shipments.</p>}
+        {h.result === "Pass" && !data.shipmentRef && <p className="mt-3 text-sm text-muted-foreground">Inspection passed. Once all production items finish TNA and pass final QC, confirm the actual quantities and location in Inventory → Warehouse receiving.</p>}
         {data.historical && <p className="mt-3 text-sm text-muted-foreground">You are viewing a previous inspection. Open the latest article tab to continue work.</p>}
       </Panel>
 
@@ -1758,11 +1831,12 @@ function InspectionShipmentBar({
     return <div className="mt-4 rounded-xl border bg-muted/30 p-5">
       <h3 className="font-bold">Stock for sales order</h3>
       <p className="mt-1 text-sm text-muted-foreground">{data.replenishmentPO.received
-        ? "Stock was added to inventory automatically. Fully covered sales orders are sent to Shipments."
-        : data.allPassed ? "Final QC passed. Inventory updates automatically when every production item is complete and cleared."
+        ? "Warehouse receipt has been recorded. Fully covered sales orders are ready for dispatch in Shipments."
+        : data.allPassed ? "Final QC passed. Confirm the actual quantities and location in Inventory → Warehouse receiving."
         : `Waiting for final QC (${data.passedCount}/${data.total} items cleared). Available order stock stays reserved.`}</p>
       <div className="mt-3 flex gap-4 text-sm font-semibold text-primary">
         <Link href={`/procurement/pos/${data.replenishmentPO.publicId}`}>Open {data.replenishmentPO.poNo}</Link>
+        <Link href="/inventory/stock">Open warehouse receiving</Link>
       </div>
     </div>;
   }
@@ -1891,6 +1965,19 @@ function tabContentFor(
             </div>
           </Panel>
         );
+      } else if (d.batchManaged && it.batchQuantities) {
+        const quantities = it.batchQuantities;
+        map[it.tabLabel] = <Panel key={it.publicId} title={`${it.item} · ${it.header.inspectionNo}`}
+          sub={`${quantities.kind} QC recorded for batch ${it.header.batchLot}.`}>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            {([ ["Assessed", quantities.assessed], ["Sample size", quantities.sampleSize],
+              ["Approved", quantities.approved], ["Hold / rework", quantities.held],
+              ["Rejected / scrap", quantities.rejected] ] as const).map(([label, value]) =>
+              <div key={label} className="rounded-lg bg-muted/40 p-3"><div className="text-xs text-muted-foreground">{label}</div><div className="text-lg font-bold">{value}</div></div>)}
+          </div>
+          {quantities.findings && <p className="mt-4 text-sm"><strong>Findings:</strong> {quantities.findings}</p>}
+          <p className="mt-3 text-xs text-muted-foreground">This inspection is recorded. Continue quantity work from the batch QC page.</p>
+        </Panel>;
       } else {
         map[it.tabLabel] = (
           <InspectionWorkspace
@@ -1984,6 +2071,7 @@ function tabContentFor(
         </Panel>
       ),
       Pricing: (
+        <div className="space-y-4">
         <Panel title="Pricing & trade" sub="Retail, wholesale & online prices and trade details">
           <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
             {[
@@ -2005,6 +2093,12 @@ function tabContentFor(
             ))}
           </div>
         </Panel>
+        {ctx.recordId && USE_BACKEND && <VariantPricingEditor variants={p.variants ?? []}
+          status={d.statusLabel} recordId={ctx.recordId} canWrite={!!ctx.canWrite}
+          onSaved={() => ctx.onSaved?.()} />}
+        {ctx.recordId && USE_BACKEND && <VariantGtinEditor variants={p.variants ?? []}
+          recordId={ctx.recordId} canWrite={!!ctx.canWrite} onSaved={() => ctx.onSaved?.()} />}
+        </div>
       ),
       Activity: (
         <Panel title="Activity">
@@ -2174,14 +2268,14 @@ function tabContentFor(
   if (d.variant === "receipt" && d.receipt) {
     const r = d.receipt;
     const node = (
-      <Panel title="Received lines">
+      <Panel title="Received lines" sub="Quantities recorded at the time of this physical receipt">
         <ResponsiveTable className="w-full text-[13px]">
           <thead>
             <tr className="text-[11px] uppercase text-muted-foreground">
-              <th className="pb-2 text-left font-bold">Component</th>
-              <th className="pb-2 text-right font-bold">Ordered</th>
-              <th className="pb-2 text-right font-bold">Received</th>
-              <th className="pb-2 text-right font-bold">Open</th>
+              <th className="pb-2 text-left font-bold">Item</th>
+              <th className="pb-2 text-right font-bold">Expected before receipt</th>
+              <th className="pb-2 text-right font-bold">Arrived</th>
+              <th className="pb-2 text-right font-bold">Remaining then</th>
               <th className="pb-2 text-right font-bold">Status</th>
             </tr>
           </thead>
@@ -2440,6 +2534,9 @@ function tabContentFor(
   if (d.variant === "shipment" && d.shipment) {
     const trackingPanel = (
       <Panel title="Tracking" sub="Delivery progress">
+        <p className="mb-4 text-sm text-muted-foreground">{d.shipment.inventoryDispatched
+          ? "Warehouse stock has been removed at dispatch. Delivery confirms customer receipt and does not remove stock again."
+          : "Choose Dispatched when these goods physically leave the warehouse. This removes their reserved stock; tracking and delivery follow afterward."}</p>
         <Timeline items={d.shipment.tracking} />
       </Panel>
     );
@@ -2517,7 +2614,8 @@ function tabContentFor(
       </Panel>
     );
     const map: Record<string, React.ReactNode> = {};
-    d.tabs.forEach((t) => (map[t] = /location/i.test(t) ? byLocation : byColor));
+    d.tabs.forEach((t) => (map[t] = /history/i.test(t) && ctx.recordId
+      ? <StockHistory recordId={ctx.recordId} /> : /location/i.test(t) ? byLocation : byColor));
     return map;
   }
 
@@ -2561,8 +2659,7 @@ export function RecordDetailPage({
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  // Re-fetch the record's data on the client; router.refresh() alone can't
-  // re-run this client page's useEffect fetch.
+  // Refresh the client query as well as any server-rendered shell data.
   const afterSave = () => {
     setEditing(false);
     for (const key of [["screen", "catalog"], ["screen", "inventory"], ["catalog"], ["inventory"], ["screen", "sales"], ["sales"], ["screen", "shipments"]]) {
@@ -2576,6 +2673,14 @@ export function RecordDetailPage({
     reload?.(); router.refresh();
   };
   const [editing, setEditing] = React.useState(false);
+  React.useEffect(() => {
+    const url = new URL(window.location.href);
+    if (module === "catalog" && url.searchParams.get("edit") === "1") {
+      setEditing(true);
+      url.searchParams.delete("edit");
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    }
+  }, [module]);
   const d = model ?? buildDetail(type, row, columns);
   // View-only roles (core/roles.py <module>.read without .write) see every
   // edit affordance on this page disabled with a tooltip, not missing.
@@ -2600,6 +2705,7 @@ export function RecordDetailPage({
       <StockMatrixEditor
         stock={d.stock!}
         recordId={recordId!}
+        productTitle={d.title}
         onCancel={() => setEditing(false)}
         onSaved={afterSave}
       />
@@ -2697,7 +2803,17 @@ export function RecordDetailPage({
                 </Button>
                 {/* Only show Edit where the drill-down actually supports editing —
                     no dead-stub buttons on read-only detail variants. */}
-                {editableVariant && (
+                {canEditProduct && recordId ? (
+                  <CatalogArticleActions id={recordId} canWrite={canWrite}
+                    onEdit={() => setEditing(true)}
+                    onResolved={afterSave}
+                    onDeleted={() => {
+                      for (const queryKey of [["screen", "catalog"], ["screen", "inventory"], ["catalog"], ["inventory"], ["screen", "production"], ["screen", "quality"]]) {
+                        queryClient.invalidateQueries({ queryKey });
+                      }
+                      router.push(backHref);
+                    }} />
+                ) : editableVariant && (
                   <Button
                     variant="navy"
                     size="sm"
@@ -2734,12 +2850,14 @@ export function RecordDetailPage({
       {recordId && USE_BACKEND && module === "sales" && d.variant === "order" && <BatchWorkspace orderId={recordId} kind="sales" />}
       {recordId && USE_BACKEND && module === "procurement" && d.variant === "order" && <BatchWorkspace orderId={recordId} kind="procurement" />}
       {recordId && USE_BACKEND && d.variant === "shipment" && <BatchShipmentPanel shipmentId={recordId} />}
+      {recordId && USE_BACKEND && d.variant === "shipment" && d.shipment?.ordinaryPacking && <ShipmentPacking shipmentId={recordId} onSaved={() => { reload?.(); router.refresh(); }} />}
+      {d.variant === "inspection" && d.batchManaged && d.batchId && <Link className="mt-4 inline-block text-sm font-semibold text-primary underline" href={`/quality/batches/${d.batchId}`}>Back to batch QC</Link>}
 
       {/* Order-level shipment (inspection group): locked until all items pass */}
       {d.variant === "order" && d.fulfillment && recordId && (
         <OrderFulfillmentPanel data={d.fulfillment} orderId={recordId} onSaved={() => { reload?.(); router.refresh(); }} />
       )}
-      {d.variant === "inspection" && d.inspection && (
+      {d.variant === "inspection" && d.inspection && !d.batchManaged && (
         <InspectionShipmentBar
           data={d.inspection.shipment}
           canWrite={canWrite}

@@ -18,37 +18,47 @@ export function ScreenRenderer({
   module: string;
   tab: TabDef;
 }) {
-  const { data, isLoading, isError } = useScreen(module, tab.id);
+  const { data, isLoading, isError, refetch } = useScreen(module, tab.id);
 
   if (isLoading) return <ScreenSkeleton kind={tab.kind} />;
-  if (isError || !data)
+  if (!data)
     return (
       <div className="py-20 text-center text-muted-foreground">
         Could not load this screen.
       </div>
     );
 
-  switch (data.kind) {
-    case "dashboard":
-      return <DashboardView config={data} />;
-    case "board":
-      return <BoardView config={data} module={module} tab={tab.id} />;
-    case "settings":
-      return <SettingsView config={data} module={module} tab={tab.id} />;
-    case "list":
-      return (
-        <ListScreen
-          module={module}
-          tab={tab.id}
-          config={data}
-          columns={getColumns(module, tab.id)}
-          schema={getSchema(module, tab.id)}
-          actionLabel={data.action ?? tab.label}
-        />
-      );
-    default:
-      return null;
-  }
+  const content = (() => {
+    switch (data.kind) {
+      case "dashboard":
+        return <DashboardView config={data} />;
+      case "board":
+        return <BoardView config={data} module={module} tab={tab.id} />;
+      case "settings":
+        return <SettingsView config={data} module={module} tab={tab.id} />;
+      case "list":
+        return (
+          <ListScreen
+            module={module}
+            tab={tab.id}
+            config={data}
+            columns={getColumns(module, tab.id)}
+            schema={getSchema(module, tab.id)}
+            actionLabel={data.action ?? tab.label}
+          />
+        );
+      default:
+        return null;
+    }
+  })();
+
+  return <>
+    {isError && <div role="alert" className="mb-3 rounded-md border px-3 py-2 text-sm">
+      Could not refresh. Showing the last loaded values.
+      <button type="button" className="ml-3 font-semibold underline" onClick={() => refetch()}>Retry</button>
+    </div>}
+    {content}
+  </>;
 }
 
 function ScreenSkeleton({ kind }: { kind: string }) {

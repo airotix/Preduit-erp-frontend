@@ -50,6 +50,8 @@ export const MODULES: ModuleDef[] = [
       { id: "locations", label: "Locations", kind: "list" },
       { id: "transfers", label: "Transfers", kind: "list" },
       { id: "alerts", label: "Reorder Alerts", kind: "list" },
+      { id: "stocktakes", label: "Stocktakes", kind: "list" },
+      { id: "returns", label: "Customer Returns", kind: "list" },
     ],
   },
   {
@@ -103,6 +105,7 @@ export const MODULES: ModuleDef[] = [
     label: "Quality",
     tabs: [
       { id: "inspections", label: "Inspections", kind: "list" },
+      { id: "returns", label: "Return QC", kind: "list" },
       { id: "defects", label: "Defect Types", kind: "list" },
       { id: "qscores", label: "Quality Scores", kind: "dashboard" },
     ],

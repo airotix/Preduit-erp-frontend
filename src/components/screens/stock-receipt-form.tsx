@@ -22,7 +22,7 @@ interface Line {
   sizeQty: Record<string, number>;
 }
 interface ApiLine { name: string; color: string | null; size: string | null; sku: string | null; qty: number }
-interface ReceiptPayload { location: string; lines: ApiLine[] }
+interface ReceiptPayload { location: string; lines: ApiLine[]; reference: string; reason: string; requestId: string }
 
 const newLine = (): Line => ({ name: "", color: "", sku: null, colorOptions: [], sizeQty: {} });
 const lineUnits = (l: Line) => Object.values(l.sizeQty).reduce((s, q) => s + (Number(q) || 0), 0);
@@ -35,6 +35,9 @@ export function StockReceiptForm({
   onSubmit: (payload: ReceiptPayload) => void;
 }) {
   const [location, setLocation] = React.useState("");
+  const [reference, setReference] = React.useState("");
+  const [reason, setReason] = React.useState("");
+  const request = React.useRef<{ key: string; id: string } | null>(null);
   const [locations, setLocations] = React.useState<LocationOption[]>([]);
   const [colors, setColors] = React.useState<ColorOption[]>([]);
   const [sizes, setSizes] = React.useState<string[]>([]);
@@ -71,6 +74,8 @@ export function StockReceiptForm({
 
   const submit = () => {
     if (!location.trim()) return setError("Location is required.");
+    if (reference.trim().length < 3 || reason.trim().length < 3)
+      return setError("Enter a receipt reference and reason of at least three characters each.");
     const apiLines: ApiLine[] = [];
     for (const l of lines) {
       if (!l.name.trim()) return setError("Select a catalog item for every row.");
@@ -85,12 +90,16 @@ export function StockReceiptForm({
     if (apiLines.length === 0)
       return setError("Add at least one item and a quantity for one or more sizes.");
     setError(null);
-    onSubmit({ location: location.trim(), lines: apiLines });
+    const body = { location: location.trim(), lines: apiLines, reference: reference.trim(), reason: reason.trim() };
+    const key = JSON.stringify(body);
+    if (!request.current || request.current.key !== key) request.current = { key, id: crypto.randomUUID() };
+    onSubmit({ ...body, requestId: request.current.id });
   };
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="erp-scroll flex-1 space-y-4 overflow-y-auto px-6 pb-6">
+        <p className="text-sm text-muted-foreground">Use this form for independent stock arrivals. Receive production purchase orders through Warehouse receiving on the Inventory stock screen.</p>
         <div className="space-y-1.5">
           <Label>Location<span className="ml-0.5 text-brand-orange">*</span></Label>
           <Select value={location} onValueChange={setLocation}>
@@ -101,6 +110,17 @@ export function StockReceiptForm({
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Receipt reference<span className="ml-0.5 text-brand-orange">*</span></Label>
+          <input value={reference} onChange={(e) => setReference(e.target.value)} minLength={3} maxLength={80}
+            placeholder="Supplier document or receipt number" className="w-full rounded-lg border border-border/60 px-3 py-2 text-sm" />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Reason / source<span className="ml-0.5 text-brand-orange">*</span></Label>
+          <textarea value={reason} onChange={(e) => setReason(e.target.value)} minLength={3} maxLength={400}
+            placeholder="Where these goods came from" className="w-full rounded-lg border border-border/60 px-3 py-2 text-sm" />
         </div>
 
         <div className="space-y-2">

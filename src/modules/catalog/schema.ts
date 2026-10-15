@@ -3,7 +3,7 @@ import { z } from "zod";
 export const productSchema = z.object({
   title: z.string().min(1, "Required"),
   // User-supplied; uniqueness is enforced by the backend (tenant + SKU).
-  sku: z.string().min(1, "Required").max(64, "Max 64 characters"),
+  sku: z.string().regex(/^SKU-[0-9]{6}$/, "Enter exactly 6 digits for the SKU number"),
   // Not a static enum: the Category picker is populated live from
   // GET /catalog/categories (see list-screen.tsx's `dynamicOptions`), so a
   // category created moments ago is selectable immediately. Validation here

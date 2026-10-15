@@ -13,6 +13,7 @@
  * typed errors for the UI to handle.
  */
 import { getAccessToken, setTokens, clearTokens } from "@/lib/auth-token";
+import { notifyDataChanged } from "@/lib/data-refresh";
 
 const BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "/api/v1";
@@ -87,7 +88,11 @@ async function request<T>(path: string, init: RequestInit, retried = false): Pro
     if (res.status === 429) detail = "Too many requests — please wait and try again.";
     throw new ApiError(res.status, detail);
   }
-  return (res.status === 204 ? undefined : await res.json()) as T;
+  const data = (res.status === 204 ? undefined : await res.json()) as T;
+  if (!["GET", "HEAD"].includes((init.method ?? "GET").toUpperCase())) {
+    notifyDataChanged();
+  }
+  return data;
 }
 
 export function apiGet<T>(path: string): Promise<T> {

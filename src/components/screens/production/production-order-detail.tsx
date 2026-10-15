@@ -1,5 +1,5 @@
 "use client";
-import { BatchWorkspace } from "./batch-workspace";
+import { ProductionSuborders } from "./batch-workspace";
 import { Table as ResponsiveTable } from "@/components/ui/table";
 
 
@@ -20,14 +20,14 @@ import { useModuleAccess } from "@/lib/module-access";
 import { TechPackPanel, type TechPack } from "@/components/screens/tech-pack-panel";
 import type { Tone } from "@/lib/tone";
 
-interface Stage {
+export interface Stage {
   public_id: string; seq: number; name: string; duration_days: number;
   status: string; overdue: boolean; start: string; end: string; worker: string; notes: string;
 }
 interface OrderLine {
   item: string; color: string; size: string; qty: number; price: string; total: string;
 }
-interface LineTL {
+export interface LineTL {
   techPack?: TechPack;
   publicId: string; name: string; qty: number; started: boolean; progress: number;
   statusLabel: string; statusTone: Tone;
@@ -66,7 +66,7 @@ const stepColor = (s: Stage) =>
   (s.status === "Completed" || s.status === "Received") ? "#2E9E6B" : s.status === "In Progress" ? "#2563EB" : "#E3E5EA";
 
 /** One style's production timeline (stepper + stage cards), or a start prompt. */
-function LineTimeline({
+export function LineTimeline({
   line, busy, onAct, onModal, onStart, canWrite, writeReason,
 }: {
   line: LineTL;
@@ -305,7 +305,7 @@ export function ProductionOrderDetail({
             </div>
           </Card>
 
-          <BatchWorkspace orderId={publicId} />
+          <ProductionSuborders orderId={publicId} />
 
           <Tabs defaultValue="summary" className="mt-4">
             <TabsList className="erp-scroll mb-4 w-full justify-start gap-0 overflow-x-auto border-b border-border/70">

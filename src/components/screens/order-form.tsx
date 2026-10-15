@@ -95,6 +95,7 @@ const emptyNewCustomer = (): NewCustomerFields => ({
 interface OrderPayload {
   customer: string;
   channel: string;
+  allowPartialShipments: boolean;
   lines: OrderApiLine[];
   newCustomer?: NewCustomerFields & { name: string; type: string };
 }
@@ -271,6 +272,7 @@ export function OrderForm({
   // inline "new customer" sub-form to capture their Reach/Account/Finance details.
   const isNewCustomer = customer.trim().length > 0 && !customerMatched && !checkingCustomer;
   const [channel, setChannel] = React.useState<string>("Wholesale");
+  const [allowPartialShipments, setAllowPartialShipments] = React.useState(false);
   const [sizes, setSizes] = React.useState<string[]>([]);
   const [lines, setLines] = React.useState<OrderLine[]>([newLine()]);
   const [error, setError] = React.useState<string | null>(null);
@@ -356,7 +358,7 @@ export function OrderForm({
       if (bad) return setError(bad);
     }
     setError(null);
-    const payload: OrderPayload = { customer: customer.trim(), channel, lines: apiLines };
+    const payload: OrderPayload = { customer: customer.trim(), channel, allowPartialShipments, lines: apiLines };
     if (isNewCustomer) {
       payload.newCustomer = {
         ...newCustomer,
@@ -370,6 +372,10 @@ export function OrderForm({
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="erp-scroll flex-1 space-y-4 overflow-y-auto px-4 pb-6 sm:px-6">
+        <label className="flex items-start gap-3 rounded-lg border border-border p-3 text-sm">
+          <input type="checkbox" checked={allowPartialShipments} onChange={e => setAllowPartialShipments(e.target.checked)} className="mt-1" />
+          <span><strong>Allow partial shipments</strong><span className="block text-muted-foreground">Unchecked: wait for the complete order. Checked: ship available quantities and keep the remainder on this order.</span></span>
+        </label>
         <div className="space-y-1.5">
           <Label htmlFor="customer">
             Customer<span className="ml-0.5 text-brand-orange">*</span>
@@ -517,9 +523,8 @@ export function OrderForm({
                         step="any"
                         placeholder="0"
                         value={zeroToBlank(l.price)}
-                        onChange={(e) =>
-                          patch(i, { price: Math.max(0, Number(e.target.value) || 0) })
-                        }
+                        readOnly
+                        title="Price is taken from Catalog for the selected sales channel"
                       />
                     </div>
                   </div>

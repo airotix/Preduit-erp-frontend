@@ -12,8 +12,11 @@ import { apiGet, apiPost } from "@/lib/api-client";
 import { useModuleAccess } from "@/lib/module-access";
 
 export type OrderFulfillment = {
+  allowPartialShipments?: boolean;
+  batchManaged?: boolean;
+  shipments?: { publicId: string; shipmentNo: string; status: string; packed: boolean; dispatched: boolean }[];
   canCreatePO: boolean;
-  lines: { lineId: number; productId?: number | null; name: string; color: string | null; size: string | null; ordered: number; reserved: number; missing: number; toPurchase?: number }[];
+  lines: { lineId: number; productId?: number | null; name: string; color: string | null; size: string | null; ordered: number; reserved: number; dispatched?: number; outstanding?: number; missing: number; toPurchase?: number }[];
   purchaseOrders: { publicId: string; poNo: string }[];
   shipment: { publicId: string; shipmentNo: string } | null;
 };
@@ -92,20 +95,35 @@ export function CreateShortagePOButton({ orderId, onSaved }: { orderId: string; 
 }
 
 export function OrderFulfillmentPanel({ data, orderId, onSaved }: { data: OrderFulfillment; orderId: string; onSaved?: () => void }) {
+  const access = useModuleAccess("sales"), client = useQueryClient();
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const pending = React.useRef<{ value: boolean; id: string } | null>(null);
+  const changePolicy = async (value: boolean) => {
+    if (!pending.current || pending.current.value !== value) pending.current = { value, id: crypto.randomUUID() };
+    setBusy(true); setError("");
+    try { await apiPost(`/sales/orders/${orderId}/shipment-policy`, { allowPartialShipments: value, requestId: pending.current.id });
+      pending.current = null; await client.invalidateQueries(); onSaved?.();
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not change shipment policy"); }
+    finally { setBusy(false); }
+  };
   return <div className="rounded-xl border bg-white p-6">
     <div className="mb-3 flex items-center justify-between"><h3 className="font-bold">Inventory allocation</h3>
       {data.canCreatePO && <CreateShortagePOButton orderId={orderId} onSaved={onSaved} />}
     </div>
-    <p className="mb-4 text-sm text-muted-foreground">Available quantities stay on hold for this order. Use the batch workspace to dispatch approved, received quantities in separate shipments.</p>
+    <p className="mb-4 text-sm text-muted-foreground">Available quantities stay on hold for this order. Confirm physical packing in Shipments before dispatch. Outstanding quantities remain on this order until shipped.</p>
+    {!data.batchManaged && <label className="mb-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={!!data.allowPartialShipments}
+      disabled={!access.canWrite || busy || data.shipments?.some(s => s.packed || s.dispatched)} onChange={e => void changePolicy(e.target.checked)} />Allow partial shipments (set before packing)</label>}
+    {error && <p role="alert" className="mb-3 text-sm text-destructive">{error}</p>}
     <div className="overflow-x-auto"><ResponsiveTable className="w-full text-left text-sm"><thead><tr>
-      <th>Item</th><th>Color / size</th><th className="text-right">Ordered</th><th className="text-right">Reserved</th><th className="text-right">Missing</th>
+      <th>Item</th><th>Color / size</th><th className="text-right">Ordered</th><th className="text-right">Reserved</th><th className="text-right">Dispatched</th><th className="text-right">Outstanding</th><th className="text-right">Missing stock</th>
     </tr></thead><tbody>{data.lines.map((line) => <tr key={line.lineId} className="border-t">
       <td className="py-2">{line.name}</td><td>{[line.color, line.size].filter(Boolean).join(" / ") || "—"}</td>
-      <td className="text-right">{line.ordered}</td><td className="text-right">{line.reserved}</td><td className="text-right">{line.missing}</td>
+      <td className="text-right">{line.ordered}</td><td className="text-right">{line.reserved}</td><td className="text-right">{line.dispatched ?? 0}</td><td className="text-right">{line.outstanding ?? line.ordered}</td><td className="text-right">{line.missing}</td>
     </tr>)}</tbody></ResponsiveTable></div>
     <div className="mt-4 flex flex-wrap gap-4">
       {data.purchaseOrders.map((po) => <Link className="text-sm font-semibold text-primary" key={po.publicId} href={`/procurement/pos/${po.publicId}`}>Open {po.poNo}</Link>)}
-      {data.shipment && <Link className="text-sm font-semibold text-primary" href={`/shipments/shipments/${data.shipment.publicId}`}>Open {data.shipment.shipmentNo}</Link>}
+      {(data.shipments ?? (data.shipment ? [data.shipment] : [])).map(s => <Link key={s.publicId} className="text-sm font-semibold text-primary" href={`/shipments/shipments/${s.publicId}`}>Open {s.shipmentNo}{"status" in s ? ` · ${s.status}` : ""}</Link>)}
     </div>
   </div>;
 }

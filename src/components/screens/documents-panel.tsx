@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Upload, FileText, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiGet, apiUpload, apiUrl, USE_BACKEND } from "@/lib/api-client";
@@ -38,24 +39,14 @@ export function DocumentsPanel({
   entityRef: string;
   entityType?: string;
 }) {
-  const [docs, setDocs] = React.useState<Doc[]>([]);
+  const { data: docs = [], refetch: load } = useQuery({
+    queryKey: ["documents", module, entityRef],
+    enabled: USE_BACKEND,
+    queryFn: () => apiGet<Doc[]>(`/documents?module=${encodeURIComponent(module)}&entity_ref=${encodeURIComponent(entityRef)}`),
+  });
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
-
-  const load = React.useCallback(async () => {
-    if (!USE_BACKEND) return;
-    try {
-      const q = `?module=${encodeURIComponent(module)}&entity_ref=${encodeURIComponent(entityRef)}`;
-      setDocs(await apiGet<Doc[]>(`/documents${q}`));
-    } catch {
-      /* leave list as-is */
-    }
-  }, [module, entityRef]);
-
-  React.useEffect(() => {
-    load();
-  }, [load]);
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];

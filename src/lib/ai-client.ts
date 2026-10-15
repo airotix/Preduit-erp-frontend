@@ -12,6 +12,7 @@
  *   NEXT_PUBLIC_USE_AI_BACKEND  "false" to disable the calls (default: on)
  */
 import { getAiFixture } from "@/lib/ai-fixtures";
+import { notifyDataChanged } from "@/lib/data-refresh";
 
 const ERP_BASE =
   process.env.NEXT_PUBLIC_API_URL ?? "/api/v1";
@@ -81,7 +82,9 @@ export async function aiGet<T>(
 export async function aiPost<T>(path: string, body?: unknown): Promise<T> {
   if (AI_DEMO) {
     await _delay(120);
-    return getAiFixture(path) as T;
+    const data = getAiFixture(path) as T;
+    notifyDataChanged();
+    return data;
   }
   const res = await fetch(buildUrl(path), {
     method: "POST",
@@ -91,13 +94,17 @@ export async function aiPost<T>(path: string, body?: unknown): Promise<T> {
   if (!res.ok) {
     throw new Error(`AI API ${res.status} ${res.statusText} for ${path}`);
   }
-  return res.json() as Promise<T>;
+  const data = (res.status === 204 ? undefined : await res.json()) as T;
+  notifyDataChanged();
+  return data;
 }
 
 export async function aiPut<T>(path: string, body?: unknown): Promise<T> {
   if (AI_DEMO) {
     await _delay(120);
-    return getAiFixture(path) as T;
+    const data = getAiFixture(path) as T;
+    notifyDataChanged();
+    return data;
   }
   const res = await fetch(buildUrl(path), {
     method: "PUT",
@@ -107,7 +114,9 @@ export async function aiPut<T>(path: string, body?: unknown): Promise<T> {
   if (!res.ok) {
     throw new Error(`AI API ${res.status} ${res.statusText} for ${path}`);
   }
-  return res.json() as Promise<T>;
+  const data = (res.status === 204 ? undefined : await res.json()) as T;
+  notifyDataChanged();
+  return data;
 }
 
 /** Absolute URL for an engine path (file downloads / export). */

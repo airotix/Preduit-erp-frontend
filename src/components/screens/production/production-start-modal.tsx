@@ -21,6 +21,8 @@ export function ProductionStartModal({
   onOpenChange,
   orderId,
   lineId,
+  batchId,
+  productionLineId,
   stageNames,
   onStarted,
 }: {
@@ -29,6 +31,8 @@ export function ProductionStartModal({
   orderId: string;
   /** When set, only this production line's timeline is started. */
   lineId?: string | null;
+  batchId?: string;
+  productionLineId?: number;
   stageNames?: string[];
   onStarted: () => void;
 }) {
@@ -50,9 +54,10 @@ export function ProductionStartModal({
     setSaving(true);
     setError(null);
     try {
-      await apiPost(`/production/porders/${orderId}/start`, {
+      await apiPost(batchId ? `/batches/${batchId}/styles/start` : `/production/porders/${orderId}/start`, {
         stages: names.map((n) => ({ name: n, days: Math.max(0, Math.floor(Number(days[n]) || 0)) })),
-        ...(lineId ? { line_id: lineId } : {}),
+        ...(batchId ? { productionLineId, requestId: crypto.randomUUID(), reason: "Start production" }
+          : lineId ? { line_id: lineId } : {}),
       });
       onStarted();
     } catch {

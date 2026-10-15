@@ -40,16 +40,19 @@ export function AiSetup() {
   const fjob = useQuery({ queryKey: ["ai", "forecast-job"], queryFn: () => fetchAiForecastJob() });
   const btest = useQuery({ queryKey: ["ai", "backtest-status"], queryFn: () => fetchAiBacktestStatus() });
 
-  // Prefill the form once season config loads.
+  const dirty = React.useRef(false);
+  // Refresh saved settings without replacing an unfinished edit.
   React.useEffect(() => {
-    if (cfg.data && cfg.data.name !== undefined) {
+    if (!dirty.current && cfg.data && cfg.data.name !== undefined) {
       setForm((f) => ({ ...f, ...cfg.data } as SeasonConfig));
     }
   }, [cfg.data]);
 
   const engineLive = !!erp.data?.enabled;
-  const set = <K extends keyof SeasonConfig>(k: K, v: SeasonConfig[K]) =>
+  const set = <K extends keyof SeasonConfig>(k: K, v: SeasonConfig[K]) => {
+    dirty.current = true;
     setForm((f) => ({ ...f, [k]: v }));
+  };
 
   const step1Valid = form.name.trim() !== "" && form.budget > 0 && form.targetMargin > 0 && form.targetMargin <= 100;
 
@@ -58,6 +61,7 @@ export function AiSetup() {
     setSaving(true);
     try {
       await saveAiSeasonConfig(form);
+      dirty.current = false;
       qc.invalidateQueries({ queryKey: ["ai", "season-config"] });
       setDone((d) => { const s = new Set(d); s.add(1); return s; });
       setStep(2);

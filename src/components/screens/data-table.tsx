@@ -164,6 +164,7 @@ interface DataTableProps {
   /** When provided, each row shows a status dropdown (document state transitions). */
   statusOptions?: string[];
   rowStatuses?: (string | null | undefined)[];
+  statusDisabledRows?: boolean[];
   onStatusChange?: (rowIndex: number, status: string) => void;
   total?: number;
 }
@@ -192,6 +193,7 @@ export function DataTable({
   shippableRows,
   statusOptions,
   rowStatuses,
+  statusDisabledRows,
   onStatusChange,
   total,
 }: DataTableProps) {
@@ -384,10 +386,13 @@ export function DataTable({
                     {onStatusChange && statusOptions && (
                       <select
                         value={rowStatuses?.[row.index] ?? ""}
+                        disabled={statusDisabledRows?.[row.index]}
                         onClick={(e) => e.stopPropagation()}
                         onChange={(e) => {
                           e.stopPropagation();
-                          onStatusChange(row.index, e.target.value);
+                          const next = e.target.value;
+                          e.target.value = rowStatuses?.[row.index] ?? "";
+                          onStatusChange(row.index, next);
                         }}
                         className="rounded-md border border-border/70 bg-white px-2 py-1 text-[12px] font-semibold text-[#4A4F61]"
                         title="Change status"

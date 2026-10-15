@@ -38,6 +38,7 @@ type InvoiceType = (typeof INVOICE_TYPES)[number];
 const FIELD = "w-full border-0 border-b border-[#c2c2c2] bg-transparent px-0.5 py-1 text-[12px] font-semibold text-[#111] outline-none focus:border-[#111]";
 const LBL = "block text-[10px] italic leading-tight text-[#666]";
 const BOX = "border border-[#c9c9c9]";
+const OrderInvoiceLock = React.createContext(false);
 
 const wsRowTotal = (r: WsRow) => Object.values(r.qty || {}).reduce((s, q) => s + (Number(q) || 0), 0);
 const fmt = (n: number, ccy: string) => `${ccy} ${(+n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
@@ -238,10 +239,11 @@ function InvoiceList({ onOpen }: { onOpen: (doc: Doc, publicId: string | null) =
 
 // ----- small labelled paper field ------------------------------------------
 function Field({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const locked = React.useContext(OrderInvoiceLock) && (label === "Order ref" || label === "PO no");
   return (
     <div>
       <span className={LBL}>{label}</span>
-      <input className={FIELD} value={value || ""} onChange={(e) => onChange(e.target.value)} />
+      <input className={FIELD} readOnly={locked} value={value || ""} onChange={(e) => onChange(e.target.value)} />
     </div>
   );
 }
@@ -255,10 +257,19 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
   const [error, setError] = React.useState<string | null>(null);
   const [savedId, setSavedId] = React.useState<string | null>(publicId);
   const ccy = doc.currency || "USD";
+  const linked = !!(doc._orderLocked || doc.orderNo || doc.orderRef || doc.poNo);
   const totals = React.useMemo(() => computeTotals(doc), [doc]);
 
   const update = (patch: (d: Doc) => void) =>
-    setDoc((prev: Doc) => { const next = structuredClone(prev); patch(next); return next; });
+    setDoc((prev: Doc) => {
+      const next = structuredClone(prev); patch(next);
+      if (linked) {
+        for (const key of ["orderNo", "orderRef", "poNo", "invoiceType", "layout", "currency", "articles", "lines", "totals"])
+          next[key] = structuredClone(prev[key]);
+        next.buyer = { ...next.buyer, name: prev.buyer?.name };
+      }
+      return next;
+    });
 
   const finalize = (): Doc => {
     const d = structuredClone(doc);
@@ -305,9 +316,10 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
       </div>
 
       {error && <p role="alert" className="text-sm font-semibold text-destructive">{error}</p>}
-      {doc.layout === "wholesale"
+      {linked && <p className="text-sm text-muted-foreground print:hidden">Prices, quantities, currency and totals are fixed from the source order. Catalog changes affect new orders only.</p>}
+      <OrderInvoiceLock.Provider value={linked}>{doc.layout === "wholesale"
         ? <WholesalePaper doc={doc} ccy={ccy} totals={totals} update={update} />
-        : <RetailPaper doc={doc} ccy={ccy} totals={totals} update={update} />}
+        : <RetailPaper doc={doc} ccy={ccy} totals={totals} update={update} />}</OrderInvoiceLock.Provider>
     </div>
   );
 }
@@ -316,6 +328,7 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
 function TotalsBox({ doc, ccy, totals, update, freight }: {
   doc: Doc; ccy: string; totals: ReturnType<typeof computeTotals>; update: (p: (d: Doc) => void) => void; freight: boolean;
 }) {
+  const locked = React.useContext(OrderInvoiceLock);
   return (
     <div className={cn(BOX, "divide-y divide-[#c9c9c9] text-[12px]")}>
       <div className="flex items-center justify-between px-3 py-2">
@@ -323,12 +336,12 @@ function TotalsBox({ doc, ccy, totals, update, freight }: {
       </div>
       <div className="flex items-center justify-between px-3 py-1.5">
         <span>Remise · Discount</span>
-        <input type="number" placeholder="0" className="w-24 border-b border-[#c2c2c2] bg-transparent text-right text-[12px] outline-none focus:border-[#111]"
+        <input type="number" readOnly={locked} placeholder="0" className="w-24 border-b border-[#c2c2c2] bg-transparent text-right text-[12px] outline-none focus:border-[#111]"
                value={zeroToBlank(doc.totals?.discount ?? 0)} onChange={(e) => update((d) => { d.totals.discount = parseFloat(e.target.value) || 0; })} />
       </div>
       <div className="flex items-center justify-between px-3 py-1.5">
         <span className="flex items-center gap-1">Sales tax (
-          <input type="number" placeholder="0" className="w-12 border-b border-[#c2c2c2] bg-transparent text-right text-[12px] outline-none focus:border-[#111]"
+          <input type="number" readOnly={locked} placeholder="0" className="w-12 border-b border-[#c2c2c2] bg-transparent text-right text-[12px] outline-none focus:border-[#111]"
                  value={zeroToBlank(doc.totals?.taxRate ?? 0)} onChange={(e) => update((d) => { d.totals.taxRate = parseFloat(e.target.value) || 0; })} />%)
         </span>
         <span className="tabular">{num(totals.tax)}</span>
@@ -336,7 +349,7 @@ function TotalsBox({ doc, ccy, totals, update, freight }: {
       {freight && (
         <div className="flex items-center justify-between px-3 py-1.5">
           <span>Fret · Freight</span>
-          <input type="number" placeholder="0" className="w-24 border-b border-[#c2c2c2] bg-transparent text-right text-[12px] outline-none focus:border-[#111]"
+          <input type="number" readOnly={locked} placeholder="0" className="w-24 border-b border-[#c2c2c2] bg-transparent text-right text-[12px] outline-none focus:border-[#111]"
                  value={zeroToBlank(doc.totals?.freight ?? 0)} onChange={(e) => update((d) => { d.totals.freight = parseFloat(e.target.value) || 0; })} />
         </div>
       )}

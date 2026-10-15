@@ -138,6 +138,7 @@ interface AutoFormProps<T extends z.ZodObject<z.ZodRawShape>> {
   numericPrefixes?: Record<string, string>;
   /** Server-side error (e.g. duplicate SKU) shown above the footer. */
   serverError?: string;
+  intro?: string;
 }
 
 export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
@@ -150,6 +151,7 @@ export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
   textSuggestions,
   numericPrefixes,
   serverError,
+  intro,
 }: AutoFormProps<T>) {
   const fields = React.useMemo(
     () => fieldsFromSchema(schema, dynamicOptions),
@@ -164,8 +166,8 @@ export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
           const msg = fieldFormatError(k, v, String(val.country || val.region || ""));
           if (msg) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [k], message: msg });
           const prefix = numericPrefixes?.[k];
-          if (prefix && (typeof v !== "string" || !v.startsWith(prefix) || !/^\d+$/.test(v.slice(prefix.length)))) {
-            ctx.addIssue({ code: z.ZodIssueCode.custom, path: [k], message: "Enter the SKU number" });
+          if (prefix && (typeof v !== "string" || !v.startsWith(prefix) || !/^[0-9]{6}$/.test(v.slice(prefix.length)))) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: [k], message: "Enter exactly 6 digits for the SKU number" });
           }
         }
       }),
@@ -189,6 +191,7 @@ export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
       className="flex flex-1 flex-col overflow-hidden"
     >
       <div className="erp-scroll flex-1 space-y-4 overflow-y-auto px-4 pb-6 sm:px-6">
+        {intro && <p className="rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">{intro}</p>}
         {serverError && (
           <p className="rounded-md bg-[#FDECEA] px-3 py-2 text-xs font-semibold text-[#C0392B]">
             {serverError}
@@ -254,10 +257,11 @@ export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
                   {...register(f.name)}
                   className="border-0 shadow-none focus-visible:ring-0"
                   inputMode="numeric"
+                  aria-label="SKU number"
                   placeholder="000001"
-                  maxLength={64 - numericPrefixes[f.name].length}
+                  maxLength={6}
                   value={String(watch(f.name) ?? "").replace(numericPrefixes[f.name], "")}
-                  onChange={(e) => setValue(f.name, numericPrefixes[f.name] + e.target.value.replace(/\D/g, ""), { shouldDirty: true, shouldValidate: true })}
+                  onChange={(e) => setValue(f.name, numericPrefixes[f.name] + e.target.value.replace(/\D/g, "").slice(0, 6), { shouldDirty: true, shouldValidate: true })}
                 />
               </div>
             ) : (

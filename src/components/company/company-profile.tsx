@@ -96,9 +96,13 @@ export function CompanyProfilePage() {
 
   React.useEffect(() => { setForm(null); setSaved(null); setPreview({}); fetchedRef.current = ""; }, [user?.company.id]);
 
+  const dirty = !!form && !!saved && JSON.stringify(form) !== JSON.stringify(saved);
+  const dirtyRef = React.useRef(dirty);
+  dirtyRef.current = dirty;
+
   React.useEffect(() => {
-    if (data && !form) { setForm(data); setSaved(data); }
-  }, [data, form]);
+    if (data && !dirtyRef.current) { setForm(data); setSaved(data); }
+  }, [data]);
 
   // Load previews for already-stored logo/cover once.
   React.useEffect(() => {
@@ -124,8 +128,6 @@ export function CompanyProfilePage() {
     next.has(m.key) ? next.delete(m.key) : next.add(m.key);
     set("enabledModules", Array.from(next));
   };
-
-  const dirty = !!form && !!saved && JSON.stringify(form) !== JSON.stringify(saved);
 
   const progress = React.useMemo(() => {
     if (!form) return 0;

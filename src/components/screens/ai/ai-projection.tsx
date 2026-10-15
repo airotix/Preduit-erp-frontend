@@ -3,7 +3,7 @@ import { Table as ResponsiveTable } from "@/components/ui/table";
 
 
 import * as React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { Search, ChevronRight, ChevronDown, PieChart } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,7 +23,15 @@ export function AiProjection() {
 
   const [search, setSearch] = React.useState("");
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
-  const [details, setDetails] = React.useState<Map<string, ProjectionDetail>>(new Map());
+  const expandedIds = React.useMemo(() => Array.from(expanded), [expanded]);
+  const detailQueries = useQueries({
+    queries: expandedIds.map((skuId) => ({
+      queryKey: ["ai", "projection-detail", skuId],
+      queryFn: (): Promise<ProjectionDetail> => fetchAiProjectionDetail(skuId.replace("SKU-", "")),
+    })),
+  });
+  const details = new Map(detailQueries.flatMap((query, i) =>
+    query.data ? [[expandedIds[i], query.data] as const] : []));
 
   const rows = React.useMemo(() => {
     const q = search.toLowerCase();
@@ -51,18 +59,12 @@ export function AiProjection() {
     return acc;
   }, [data]);
 
-  const toggle = async (skuId: string) => {
+  const toggle = (skuId: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
       next.has(skuId) ? next.delete(skuId) : next.add(skuId);
       return next;
     });
-    if (!details.has(skuId)) {
-      try {
-        const d = await fetchAiProjectionDetail(skuId.replace("SKU-", ""));
-        setDetails((prev) => new Map(prev).set(skuId, d));
-      } catch { /* ignore */ }
-    }
   };
 
   return (

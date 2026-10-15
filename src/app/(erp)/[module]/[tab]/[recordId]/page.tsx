@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useQuery } from "@tanstack/react-query";
 import { notFound, useParams } from "next/navigation";
 import { getModule, getTab } from "@/config/navigation";
 import { detailTypeFor } from "@/config/detail-types";
@@ -8,7 +9,7 @@ import { fetchScreen } from "@/modules/registry";
 import { RecordDetailPage } from "@/components/screens/record-detail-page";
 import { ProductionOrderDetail } from "@/components/screens/production/production-order-detail";
 import { OrderHistoryDetail } from "@/components/screens/order-history/order-history-detail";
-import { apiGet, USE_BACKEND } from "@/lib/api-client";
+import { ApiError, apiGet, USE_BACKEND } from "@/lib/api-client";
 import type { Cell, ScreenConfig } from "@/lib/screen-types";
 import type { DetailModel } from "@/modules/detail/detail-data";
 
@@ -45,63 +46,50 @@ export default function RecordPage() {
   const isPublicId = USE_BACKEND && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.recordId);
   const valid = !!mod && !!tab && !!type && (isPublicId || !Number.isNaN(index));
 
-  const [loading, setLoading] = React.useState(true);
-  const [missing, setMissing] = React.useState(false);
-  const [screen, setScreen] = React.useState<ScreenConfig | null>(null);
-  const [model, setModel] = React.useState<DetailModel | undefined>(undefined);
-  const [recordId, setRecordId] = React.useState<string | undefined>(undefined);
-  // Bumped after an in-place save to re-fetch the record client-side.
-  const [nonce, setNonce] = React.useState(0);
-  const reload = React.useCallback(() => setNonce((n) => n + 1), []);
-
-  React.useEffect(() => {
-    if (!valid) { setLoading(false); setMissing(true); return; }
-    let cancelled = false;
-    (async () => {
-      try {
-        // Stable cross-module links must work even outside the first list page.
-        if (isPublicId && type && BACKEND_DETAILS[type]) {
-          const m = await apiGet<DetailModel>(BACKEND_DETAILS[type](params.recordId));
-          if (cancelled) return;
-          setModel(m);
-          setRecordId(params.recordId);
-          setScreen({ kind: "list", rows: [[]], columns: [] });
-          return;
-        }
-        const scr = await fetchScreen(params.module, params.tab);
-        if (cancelled) return;
-        if (scr.kind !== "list" || !scr.rows[index]) { setMissing(true); return; }
-        setScreen(scr);
-        const rid = scr.ids?.[index];
-        setRecordId(rid);
-        const detailPath = type ? BACKEND_DETAILS[type] : undefined;
-        if (USE_BACKEND && rid && detailPath) {
-          try {
-            const m = await apiGet<DetailModel>(detailPath(rid));
-            if (!cancelled) setModel(m);
-          } catch {
-            /* fall back to the mock builder */
-          }
-        }
-      } catch {
-        if (!cancelled) setMissing(true);
-      } finally {
-        if (!cancelled) setLoading(false);
+  const detail = useQuery({
+    queryKey: ["detail", params.module, params.tab, params.recordId],
+    enabled: valid,
+    queryFn: async (): Promise<{ screen: ScreenConfig; model?: DetailModel; recordId?: string } | null> => {
+      // Stable cross-module links must work even outside the first list page.
+      if (isPublicId && type && BACKEND_DETAILS[type]) {
+        const model = await apiGet<DetailModel>(BACKEND_DETAILS[type](params.recordId));
+        return { model, recordId: params.recordId, screen: { kind: "list", rows: [[]], columns: [] } };
       }
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.module, params.tab, params.recordId, nonce]);
+      const screen = await fetchScreen(params.module, params.tab);
+      if (screen.kind !== "list" || !screen.rows[index]) return null;
+      const recordId = screen.ids?.[index];
+      const detailPath = type ? BACKEND_DETAILS[type] : undefined;
+      let model: DetailModel | undefined;
+      if (USE_BACKEND && recordId && detailPath) {
+        try {
+          model = await apiGet<DetailModel>(detailPath(recordId));
+        } catch {
+          /* fall back to the mock builder */
+        }
+      }
+      return { screen, model, recordId };
+    },
+  });
+  const { refetch } = detail;
+  const reload = React.useCallback(() => { void refetch(); }, [refetch]);
 
-  if (!valid || missing) notFound();
+  if (!valid || detail.data === null || (detail.error instanceof ApiError && detail.error.status === 404)) notFound();
 
-  if (loading || !screen) {
+  if (detail.isError && !detail.data) {
+    return <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm">
+      <p role="alert">Could not load this record.</p>
+      <button type="button" onClick={reload} className="rounded-md border px-4 py-2">Retry</button>
+    </div>;
+  }
+
+  if (!detail.data) {
     return (
       <div className="flex flex-1 items-center justify-center text-[13px] font-semibold text-muted-foreground">
         Loading…
       </div>
     );
   }
+  const { screen, model, recordId } = detail.data;
 
   const row = (screen.kind === "list" ? screen.rows[isPublicId ? 0 : index] : undefined) as Cell[] | undefined;
   if (!row) notFound();
@@ -128,6 +116,7 @@ export default function RecordPage() {
   return (
     <div className="erp-scroll flex-1 overflow-y-auto px-[26px] pb-7 pt-[18px]">
       <RecordDetailPage
+        key={`${params.module}/${params.tab}/${params.recordId}`}
         type={type!}
         row={row}
         columns={screen.kind === "list" ? screen.columns : []}

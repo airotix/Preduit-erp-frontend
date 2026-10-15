@@ -2,12 +2,15 @@
 import { BatchWorkList } from "./production/batch-workspace";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef as TanstackColumnDef } from "@tanstack/react-table";
 import type { z } from "zod";
 import { DataTable } from "@/components/screens/data-table";
 import { AutoForm } from "@/components/screens/auto-form";
+import { CategoryDeleteButton } from "@/components/screens/category-delete-button";
+import { CatalogArticleActions } from "@/components/screens/catalog-article-actions";
 import { OrderForm } from "@/components/screens/order-form";
 import { CreateShortagePOButton } from "@/components/screens/sales/order-fulfillment";
 import { PurchaseOrderForm } from "@/components/screens/po-form";
@@ -16,7 +19,7 @@ import type { DetailModel } from "@/modules/detail/detail-data";
 import { InspectionForm } from "@/components/screens/inspection-form";
 import { TransferForm } from "@/components/screens/transfer-form";
 import { StockReceiptForm } from "@/components/screens/stock-receipt-form";
-import { FinanceFormSheet } from "@/components/screens/finance/finance-form-sheet";
+import { WarehouseReceivingPanel } from "@/components/screens/warehouse-receiving-panel";
 import { Button } from "@/components/ui/button";
 import { detailTypeFor } from "@/config/detail-types";
 import {
@@ -98,10 +101,9 @@ const STATUS_OPTIONS: Record<string, string[]> = {
   "sales/orders": ["New", "Packed", "Shipped", "Cancelled"],
   "sales/invoices": ["Open", "Paid", "Overdue", "Void"],
   "sales/returns": ["Inspecting", "Refunded", "Rejected"],
-  "procurement/receipts": ["Expected", "Partial", "Complete"],
   "inventory/transfers": ["Draft", "In transit", "Received", "Cancelled"],
   "quality/inspections": ["Pending", "Pass", "Fail"],
-  "shipments/shipments": ["Pending", "Label created", "In transit", "Customs", "Out for delivery", "Delivered"],
+  "shipments/shipments": ["Pending", "Label created", "Dispatched", "In transit", "Customs", "Out for delivery", "Delivered"],
 };
 
 /** module/tab → a bulk action button (no create form). */
@@ -150,6 +152,7 @@ export function ListScreen({
 }: ListScreenProps) {
   const [open, setOpen] = React.useState(false);
   const [editIndex, setEditIndex] = React.useState<number | null>(null);
+  const [editRecord, setEditRecord] = React.useState<{ id: string; values: Record<string, unknown> } | null>(null);
   const [actionResult, setActionResult] = React.useState<string | null>(null);
   const detailType = detailTypeFor(module, tab);
   const router = useRouter();
@@ -174,16 +177,16 @@ export function ListScreen({
   const openRecord = React.useCallback(
     (row: Row) => {
       const index = config.rows.indexOf(row);
-      if (index >= 0) router.push(`/${module}/${tab}/${index}`);
+      if (index >= 0) router.push(`/${module}/${tab}/${USE_BACKEND ? config.ids?.[index] ?? index : index}`);
     },
-    [config.rows, module, tab, router]
+    [config.rows, config.ids, module, tab, router]
   );
 
   // Save = create (editIndex null) or update (editIndex set).
   const save = useMutation({
     mutationFn: async (values: Record<string, unknown>) => {
       if (editIndex != null) {
-        const id = config.ids?.[editIndex];
+        const id = editRecord?.id;
         if (USE_BACKEND && updateBuilder && id) {
           return apiPut(updateBuilder(id), values);
         }
@@ -302,7 +305,9 @@ export function ListScreen({
   });
 
   const isEdit = editIndex != null;
-  const defaultValues = isEdit ? config.records?.[editIndex] : undefined;
+  // Keep the original record identity and values while the table refreshes.
+  const defaultValues = isEdit ? editRecord?.values
+    : module === "catalog" && tab === "products" ? { status: "Draft" } : undefined;
   // Sales orders + purchase orders use bespoke multi-line create forms.
   const isOrderCreate = !isEdit && module === "sales" && tab === "orders";
   const isPOCreate = !isEdit && module === "procurement" && tab === "pos";
@@ -316,8 +321,6 @@ export function ListScreen({
   const isInspectionCreate = !isEdit && module === "quality" && tab === "inspections";
   // Production orders get a per-row "Start production" button + modal.
   const isProductionOrders = module === "production" && tab === "porders";
-  // Passing a QC inspection opens a carrier/destination modal → creates a shipment.
-  const isInspections = module === "quality" && tab === "inspections";
   // Order History is a read-only cross-module drill-down — no create form.
   const isOrderHistory = module === "orderhistory" && tab === "shipped";
   // Product form's Category field is populated from the live category list
@@ -338,23 +341,15 @@ export function ListScreen({
     [...(seasonNames ?? []), "Core", "Spring '26", "Fall '26", "Winter '26"]
       .map((name) => [name.toLowerCase(), name])
   ).values());
-  const [passId, setPassId] = React.useState<string | null>(null);
-  const passInspection = useMutation({
-    mutationFn: (v: Record<string, string | number>) =>
-      apiPost(`/quality/inspections/${passId}/pass`, { carrier: v.carrier, destination: v.destination }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["screen", "quality", "inspections"] });
-      queryClient.invalidateQueries({ queryKey: ["screen", "shipments"] });
-      queryClient.invalidateQueries({ queryKey: ["screen", "sales"] });
-      queryClient.invalidateQueries({ queryKey: ["screen", "inventory"] });
-      queryClient.invalidateQueries({ queryKey: ["screen", "procurement"] });
-      setPassId(null);
-    },
-  });
   return (
     <>
-      {USE_BACKEND && module === "production" && tab === "porders" && <BatchWorkList kind="production" />}
       {USE_BACKEND && module === "quality" && tab === "inspections" && <BatchWorkList kind="quality" />}
+      {USE_BACKEND && module === "shipments" && tab === "shipments" && <BatchWorkList kind="shipments" />}
+      {USE_BACKEND && module === "inventory" && tab === "stock" && <BatchWorkList kind="inventory" />}
+      {USE_BACKEND && module === "inventory" && tab === "stock" && <WarehouseReceivingPanel />}
+      {USE_BACKEND && module === "inventory" && tab === "stock" && <div className="mb-4">
+        <Link href="/inventory/movements" className="inline-block rounded-md border px-3 py-2 text-sm font-semibold">View stock movement history</Link>
+      </div>}
       {failedInspectionId && <QCReopenDialog inspectionId={failedInspectionId} open onOpenChange={(value) => { if (!value) setFailedInspectionId(null); }}
         canReopenProduction={failedInspection?.inspection?.items.some((item) => item.publicId === failedInspectionId && !item.placeholder && item.canReopenProduction)}
         onSaved={() => {
@@ -373,6 +368,10 @@ export function ListScreen({
           isOrderHistory || isProductionOrders || !canWrite
             ? undefined
             : () => {
+                if (USE_BACKEND && module === "procurement" && tab === "receipts") {
+                  router.push("/inventory/stock");
+                  return;
+                }
                 setEditIndex(null);
                 setActionResult(null);
                 setOpen(true);
@@ -381,7 +380,13 @@ export function ListScreen({
         actionDisabled={!isOrderHistory && !isProductionOrders && !canWrite}
         actionDisabledReason={reason ?? undefined}
         onRowClick={detailType ? openRecord : undefined}
-        renderRowAction={module === "sales" && tab === "orders" && USE_BACKEND ? (i) =>
+        renderRowAction={isCatalogProducts && USE_BACKEND ? (i) => config.ids?.[i] ?
+          <CatalogArticleActions key={config.ids[i]} id={config.ids[i]} canWrite={canWrite}
+            onEdit={() => router.push(`/catalog/products/${config.ids![i]}?edit=1`)}
+            onDeleted={() => { void queryClient.invalidateQueries(); }} /> : null
+          : module === "catalog" && tab === "categories" && USE_BACKEND && canWrite ? (i) =>
+          config.ids?.[i] ? <CategoryDeleteButton key={config.ids[i]} id={config.ids[i]} name={String(config.records?.[i]?.name ?? "this category")} /> : null
+          : module === "sales" && tab === "orders" && USE_BACKEND ? (i) =>
           config.records?.[i]?.status === "PO needed" && config.ids?.[i]
             ? <CreateShortagePOButton orderId={config.ids[i]} /> : null : undefined}
         // Production is started per-item inside each order's item tab, not from
@@ -393,8 +398,11 @@ export function ListScreen({
         onShipRow={undefined}
         shippableRows={undefined}
         onEditRow={
-          canEdit
+          canEdit && !isCatalogProducts
             ? (i) => {
+                const id = config.ids?.[i];
+                if (!id) return;
+                setEditRecord({ id, values: { ...config.records?.[i] } });
                 setEditIndex(i);
                 setOpen(true);
               }
@@ -405,12 +413,6 @@ export function ListScreen({
         onStatusChange={
           canStatus
             ? (i, s) => {
-                // Passing an inspection needs shipment details → open the modal
-                // instead of a plain status update.
-                if (isInspections && s === "Pass") {
-                  setPassId(config.ids?.[i] ?? null);
-                  return;
-                }
                 setStatus.mutate({ index: i, status: s });
               }
             : undefined
@@ -463,14 +465,18 @@ export function ListScreen({
             />
           ) : schema ? (
             <AutoForm
-              key={isEdit ? `edit-${editIndex}` : "create"}
+              key={isEdit ? `edit-${editRecord?.id}` : "create"}
               schema={schema}
               submitLabel={isEdit ? "Save changes" : actionLabel}
               pending={save.isPending}
               defaultValues={defaultValues}
-              dynamicOptions={isCatalogProducts ? { category: categoryNames ?? [] } : undefined}
+              dynamicOptions={isCatalogProducts ? { category: categoryNames ?? [],
+                ...(!isEdit ? { status: ["Draft"] } : {}) } : undefined}
+              intro={isCatalogProducts && !isEdit
+                ? "New articles start as Draft. Add colour and size variants, then activate the article to make it available for new orders."
+                : undefined}
               textSuggestions={isCatalogProducts ? { season: seasonSuggestions } : undefined}
-              numericPrefixes={isCatalogProducts && !isEdit ? { sku: "SKU-" } : undefined}
+              numericPrefixes={isCatalogProducts ? { sku: "SKU-" } : undefined}
               serverError={
                 save.isError
                   ? save.error instanceof Error
@@ -499,21 +505,7 @@ export function ListScreen({
         </SheetContent>
       </Sheet>
 
-      {isInspections && (
-        <FinanceFormSheet
-          open={!!passId}
-          onOpenChange={(o) => { if (!o) setPassId(null); }}
-          title="Pass inspection & ship"
-          description="Inspection passed — enter shipment details to send it out."
-          submitLabel="Pass & create shipment"
-          pending={passInspection.isPending}
-          onSubmit={(v) => passInspection.mutate(v)}
-          fields={[
-            { name: "carrier", label: "Carrier", required: true, placeholder: "DHL Express" },
-            { name: "destination", label: "Destination", required: true, placeholder: "Paris, FR" },
-          ]}
-        />
-      )}
+
     </>
   );
 }
