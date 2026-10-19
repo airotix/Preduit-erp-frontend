@@ -47,6 +47,8 @@ export const MODULES: ModuleDef[] = [
     label: "Inventory",
     tabs: [
       { id: "stock", label: "Stock Levels", kind: "list" },
+      { id: "receiving", label: "Warehouse receiving", kind: "list" },
+      { id: "batchreceiving", label: "Batch receiving", kind: "list" },
       { id: "locations", label: "Locations", kind: "list" },
       { id: "transfers", label: "Transfers", kind: "list" },
       { id: "alerts", label: "Reorder Alerts", kind: "list" },
@@ -73,6 +75,8 @@ export const MODULES: ModuleDef[] = [
     tabs: [
       { id: "pos", label: "Purchase Orders", kind: "list" },
       { id: "approvals", label: "Approval Queue", kind: "board" },
+      { id: "returns", label: "Supplier Returns", kind: "list" },
+      { id: "performance", label: "Supplier Performance", kind: "list" },
       { id: "receipts", label: "Invoices", kind: "list" },
       { id: "suppliers", label: "Suppliers", kind: "list" },
     ],

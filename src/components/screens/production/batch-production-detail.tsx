@@ -76,7 +76,7 @@ export function BatchProductionDetail({ batchId, orderId }: { batchId: string; o
   });
   const { data: parentDetail } = useQuery({
     queryKey: ["production", "porder", orderId],
-    queryFn: () => apiGet<{ materials: { component: string; material: string; qty: string; cost: string }[] }>(`/production/porders/${orderId}/detail`),
+    queryFn: () => apiGet<{ tnaStartBlockedReason?: string | null; materials: { component: string; material: string; qty: string; cost: string }[] }>(`/production/porders/${orderId}/detail`),
   });
   const batch = data?.batches.find((entry) => entry.publicId === batchId);
   const [startStyle, setStartStyle] = React.useState<{ id: number; lineId: string; names: string[] } | null>(null);
@@ -137,7 +137,8 @@ export function BatchProductionDetail({ batchId, orderId }: { batchId: string; o
           <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-bold">{style.name}</h2><span className="text-sm">{style.qty} pieces · {style.progress}% stages complete</span></div>
           <LineTimeline line={style} busy={busy} onAct={(id, action, body) => { void act(id, action, body); }}
             onModal={setModal} onStart={() => setStartStyle({ id: styleId, lineId: style.publicId, names: styleStages.map((stage) => stage.name) })}
-            canWrite={canWrite && batch.status !== "Cancelled" && styleId > 0} writeReason={writeReason} />
+            canWrite={canWrite && batch.status !== "Cancelled" && styleId > 0} writeReason={writeReason}
+            startBlockedReason={parentDetail?.tnaStartBlockedReason} />
           <div className="space-y-2"><h3 className="text-sm font-bold">Produced quantities</h3>
             {variants.map((line) => <ProducedQuantity key={line.id} batch={batch} line={line} ready={line.tnaComplete} />)}
           </div>

@@ -1,5 +1,6 @@
 "use client";
-import { BatchWorkspace, BatchShipmentPanel } from "./production/batch-workspace";
+import { BatchWorkspace } from "./production/batch-workspace";
+import { POChangePanel } from "./po-change-review";
 import { Table as ResponsiveTable } from "@/components/ui/table";
 
 
@@ -20,7 +21,8 @@ import { DocumentsPanel } from "@/components/screens/documents-panel";
 import { TechPackPanel } from "@/components/screens/tech-pack-panel";
 import { StockMovementHistory } from "@/components/screens/stock-movement-history";
 import { OrderFulfillmentPanel } from "@/components/screens/sales/order-fulfillment";
-import { ShipmentPacking } from "@/components/screens/sales/shipment-packing";
+import { CatalogSupplierPricing } from "@/components/screens/catalog-supplier-pricing";
+import { ShipmentActions } from "@/components/screens/shipment-actions";
 import { CatalogPOButton } from "@/components/screens/catalog-po-button";
 import { CatalogArticleActions } from "@/components/screens/catalog-article-actions";
 import { QCReopenDialog } from "@/components/screens/qc-reopen-dialog";
@@ -740,7 +742,7 @@ const PRICE_FIELDS: { key: PriceField; label: string }[] = [
   { key: "retailPrice", label: "Retail" },
   { key: "wholesalePrice", label: "Wholesale" },
   { key: "onlinePrice", label: "Online" },
-  { key: "supplierPrice", label: "Supplier" },
+  { key: "supplierPrice", label: "Reference cost (legacy)" },
 ];
 
 function VariantPricingEditor({ variants, status, recordId, canWrite, onSaved }: {
@@ -767,7 +769,7 @@ function VariantPricingEditor({ variants, status, recordId, canWrite, onSaved }:
     for (const row of changed) {
       for (const { key, label } of PRICE_FIELDS) {
         const value = row[key].trim();
-        if ((value && !/^\d+(\.\d{1,4})?$/.test(value)) || (status === "Active" && (!value || Number(value) <= 0))) {
+        if ((value && !/^\d+(\.\d{1,4})?$/.test(value)) || (status === "Active" && key !== "supplierPrice" && (!value || Number(value) <= 0))) {
           setError(`${label} price must be ${status === "Active" ? "positive" : "a non-negative amount with up to four decimals"} for every edited variant.`);
           return;
         }
@@ -784,7 +786,7 @@ function VariantPricingEditor({ variants, status, recordId, canWrite, onSaved }:
       setError(err instanceof Error ? err.message : "Could not save variant prices.");
     } finally { setSaving(false); }
   };
-  return <Panel title="Prices by colour and size" sub="Each row is independent. Saving a product detail never copies the lowest price across variants.">
+  return <Panel title="Prices by colour and size" sub="Sales prices are independent for each variant. Reference cost is legacy information; POs use the supplier-specific prices configured above.">
     {variants.length === 0 ? <p className="text-sm text-muted-foreground">Save colour and size variants before entering prices.</p> : <>
       <div className="overflow-x-auto"><ResponsiveTable className="w-full min-w-[720px] text-[13px]">
         <thead><tr className="text-left text-[11px] uppercase text-muted-foreground">
@@ -1793,41 +1795,25 @@ function InspectionShipmentBar({
   canWrite?: boolean;
   onDone?: () => void;
 }) {
-  const [carrier, setCarrier] = React.useState("");
-  const [destination, setDestination] = React.useState("");
-  const [busy, setBusy] = React.useState(false);
-  const [err, setErr] = React.useState<string | null>(null);
   const locked = !data.allPassed;
-
-  // Carrier type-ahead backed by the existing carriers in the Shipments module.
-  const [carriers, setCarriers] = React.useState<{ name: string; service: string }[]>([]);
-  const [carrierOpen, setCarrierOpen] = React.useState(false);
-  const carrierTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const loadCarriers = React.useCallback((q: string, openAfter: boolean) => {
-    if (!USE_BACKEND) return;
-    if (carrierTimer.current) clearTimeout(carrierTimer.current);
-    carrierTimer.current = setTimeout(async () => {
-      try {
-        const r = await apiGet<{ carriers: { name: string; service: string }[] }>(
-          `/shipments/carriers/search?q=${encodeURIComponent(q.trim())}`);
-        setCarriers(r.carriers ?? []);
-        if (openAfter) setCarrierOpen((r.carriers ?? []).length > 0);
-      } catch { setCarriers([]); }
-    }, 150);
-  }, []);
-  React.useEffect(() => { loadCarriers("", false); }, [loadCarriers]);
-
-  const create = async () => {
-    if (!data.inspectionId) return;
-    if (!carrier.trim() || !destination.trim()) { setErr("Enter carrier and destination."); return; }
-    setBusy(true); setErr(null);
-    try { await apiPost(`/quality/inspections/${data.inspectionId}/pass`, { carrier, destination }); onDone?.(); }
-    catch { setErr("Could not create the shipment."); }
-    finally { setBusy(false); }
-  };
 
   // Already shipped → show the reference.
   if (data.replenishmentPO) {
+    if (data.replenishmentPO.supplierShipmentRequired) {
+      const po = data.replenishmentPO;
+      return <div className="mt-4 rounded-xl border bg-muted/30 p-5">
+        <h3 className="font-bold">Supplier shipment · {po.supplier}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{po.received
+          ? "Warehouse receipt recorded. This supplier shipment is delivered."
+          : po.shipment ? `${po.shipment.ref} · ${po.shipment.status}. Manage carrier, destination and dispatch in Shipments; confirm physical arrival in Inventory.`
+          : `The shipment is created after this supplier PO's TNA is complete and every article passes final QC (${data.passedCount}/${data.total} cleared).`}</p>
+        <div className="mt-3 flex gap-4 text-sm font-semibold text-primary">
+          <Link href={`/procurement/pos/${po.publicId}`}>Open {po.poNo}</Link>
+          {po.shipment && <Link href={`/shipments/shipments/${po.shipment.id}`}>Open {po.shipment.ref}</Link>}
+          <Link href="/inventory/receiving">Open warehouse receiving</Link>
+        </div>
+      </div>;
+    }
     return <div className="mt-4 rounded-xl border bg-muted/30 p-5">
       <h3 className="font-bold">Stock for sales order</h3>
       <p className="mt-1 text-sm text-muted-foreground">{data.replenishmentPO.received
@@ -1836,7 +1822,7 @@ function InspectionShipmentBar({
         : `Waiting for final QC (${data.passedCount}/${data.total} items cleared). Available order stock stays reserved.`}</p>
       <div className="mt-3 flex gap-4 text-sm font-semibold text-primary">
         <Link href={`/procurement/pos/${data.replenishmentPO.publicId}`}>Open {data.replenishmentPO.poNo}</Link>
-        <Link href="/inventory/stock">Open warehouse receiving</Link>
+        <Link href="/inventory/receiving">Open warehouse receiving</Link>
       </div>
     </div>;
   }
@@ -1850,51 +1836,13 @@ function InspectionShipmentBar({
 
   return (
     <div className="mt-4 rounded-2xl border border-border/60 p-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-[15px] font-bold text-foreground">Create shipment</div>
-          <div className="text-[13px] text-muted-foreground">
-            {locked
-              ? `Locked — every item must be a Final-stage pass first (${data.passedCount}/${data.total} cleared).`
-              : "All items cleared (Final + passed) — enter carrier & destination to ship this order."}
-          </div>
-        </div>
-        {locked && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-[12px] font-bold text-muted-foreground">
-            🔒 {data.passedCount}/{data.total} cleared
-          </span>
-        )}
-      </div>
-      <div className="mt-3 flex flex-wrap items-end gap-2">
-        <div className="relative">
-          <input value={carrier}
-            onChange={(e) => { setCarrier(e.target.value); loadCarriers(e.target.value, true); }}
-            onFocus={() => { setCarrierOpen(carriers.length > 0); loadCarriers(carrier, true); }}
-            onBlur={() => setTimeout(() => setCarrierOpen(false), 120)}
-            placeholder="Carrier" disabled={locked} autoComplete="off"
-            className="w-48 rounded-md border border-border/70 bg-transparent px-2.5 py-1.5 text-[13px] outline-none disabled:opacity-50" />
-          {carrierOpen && !locked && carriers.length > 0 && (
-            <ul className="absolute z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-border bg-white py-1 shadow-lg">
-              {carriers.map((c) => (
-                <li key={c.name}>
-                  <button type="button" onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => { setCarrier(c.name); setCarrierOpen(false); }}
-                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-[13px] hover:bg-muted">
-                    <span className="font-semibold text-foreground">{c.name}</span>
-                    {c.service && <span className="truncate text-muted-foreground">{c.service}</span>}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        <input value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="Destination" disabled={locked}
-          className="flex-1 rounded-md border border-border/70 bg-transparent px-2.5 py-1.5 text-[13px] outline-none disabled:opacity-50" />
-        <Button size="sm" disabled={locked || busy || !canWrite} onClick={create}>
-          {busy ? "Creating…" : "Create shipment"}
-        </Button>
-      </div>
-      {err && <div className="mt-2 text-[12px] font-semibold text-[#C0392B]">{err}</div>}
+      <div className="text-[15px] font-bold text-foreground">Shipment eligibility</div>
+      <p className="mt-1 text-[13px] text-muted-foreground">
+        {locked
+          ? `Final QC has not cleared every required article (${data.passedCount}/${data.total}). Carrier, destination and dispatch stay in Shipments.`
+          : "Approved quantities can ship from Shipments. Warehouse receipt stays in Inventory."}
+      </p>
+      <Link href="/shipments/shipments" className="mt-3 inline-block text-sm font-semibold text-primary underline">Open shipments</Link>
     </div>
   );
 }
@@ -1916,7 +1864,7 @@ function InlineFieldEditor({
   const save = async () => {
     setSaving(true); setError(null);
     try { await apiPut(endpoint, f); onSaved(); }
-    catch { setError("Could not save changes. Please try again."); setSaving(false); }
+    catch (e) { setError(e instanceof Error ? e.message : "Could not save changes. Please try again."); setSaving(false); }
   };
   return (
     <Panel title={title} sub={sub}>
@@ -2072,13 +2020,15 @@ function tabContentFor(
       ),
       Pricing: (
         <div className="space-y-4">
+          {ctx.recordId && USE_BACKEND && <CatalogSupplierPricing key={ctx.recordId} productId={ctx.recordId}
+            sizes={p.sizes} colors={p.matrix.map(color => ({ name: color.name, hex: color.hex }))} onSaved={ctx.onSaved} />}
         <Panel title="Pricing & trade" sub="Retail, wholesale & online prices and trade details">
           <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
             {[
               { k: "Retail price", v: p.prices?.retail ?? d.meta.find((m) => m.k === "Retail price")?.v ?? "—" },
               { k: "Wholesale price", v: p.prices?.wholesale ?? "—" },
               { k: "Online price", v: p.prices?.online ?? "—" },
-              { k: "Supplier price", v: p.prices?.supplier ?? "—" },
+              { k: "Reference cost (legacy)", v: p.prices?.supplier ?? "—" },
               ...p.specs.filter((s) =>
                 ["HS code", "Origin", "Weight", "Composition", "Fabric"].includes(s.k)
               ),
@@ -2732,14 +2682,13 @@ export function RecordDetailPage({
     const sf = d.shipment!.form!;
     content[tabs[0]] = (
       <InlineFieldEditor
-        title="Edit shipment" sub="Carrier, destination, ETA & status"
-        endpoint={`/shipments/${recordId}`}
+        title="Edit transport details" sub="Carrier, destination and ETA. Status changes use the shipment actions."
+        endpoint={`/shipments/shipments/${recordId}`}
         initial={{ carrier: sf.carrier, destination: sf.destination, eta: sf.eta, status: sf.status }}
         fields={[
           { name: "carrier", label: "Carrier" },
           { name: "destination", label: "Destination" },
           { name: "eta", label: "ETA" },
-          { name: "status", label: "Status", type: "select", options: d.shipment!.statusOptions ?? [] },
         ]}
         onCancel={() => setEditing(false)} onSaved={afterSave}
       />
@@ -2849,9 +2798,10 @@ export function RecordDetailPage({
 
       {recordId && USE_BACKEND && module === "sales" && d.variant === "order" && <BatchWorkspace orderId={recordId} kind="sales" />}
       {recordId && USE_BACKEND && module === "procurement" && d.variant === "order" && <BatchWorkspace orderId={recordId} kind="procurement" />}
-      {recordId && USE_BACKEND && d.variant === "shipment" && <BatchShipmentPanel shipmentId={recordId} />}
-      {recordId && USE_BACKEND && d.variant === "shipment" && d.shipment?.ordinaryPacking && <ShipmentPacking shipmentId={recordId} onSaved={() => { reload?.(); router.refresh(); }} />}
-      {d.variant === "inspection" && d.batchManaged && d.batchId && <Link className="mt-4 inline-block text-sm font-semibold text-primary underline" href={`/quality/batches/${d.batchId}`}>Back to batch QC</Link>}
+      {recordId && USE_BACKEND && module === "procurement" && d.variant === "order" && <POChangePanel id={recordId} onSaved={afterSave} />}
+      {recordId && USE_BACKEND && module === "procurement" && d.variant === "entity" && <Link className="mb-5 inline-block text-sm font-semibold text-primary underline" href={`/procurement/performance?supplier=${recordId}`}>Supplier performance and follow-ups →</Link>}
+      {recordId && USE_BACKEND && d.variant === "shipment" && <ShipmentActions shipmentId={recordId} />}
+      {d.variant === "inspection" && d.taskKey && <Link className="mt-4 inline-block text-sm font-semibold text-primary underline" href={`/quality/work?task=${encodeURIComponent(d.taskKey)}`}>Open inspection</Link>}
 
       {/* Order-level shipment (inspection group): locked until all items pass */}
       {d.variant === "order" && d.fulfillment && recordId && (

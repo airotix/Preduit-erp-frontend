@@ -33,7 +33,7 @@ export function CatalogPOButton({ productId }: { productId: string }) {
           onSubmit={async (payload) => {
             setBusy(true); setError("");
             try {
-              await apiPost("/procurement/pos", payload);
+              await apiPost("/procurement/pos/grouped", payload);
               for (const key of [["screen", "procurement"], ["screen", "production"], ["production"], ["finance"], ["procurement", "invoices"]]) {
                 client.invalidateQueries({ queryKey: key });
               }

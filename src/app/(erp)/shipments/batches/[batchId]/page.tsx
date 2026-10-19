@@ -1,2 +1,5 @@
-import { BatchModulePage } from "@/components/screens/production/batch-module-page";
-export default function Page() { return <BatchModulePage mode="shipments" />; }
+import { redirect } from "next/navigation";
+
+export default function Page() {
+  redirect("/shipments/shipments?view=ready");
+}

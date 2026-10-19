@@ -197,11 +197,11 @@ function InvoiceList({ onOpen }: { onOpen: (doc: Doc, publicId: string | null) =
 }
 
 // ----- small labelled paper field ------------------------------------------
-function Field({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function Field({ label, value, onChange, readOnly = false }: { label: string; value: string; onChange: (v: string) => void; readOnly?: boolean }) {
   return (
     <div>
       <span className={LBL}>{label}</span>
-      <input className={FIELD} value={value || ""} onChange={(e) => onChange(e.target.value)} />
+      <input className={FIELD} readOnly={readOnly} value={value || ""} onChange={(e) => onChange(e.target.value)} />
     </div>
   );
 }
@@ -215,11 +215,25 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
   const [savedId, setSavedId] = React.useState<string | null>(publicId);
   const [notice, setNotice] = React.useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const ccy = doc.currency || "USD";
+  const locked = !!(doc._financialLocked || doc.poNo);
 
   const update = (patch: (d: Doc) => void) =>
-    setDoc((prev: Doc) => { const next = structuredClone(prev); patch(next); return next; });
+    setDoc((prev: Doc) => {
+      const next = structuredClone(prev); patch(next);
+      if (locked) {
+        for (const key of ["poNo", "currency", "totals"]) next[key] = structuredClone(prev[key]);
+        next.buyer = { ...next.buyer, name: prev.buyer?.name };
+        next.articles = (prev.articles || []).map((a: Article, i: number) => {
+          const updated = next.articles?.[i] || a;
+          return { ...updated, style: a.style, sizes: structuredClone(a.sizes), rows: structuredClone(a.rows) };
+        });
+      }
+      return next;
+    });
 
   const totalsView = React.useMemo(() => {
+    if (locked && doc.totals) return { totalQty: Number(doc.totals.totalQty || 0), subtotal: Number(doc.totals.subtotal || 0),
+      freight: Number(doc.totals.freight || 0), total: Number(doc.totals.total || 0) };
     let totalQty = 0, subtotal = 0;
     (doc.articles || []).forEach((a: Article) => a.rows.forEach((r) => {
       const t = rowTotal(r); totalQty += t; subtotal += t * (Number(r.unitPrice) || 0);
@@ -227,10 +241,11 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
     subtotal = Math.round(subtotal * 100) / 100;
     const freight = Number(doc.totals?.freight) || 0;
     return { totalQty, subtotal, total: Math.round((subtotal + freight) * 100) / 100, freight };
-  }, [doc]);
+  }, [doc, locked]);
 
   const finalize = (): Doc => {
     const d = structuredClone(doc);
+    if (locked) return d;
     let totalQty = 0, subtotal = 0;
     d.articles.forEach((a: Article) => {
       let sq = 0, sa = 0;
@@ -281,7 +296,7 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
         <Button variant="outline" size="sm" onClick={onBack}><ArrowLeft size={15} /> Back</Button>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => window.print()}><Printer size={15} /> Print</Button>
-          <Button size="sm" onClick={save} disabled={saving || !canWrite}
+          <Button size="sm" onClick={save} disabled={saving || !canWrite || !!doc._reconciliationRequired}
             title={!canWrite ? writeReason ?? undefined : undefined}>
             {saving ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : <><Save size={15} /> Save</>}
           </Button>
@@ -300,6 +315,8 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
       )}
 
       {/* ===== PAPER ===== */}
+      {locked && <p className="text-sm text-muted-foreground print:hidden">Quantities, unit prices, supplier, currency and totals are fixed from the saved PO. Resolve supplier differences through a PO revision or Finance adjustment.</p>}
+      {doc._reconciliationRequired && <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 print:hidden">{doc._reconciliationRequired}</p>}
       <div className="invoice-paper mx-auto w-full max-w-[900px] border border-[#e2e2e2] bg-white p-8 text-[#111] shadow-erp-lg">
         <div className="mb-3 text-[11px]">
           <label>Prepared by <input className={FIELD} value={doc.preparedBy || ""} onChange={(e) => update((d) => { d.preparedBy = e.target.value; })} /></label>
@@ -336,7 +353,7 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
             </div>
             <div className={cn(BOX, "mt-1.5 p-3")}>
               <span className={LBL}>Supplier</span>
-              <input className={cn(FIELD, "font-bold")} value={doc.buyer?.name || ""} onChange={(e) => update((d) => { d.buyer.name = e.target.value; })} />
+              <input className={cn(FIELD, "font-bold")} readOnly={locked} value={doc.buyer?.name || ""} onChange={(e) => update((d) => { d.buyer.name = e.target.value; })} />
               <span className={cn(LBL, "mt-2")}>T.V.A. / VAT</span>
               <span className={LBL}>Supplier country</span><LocationSelector className={FIELD} value={doc.buyer?.country || ""} onValueChange={country => update(d => { d.buyer.country = country; d.buyer.city = ""; d.buyer.state = ""; })} />
               <input className={FIELD} value={doc.buyer?.vat || ""} onChange={(e) => update((d) => { d.buyer.vat = e.target.value; })} />
@@ -351,7 +368,7 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
               <PhoneInput country={doc.buyer?.country} className={FIELD} value={doc[key] || ""} onValueChange={value => update(d => { d[key] = value; })} /></div>
             : key === "origin" ? <div key={key}><span className={LBL}>{label}</span>
               <LocationSelector className={FIELD} value={doc[key] || ""} onValueChange={v => update(d => { d[key] = v; })} /></div>
-            : <Field key={key} label={label} value={doc[key]} onChange={(v) => update((d) => { d[key] = v; })} />
+            : <Field key={key} label={label} value={doc[key]} readOnly={locked && ["poNo", "currency"].includes(key)} onChange={(v) => update((d) => { d[key] = v; })} />
           ))}
         </div>
 
@@ -388,9 +405,10 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
             </div>
             <div className="flex items-center justify-between px-3 py-1.5">
               <span>Fret &amp; assurance · Freight</span>
-              <input type="number" placeholder="0" className="w-24 border-b border-[#c2c2c2] bg-transparent text-right text-[12px] outline-none focus:border-[#111]"
+              <input type="number" readOnly={locked} placeholder="0" className="w-24 border-b border-[#c2c2c2] bg-transparent text-right text-[12px] outline-none focus:border-[#111]"
                      value={zeroToBlank(doc.totals?.freight ?? 0)} onChange={(e) => update((d) => { d.totals.freight = parseFloat(e.target.value) || 0; })} />
             </div>
+            {!!Number(doc.totals?.rounding) && <div className="flex items-center justify-between px-3 py-1.5"><span>Rounding</span><span className="tabular">{num(Number(doc.totals.rounding))}</span></div>}
             <div className="flex items-center justify-between bg-[#e4e4e4] px-3 py-2 font-extrabold">
               <span>TOTAL À PAYER · TOTAL {ccy}</span><span className="tabular">{num(totalsView.total)}</span>
             </div>

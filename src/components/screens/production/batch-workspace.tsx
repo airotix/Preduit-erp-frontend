@@ -56,7 +56,7 @@ function batchStatus(batch: { status: string; productionStatus: string; qualityS
 
 function BatchLinks({ batch }: { batch: Batch }) {
   const production = useModuleAccess("production"), quality = useModuleAccess("quality"), shipping = useModuleAccess("shipments"), inventory = useModuleAccess("inventory");
-  return <nav className="my-3 flex flex-wrap gap-4 text-sm">{([["production", "Production / TNA", production], ["quality", "QC / Inspection", quality], ["shipments", "Shipments", shipping], ["inventory", "Warehouse receiving", inventory]] as const).filter(([, , access]) => access.canRead).map(([module, label]) => <Link key={module} className="text-primary underline" href={`/${module}/batches/${batch.publicId}`}>{label}</Link>)}</nav>;
+  return <nav className="my-3 flex flex-wrap gap-4 text-sm">{([["production", "Production / TNA", production, `/production/batches/${batch.publicId}`], ["quality", "QC / Inspection", quality, "/quality/inspections"], ["shipments", "Shipments", shipping, "/shipments/shipments?view=ready"], ["inventory", "Warehouse receiving", inventory, `/inventory/batches/${batch.publicId}`]] as const).filter(([, , access]) => access.canRead).map(([module, label, , href]) => <Link key={module} className="text-primary underline" href={href}>{label}</Link>)}</nav>;
 }
 
 function PlanBatch({ orderId, data, send, busy }: Commands & { orderId: string; data: Data }) {
@@ -89,10 +89,13 @@ function TnaStage({ batch, stage, send, busy }: Commands & { batch: Batch; stage
 }
 
 function LineAction({ batch, line, mode, send, busy }: Commands & { batch: Batch; line: Line; mode: BatchMode }) {
-  const production = useModuleAccess("production"), quality = useModuleAccess("quality");
+  const production = useModuleAccess("production");
   const [qcKind, setKind] = React.useState("Final");
-  if (mode !== "production" && mode !== "quality") return null;
-  const qc = mode === "quality", allowed = qc ? quality.canWrite : production.canWrite;
+  if (mode === "quality") {
+    return <Link className="mt-2 inline-block text-sm font-semibold text-primary underline" href={`/quality/work?task=${encodeURIComponent(`batch:${batch.publicId}:${line.name}`)}`}>Open inspection</Link>;
+  }
+  if (mode !== "production") return null;
+  const qc = false, allowed = production.canWrite;
   const blocked = qc ? qcKind !== "Inline" && !line.tnaComplete : !line.tnaComplete;
   return <details className="mt-3 rounded-lg border p-3"><summary className="cursor-pointer text-sm font-semibold">{qc ? "Record batch inspection" : "Record produced quantities"}</summary><form className="mt-3 space-y-3" onSubmit={async (e) => {
     e.preventDefault(); const form = e.currentTarget, f = new FormData(form);
@@ -132,19 +135,18 @@ function BatchTransfer({ batch, line, locations, send, busy }: Commands & { batc
   return <details className="mt-3 rounded-lg border p-3"><summary className="cursor-pointer text-sm">Transfer received stock: {item(line)}</summary><form className="mt-3 space-y-3" onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget); void send(`/batches/${batch.publicId}/lots/${f.get("lotId")}/transfer`, { qty: qty(f, "qty"), locationId: qty(f, "locationId"), reason: f.get("reason") }); }}><fieldset disabled={busy || !inventory.canWrite} className="space-y-3"><label className="text-sm">Source batch lot<select name="lotId" required className={field}>{line.lots.filter((l) => l.available > 0).map((l) => <option key={l.id} value={l.id}>{l.location} · {l.available} transferable</option>)}</select></label><label className="text-sm">Destination warehouse<select name="locationId" required className={field}><option value="">Select location</option>{locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label><Input name="qty" label="Transfer quantity" type="number" /><Input name="reason" label="Transfer reference" /><Button type="submit" disabled={busy || !inventory.canWrite}>Transfer stock</Button></fieldset></form></details>;
 }
 
-function ShipmentCard({ ship, send, busy, warehouse = false }: Commands & { ship: Ship; warehouse?: boolean }) {
-  const access = useModuleAccess("shipments"), inventory = useModuleAccess("inventory");
-  const [action, setAction] = React.useState(ship.status === "Pending" ? "In transit" : "Delivered");
+function ShipmentCard({ ship }: { ship: Ship }) {
   const inbound = ship.direction === "Inbound";
-  const actions = warehouse ? inbound && ["In transit", "Customs", "Out for delivery"].includes(ship.status) ? ["Delivered"] : [] : ship.status === "Pending" ? ["In transit", "Cancelled"] : ship.status === "In transit" ? ["Customs", "Out for delivery", "Delivered"] : ship.status === "Customs" ? ["Out for delivery", "Delivered"] : ship.status === "Out for delivery" ? ["Delivered"] : [];
-  if (!inbound && !["Pending", "Cancelled", "Returned"].includes(ship.status) && inventory.canWrite && ship.sources.every((s) => s.batchId)) actions.push("Returned");
-  const selected = actions.includes(action) ? action : actions[0];
-  const allowed = inbound && selected === "Delivered" ? inventory.canWrite : access.canWrite;
-  return <details className="rounded-lg border p-4"><summary className="cursor-pointer font-semibold">{ship.ref} · {ship.direction} · {ship.qty} pieces · {ship.status}</summary><p className="my-2 text-sm">{ship.carrier} → {ship.destination}</p>{ship.sources.map((s) => <div key={s.allocationId} className="text-sm">{s.batch} · {s.batchId && <Link className="text-primary underline" href={`/shipments/batches/${s.batchId}`}>{s.batchId}</Link>} · {[s.item, s.color, s.size].filter(Boolean).join(" / ")} · {s.location} · {s.qty} shipped{inbound && ship.status === "Delivered" ? ` / ${s.accepted} accepted` : ""}</div>)}
-    {actions.length > 0 && <form className="mt-4 space-y-3" onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget); void send(`/batches/shipments/${ship.publicId}/status`, { status: selected, reason: f.get("reason"), ...(inbound && selected === "Delivered" ? { accepted: ship.sources.map((s) => ({ allocationId: s.allocationId, qty: qty(f, `accepted-${s.allocationId}`) })) } : {}) }); }}><label className="text-sm">Action<select className={field} value={selected} disabled={busy || (warehouse ? !inventory.canWrite : !access.canWrite && !inventory.canWrite)} onChange={(e) => setAction(e.target.value)}>{actions.map((s) => <option key={s} value={s}>{s === "In transit" ? inbound ? "Confirm factory dispatch" : "Confirm warehouse dispatch" : s === "Delivered" && inbound ? "Confirm warehouse delivery & accepted quantities" : s}</option>)}</select></label>
-      {inbound && selected === "Delivered" && <><p className="text-sm">Confirm physically received and accepted quantities. Discrepancies go to hold for reconciliation. Inventory is added once.</p>{ship.sources.map((s) => <Input key={s.allocationId} name={`accepted-${s.allocationId}`} label={`Accepted: ${s.batch} / ${s.item} / ${s.color || ""} / ${s.size || ""}`} type="number" min={0} max={s.qty} value={s.qty} />)}</>}
-      <fieldset disabled={busy || !allowed} className="space-y-3"><Input name="reason" label="Reference / reason" /><Button type="submit" disabled={busy || !allowed}>Record shipment action</Button></fieldset>{!allowed && <p className="text-xs text-muted-foreground">{inbound && selected === "Delivered" ? "Warehouse write access is required to confirm accepted delivery quantities." : "Shipment write access is required."}</p>}
-    </form>}<details className="mt-3"><summary className="cursor-pointer text-sm">Shipment history</summary>{ship.history.map((h, i) => <p key={i} className="mt-2 text-xs">{h.kind} · {new Date(h.at).toLocaleString()} · {h.actor} · {h.reason}</p>)}</details></details>;
+  const dispatched = ["In transit", "Customs", "Out for delivery", "Dispatched"].includes(ship.status);
+  return <details className="rounded-lg border p-4"><summary className="cursor-pointer font-semibold">{ship.ref} · {ship.direction} · {ship.qty} pieces · {ship.status}</summary>
+    <p className="my-2 text-sm">{ship.carrier || "Carrier not entered"} → {ship.destination || "Destination not entered"}</p>
+    {ship.sources.map((s) => <div key={s.allocationId} className="text-sm">{s.batch} · {[s.item, s.color, s.size].filter(Boolean).join(" / ")} · {s.location} · {s.qty} shipped{inbound && ship.status === "Delivered" ? ` / ${s.accepted} accepted` : ""}</div>)}
+    <div className="mt-3 flex flex-wrap gap-4 text-sm">
+      <Link className="text-primary underline" href={`/shipments/shipments/${ship.publicId}`}>Open shipment</Link>
+      {inbound && dispatched && <Link className="text-primary underline" href="/inventory/receiving">Open warehouse receiving</Link>}
+    </div>
+    {inbound && dispatched && <p className="mt-2 text-sm text-muted-foreground">Stock is added when Inventory confirms the quantities that physically arrived.</p>}
+  </details>;
 }
 
 export function BatchWorkspace({ orderId, kind = "production", mode, batchId }: { orderId: string; kind?: "production" | "sales" | "procurement"; mode?: BatchMode; batchId?: string }) {
@@ -164,10 +166,10 @@ export function BatchWorkspace({ orderId, kind = "production", mode, batchId }: 
         {owner === "production" && production.canWrite && b.status !== "Cancelled" && b.summary.completed === 0 && <details className="mt-3"><summary className="cursor-pointer text-sm">Cancel batch plan</summary><form className="mt-3 space-y-3" onSubmit={(e) => { e.preventDefault(); void commands.send(`/batches/${b.publicId}/cancel`, { reason: new FormData(e.currentTarget).get("reason") }); }}><Input name="reason" label="Cancellation reason" /><Button type="submit" disabled={commands.busy}>Cancel batch</Button></form></details>}
         <details className="mt-4"><summary className="cursor-pointer text-sm font-semibold">{owner === "quality" ? "Inspection history" : "Batch history"}</summary>{b.history.filter((h) => owner !== "quality" || h.kind === "QC").map((h, i) => <div key={i} className="mt-2 rounded bg-muted/30 p-2 text-xs"><strong>{h.kind}</strong> · {new Date(h.at).toLocaleString()} · {h.actor || "System"}{h.inspectionId && <p><Link className="text-primary underline" href={`/quality/inspections/${h.inspectionId}`}>Open inspection {h.inspectionId}</Link></p>}<p>{String(h.details.reason || "")}</p><p>{Object.entries(h.details).filter(([k]) => ["qty", "assessed", "sampleSize", "approved", "held", "rejected", "kind", "worker"].includes(k)).map(([k, v]) => `${k}: ${v}`).join(" · ")}</p></div>)}</details>
       </details>)}{!data.batches.length && <p>No batches planned yet.</p>}
-      {owner === "shipments" && batchId && <Link className="block text-sm text-primary underline" href={`/shipments/orders/${orderId}`}>Manage shipments across this PO's batches</Link>}
+      {owner === "shipments" && batchId && <Link className="block text-sm text-primary underline" href="/shipments/shipments?view=ready">Open the shipments workspace</Link>}
       {owner === "shipments" && kind === "production" && data.batches.length > 0 && <InboundForm data={data} orderId={orderId} {...commands} />}{owner === "shipments" && <OutboundForm data={data} orderId={orderId} kind={kind} {...commands} />}
-      {owner === "overview" && data.productionOrders.map((w) => <Link className="block text-sm text-primary underline" key={w.publicId} href={`/shipments/orders/${w.publicId}`}>Manage inbound shipments for {w.ref}</Link>)}{owner === "overview" && kind === "sales" && <Link className="block text-sm text-primary underline" href={`/shipments/orders/${orderId}?kind=sales`}>Manage customer shipments</Link>}
-      {(owner === "shipments" || owner === "inventory" || owner === "overview") && <><h3 className="font-semibold">Linked shipments</h3>{data.shipments.map((s) => owner === "shipments" || owner === "inventory" && s.direction === "Inbound" ? <ShipmentCard key={s.publicId} ship={s} warehouse={owner === "inventory"} {...commands} /> : <Link key={s.publicId} href={`/shipments/shipments/${s.publicId}`} className="block text-sm text-primary underline">{s.ref} · {s.direction} · {s.status}</Link>)}</>}
+      {owner === "overview" && data.productionOrders.map((w) => <Link className="block text-sm text-primary underline" key={w.publicId} href="/shipments/shipments?view=ready">Prepare inbound shipments for {w.ref}</Link>)}{owner === "overview" && kind === "sales" && <Link className="block text-sm text-primary underline" href="/shipments/shipments?view=ready">Prepare customer shipments</Link>}
+      {(owner === "shipments" || owner === "inventory" || owner === "overview") && <><h3 className="font-semibold">Linked shipments</h3>{data.shipments.map((s) => <ShipmentCard key={s.publicId} ship={s} />)}</>}
     </>}
   </section>;
 }
@@ -177,7 +179,7 @@ export function BatchShipmentPanel({ shipmentId }: { shipmentId: string }) {
   const commands = useCommands();
   if (error) return <p role="alert">{String(error)}</p>;
   if (!data) return null;
-  return <section className="my-4 space-y-3 rounded-xl border bg-white p-5"><h2 className="font-bold">{data.direction} shipment · batch sources</h2><ShipmentCard ship={data} {...commands} />{commands.error && <p role="alert" className="text-destructive">{commands.error}</p>}{commands.notice && <p role="status">{commands.notice}</p>}</section>;
+  return <section className="my-4 space-y-3 rounded-xl border bg-white p-5"><h2 className="font-bold">{data.direction} shipment · batch sources</h2><ShipmentCard ship={data} />{commands.error && <p role="alert" className="text-destructive">{commands.error}</p>}{commands.notice && <p role="status">{commands.notice}</p>}</section>;
 }
 
 export function BatchWorkList({ kind }: { kind: "production" | "quality" | "shipments" | "inventory" }) {

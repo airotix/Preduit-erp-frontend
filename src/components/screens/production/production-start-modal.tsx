@@ -60,8 +60,8 @@ export function ProductionStartModal({
           : lineId ? { line_id: lineId } : {}),
       });
       onStarted();
-    } catch {
-      setError("Could not start production. Please try again.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not start production. Please try again.");
       setSaving(false);
     }
   };

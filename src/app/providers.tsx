@@ -6,6 +6,7 @@ import {
   QueryClientProvider,
 } from "@tanstack/react-query";
 import { AuthProvider } from "@/lib/auth";
+import { NumberInputWheel } from "@/components/number-input-wheel";
 import { usePathname } from "next/navigation";
 import { freshQueryDefaults, refreshData, subscribeToDataChanges } from "@/lib/data-refresh";
 
@@ -31,7 +32,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={client}>
-      <AuthProvider>{children}</AuthProvider>
+      <AuthProvider><NumberInputWheel />{children}</AuthProvider>
     </QueryClientProvider>
   );
 }

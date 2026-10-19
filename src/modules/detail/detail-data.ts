@@ -76,6 +76,7 @@ export interface InspectionItem {
   }[];
 }
 export interface DetailModel {
+  taskKey?: string | null;
   batchManaged?: boolean;
   batchId?: string | null;
   fulfillment?: import("@/components/screens/sales/order-fulfillment").OrderFulfillment | null;
@@ -200,7 +201,9 @@ export interface DetailModel {
   inspection?: {
     items: (InspectionItem | InspectionPlaceholder)[];
     shipment: {
-      replenishmentPO?: { publicId: string; poNo: string; received: boolean } | null;
+      replenishmentPO?: { publicId: string; poNo: string; received: boolean;
+        supplierShipmentRequired?: boolean; supplier?: string;
+        shipment?: { id: string; ref: string; status: string } | null } | null;
       allPassed: boolean; passedCount: number; total: number;
       shipmentRef: string | null; inspectionId: string | null;
     };

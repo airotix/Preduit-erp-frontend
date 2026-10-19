@@ -10,7 +10,7 @@ import { useAuth } from "@/lib/auth";
 
 type Option = { id: string; label: string };
 type List<T> = { items: T[]; total: number };
-type Options = { variants: Option[]; locations: Option[]; suppliers: Option[]; counters: Option[] };
+type Options = { variants: (Option & { supplierIds?: string[] })[]; locations: Option[]; suppliers: Option[]; counters: Option[] };
 type Event = { action: string; actor: string; at: string; data: { reason: string; override?: boolean;
   snapshot?: { label: string; book: number; count: number | null; recount: number | null }[] } };
 const field = "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-50";
@@ -69,6 +69,7 @@ function Pagination({ offset, total, setOffset }: { offset: number; total: numbe
 }
 
 type Rule = { id: string; variantId: string; label: string; locationId: string; warehouse: string;
+  priceConfigured?: boolean; catalogHref?: string;
   supplierId: string; supplier: string; minimum: number; target: number; leadDays: number; minimumOrder: number;
   packMultiple: number; active: boolean; available: number; incoming: number; unassigned: number; suggested: number; enabled: boolean; expected: string };
 type Plan = { rules: Rule[]; unassigned: { poId: string; po: string; quantity: number; expected: string }[] };
@@ -93,7 +94,7 @@ export function ReplenishmentScreen() {
       if (result) { setNotice("Reorder rule saved."); setShowForm(false); } }}><h2 className="font-semibold">Warehouse reorder rule</h2>
       <div className="grid gap-4 md:grid-cols-3"><Select title="Variant" options={o.variants} value={draft.variantId} onChange={variantId => setDraft({ ...draft, variantId })} />
         <Select title="Warehouse" options={o.locations} value={draft.locationId} onChange={locationId => setDraft({ ...draft, locationId })} />
-        <Select title="Supplier" options={o.suppliers} value={draft.supplierId} onChange={supplierId => setDraft({ ...draft, supplierId })} />
+        <Select title="Supplier" options={o.suppliers.filter(s => o.variants.find(v => v.id === draft.variantId)?.supplierIds?.includes(s.id))} value={draft.supplierId} onChange={supplierId => setDraft({ ...draft, supplierId })} />
         {([['minimum', 'Minimum'], ['target', 'Target'], ['leadDays', 'Lead time (days)'], ['minimumOrder', 'Minimum order'], ['packMultiple', 'Pack multiple']] as const).map(([key, title]) =>
           <NumberField key={key} title={title} value={draft[key]} min={key === "target" || key === "minimumOrder" || key === "packMultiple" ? 1 : 0}
             onChange={n => setDraft({ ...draft, [key]: n })} />)}</div>
@@ -111,7 +112,8 @@ export function ReplenishmentScreen() {
       <tbody>{plan.data?.rules.filter(r => `${r.label} ${r.warehouse} ${r.supplier}`.toLowerCase().includes(search.toLowerCase())).map(r => <tr key={r.id}>
         <td className={cell}><strong>{r.label}</strong><p className="text-muted-foreground">{r.warehouse}{!r.active && " · Paused"}</p></td>
         <td className={cell}>{r.available}</td><td className={cell}>{r.incoming}{r.unassigned > 0 && <p className="text-amber-700">+{r.unassigned} unassigned</p>}</td>
-        <td className={cell}>{r.minimum} / {r.target}</td><td className={cell}>{r.supplier}<p className="text-muted-foreground">{r.expected} · {r.leadDays} days</p></td>
+        <td className={cell}>{r.minimum} / {r.target}</td><td className={cell}>{r.supplier}<p className="text-muted-foreground">{r.expected} · {r.leadDays} days</p>
+          {r.priceConfigured === false && <Link href={r.catalogHref ?? "/catalog/products"} className="text-amber-700 underline">Configure supplier price in Catalog</Link>}</td>
         <td className={cell}>{r.suggested}</td><td className={cell}><div className="flex gap-2"><button className={button} disabled={!access.canWrite || write.busy} onClick={() => {
           setDraft({ variantId: r.variantId, locationId: r.locationId, supplierId: r.supplierId, minimum: r.minimum, target: r.target,
             leadDays: r.leadDays, minimumOrder: r.minimumOrder, packMultiple: r.packMultiple, active: r.active }); setShowForm(true); }}>Edit</button>

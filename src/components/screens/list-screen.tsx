@@ -1,5 +1,5 @@
 "use client";
-import { BatchWorkList } from "./production/batch-workspace";
+import { QcQueue } from "./quality/qc-queue";
 
 import * as React from "react";
 import Link from "next/link";
@@ -19,7 +19,6 @@ import type { DetailModel } from "@/modules/detail/detail-data";
 import { InspectionForm } from "@/components/screens/inspection-form";
 import { TransferForm } from "@/components/screens/transfer-form";
 import { StockReceiptForm } from "@/components/screens/stock-receipt-form";
-import { WarehouseReceivingPanel } from "@/components/screens/warehouse-receiving-panel";
 import { Button } from "@/components/ui/button";
 import { detailTypeFor } from "@/config/detail-types";
 import {
@@ -95,7 +94,6 @@ const STATUS_ENDPOINTS: Record<string, (id: string) => string> = {
   "inventory/transfers": (id) => `/inventory/transfers/${id}/status`,
   // Inspection results are decided inside the per-item workspace (Start →
   // Complete), not via an inline status dropdown on the grouped list.
-  "shipments/shipments": (id) => `/shipments/shipments/${id}/status`,
 };
 const STATUS_OPTIONS: Record<string, string[]> = {
   "sales/orders": ["New", "Packed", "Shipped", "Cancelled"],
@@ -103,7 +101,6 @@ const STATUS_OPTIONS: Record<string, string[]> = {
   "sales/returns": ["Inspecting", "Refunded", "Rejected"],
   "inventory/transfers": ["Draft", "In transit", "Received", "Cancelled"],
   "quality/inspections": ["Pending", "Pass", "Fail"],
-  "shipments/shipments": ["Pending", "Label created", "Dispatched", "In transit", "Customs", "Out for delivery", "Delivered"],
 };
 
 /** module/tab → a bulk action button (no create form). */
@@ -194,7 +191,7 @@ export function ListScreen({
         return values;
       }
       // A PO raised from Reorder Alerts is a real procurement PO.
-      const path = isReorderPOCreate ? "/procurement/pos" : CREATE_ENDPOINTS[key];
+      const path = isPOCreate || isReorderPOCreate ? "/procurement/pos/grouped" : CREATE_ENDPOINTS[key];
       if (USE_BACKEND && path) {
         return apiPost(path, values);
       }
@@ -202,6 +199,10 @@ export function ListScreen({
       return values;
     },
     onSuccess: (result) => {
+      if (isPOCreate || isReorderPOCreate) {
+        const created = (result as { purchaseOrders?: { po_no: string; supplier: string }[] })?.purchaseOrders;
+        if (created?.length) setActionResult(`Created ${created.length} supplier PO(s): ${created.map(po => `${po.po_no} (${po.supplier})`).join(", ")}.`);
+      }
       if (module === "inventory" && tab === "stock") {
         setActionResult(`Received ${(result as { received?: number })?.received ?? 0} units into inventory.`);
       }
@@ -341,12 +342,11 @@ export function ListScreen({
     [...(seasonNames ?? []), "Core", "Spring '26", "Fall '26", "Winter '26"]
       .map((name) => [name.toLowerCase(), name])
   ).values());
+  if (USE_BACKEND && module === "quality" && tab === "inspections") {
+    return <QcQueue />;
+  }
   return (
     <>
-      {USE_BACKEND && module === "quality" && tab === "inspections" && <BatchWorkList kind="quality" />}
-      {USE_BACKEND && module === "shipments" && tab === "shipments" && <BatchWorkList kind="shipments" />}
-      {USE_BACKEND && module === "inventory" && tab === "stock" && <BatchWorkList kind="inventory" />}
-      {USE_BACKEND && module === "inventory" && tab === "stock" && <WarehouseReceivingPanel />}
       {USE_BACKEND && module === "inventory" && tab === "stock" && <div className="mb-4">
         <Link href="/inventory/movements" className="inline-block rounded-md border px-3 py-2 text-sm font-semibold">View stock movement history</Link>
       </div>}
@@ -357,7 +357,7 @@ export function ListScreen({
           queryClient.invalidateQueries({ queryKey: ["screen", "production"] });
         }} />}
       <DataTable
-        columns={isProductionOrders && USE_BACKEND ? buildColumns(config.columns) : columns}
+        columns={USE_BACKEND && (isProductionOrders || (module === "shipments" && tab === "shipments")) ? buildColumns(config.columns) : columns}
         data={config.rows}
         records={config.records}
         searchPlaceholder={config.search}

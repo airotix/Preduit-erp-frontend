@@ -9,6 +9,9 @@ import { SalesInvoices } from "@/components/screens/sales/sales-invoices";
 import { AdminUsers } from "@/components/screens/admin/admin-users";
 import { AdminRoles } from "@/components/screens/admin/admin-roles";
 import { AdminCompanies } from "@/components/screens/admin/admin-companies";
+import { WarehouseReceivingPanel } from "@/components/screens/warehouse-receiving-panel";
+import { BatchWorkList } from "@/components/screens/production/batch-workspace";
+import { ShipmentsWorkspace } from "@/components/screens/shipments-workspace";
 
 export function generateStaticParams() {
   return MODULES.flatMap((m) =>
@@ -73,6 +76,28 @@ export default async function ScreenPage({
           {tab.id === "users" && <AdminUsers />}
           {tab.id === "roles" && <AdminRoles />}
           {tab.id === "companies" && <AdminCompanies />}
+        </div>
+      </>
+    );
+  }
+
+  if (mod.id === "shipments" && tab.id === "shipments") {
+    return (
+      <>
+        <PageHeader crumb={mod.label} title="Shipments" />
+        <div className="erp-scroll flex-1 overflow-y-auto px-[26px] pb-7 pt-[18px]">
+          <ShipmentsWorkspace />
+        </div>
+      </>
+    );
+  }
+
+  if (mod.id === "inventory" && (tab.id === "receiving" || tab.id === "batchreceiving")) {
+    return (
+      <>
+        <PageHeader crumb={mod.label} title={tab.label} />
+        <div className="erp-scroll flex-1 overflow-y-auto px-[26px] pb-7 pt-[18px]">
+          {tab.id === "receiving" ? <WarehouseReceivingPanel /> : <BatchWorkList kind="inventory" />}
         </div>
       </>
     );

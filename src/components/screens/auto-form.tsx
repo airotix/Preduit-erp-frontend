@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { LocationSelector } from "@/components/ui/location-selector";
@@ -174,6 +174,7 @@ export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
     [schema, numericPrefixes]
   );
   const {
+    control,
     register,
     handleSubmit,
     setValue,
@@ -250,20 +251,35 @@ export function AutoForm<T extends z.ZodObject<z.ZodRawShape>>({
             ) : f.kind === "date" ? (
               <Input id={f.name} type="date" {...register(f.name)} />
             ) : numericPrefixes?.[f.name] ? (
-              <div className="flex items-center rounded-md border border-input focus-within:ring-2 focus-within:ring-ring">
-                <span className="pl-3 text-sm font-medium">{numericPrefixes[f.name]}</span>
-                <Input
-                  id={f.name}
-                  {...register(f.name)}
-                  className="border-0 shadow-none focus-visible:ring-0"
-                  inputMode="numeric"
-                  aria-label="SKU number"
-                  placeholder="000001"
-                  maxLength={6}
-                  value={String(watch(f.name) ?? "").replace(numericPrefixes[f.name], "")}
-                  onChange={(e) => setValue(f.name, numericPrefixes[f.name] + e.target.value.replace(/\D/g, "").slice(0, 6), { shouldDirty: true, shouldValidate: true })}
-                />
-              </div>
+              <Controller
+                name={f.name}
+                control={control}
+                defaultValue=""
+                render={({ field }) => {
+                  const prefix = numericPrefixes[f.name];
+                  const stored = String(field.value ?? "");
+                  return <div className="flex items-center rounded-md border border-input focus-within:ring-2 focus-within:ring-ring">
+                    <span className="pl-3 text-sm font-medium">{prefix}</span>
+                    <Input
+                      id={f.name}
+                      name={field.name}
+                      ref={field.ref}
+                      onBlur={field.onBlur}
+                      className="border-0 shadow-none focus-visible:ring-0"
+                      inputMode="numeric"
+                      aria-label="SKU number"
+                      aria-invalid={!!errors[f.name]}
+                      placeholder="000001"
+                      maxLength={6}
+                      value={stored.startsWith(prefix) ? stored.slice(prefix.length) : stored}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, "").slice(0, 6);
+                        field.onChange(digits ? prefix + digits : "");
+                      }}
+                    />
+                  </div>;
+                }}
+              />
             ) : (
               <>
               <Input

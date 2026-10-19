@@ -34,6 +34,7 @@ export interface LineTL {
   alert: { type: string; message: string } | null; stages: Stage[];
 }
 interface Detail {
+  tnaStartBlockedReason?: string | null;
   ref: string; title: string; statusLabel: string; statusTone: Tone;
   meta: { k: string; v: string }[];
   started: boolean; progress: number; stageNames: string[];
@@ -43,7 +44,7 @@ interface Detail {
   stages: Stage[]; materials: { component: string; material: string; qty: string; cost: string }[];
   orderLines?: OrderLine[];
   orderTotal?: string;
-  sourcePurchaseOrder?: { publicId: string; poNo: string } | null;
+  sourcePurchaseOrder?: { publicId: string; poNo: string; status?: string } | null;
   lines?: LineTL[];
 }
 
@@ -67,7 +68,7 @@ const stepColor = (s: Stage) =>
 
 /** One style's production timeline (stepper + stage cards), or a start prompt. */
 export function LineTimeline({
-  line, busy, onAct, onModal, onStart, canWrite, writeReason,
+  line, busy, onAct, onModal, onStart, canWrite, writeReason, startBlockedReason,
 }: {
   line: LineTL;
   busy: boolean;
@@ -76,6 +77,7 @@ export function LineTimeline({
   onStart: () => void;
   canWrite: boolean;
   writeReason?: string | null;
+  startBlockedReason?: string | null;
 }) {
   if (!line.started) {
     return (
@@ -90,8 +92,9 @@ export function LineTimeline({
           Finishing → Packed) for <span className="font-semibold">{line.name}</span>. Each item
           runs on its own timeline.
         </p>
-        <Button variant="navy" size="sm" onClick={canWrite ? onStart : undefined}
-          disabled={!canWrite} title={!canWrite ? writeReason ?? undefined : undefined}>
+        {startBlockedReason && <p role="status" className="max-w-xl text-sm text-amber-700">{startBlockedReason}</p>}
+        <Button variant="navy" size="sm" onClick={canWrite && !startBlockedReason ? onStart : undefined}
+          disabled={!canWrite || !!startBlockedReason} title={startBlockedReason || (!canWrite ? writeReason ?? undefined : undefined)}>
           <Play size={15} strokeWidth={2} /> Start production
         </Button>
       </Card>
@@ -171,8 +174,8 @@ export function LineTimeline({
                   </Button>
                 )}
                 {s.status === "Pending" && (
-                  <Button size="sm" className="h-8" disabled={busy || !canWrite}
-                    title={!canWrite ? writeReason ?? undefined : undefined}
+                  <Button size="sm" className="h-8" disabled={busy || !canWrite || !!startBlockedReason}
+                    title={startBlockedReason || (!canWrite ? writeReason ?? undefined : undefined)}
                     onClick={() => onAct(s.public_id, "start")}>
                     <Play size={14} strokeWidth={2} /> Start
                   </Button>
@@ -219,6 +222,7 @@ export function ProductionOrderDetail({
   const qc = useQueryClient();
   const { canWrite, reason: writeReason } = useModuleAccess("production");
   const [startOpen, setStartOpen] = React.useState(false);
+  const [stopOpen, setStopOpen] = React.useState(false);
   // null → start the whole order (all lines); otherwise start just this line.
   const [startLineId, setStartLineId] = React.useState<string | null>(null);
   const [modal, setModal] = React.useState<{ kind: "assign" | "notes" | "extend"; id: string } | null>(null);
@@ -230,6 +234,10 @@ export function ProductionOrderDetail({
   });
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["production", "porder", publicId] });
+  const stop = useMutation({
+    mutationFn: (reason: string) => apiPost(`/production/porders/${publicId}/stop`, { reason }),
+    onSuccess: () => { setStopOpen(false); qc.invalidateQueries(); },
+  });
 
   const act = useMutation({
     mutationFn: ({ id, action, body }: { id: string; action: string; body?: Record<string, unknown> }) =>
@@ -305,6 +313,12 @@ export function ProductionOrderDetail({
             </div>
           </Card>
 
+          {data.sourcePurchaseOrder && ["Cancelled", "Rejected", "Inactive"].includes(data.sourcePurchaseOrder.status ?? "") && data.statusLabel !== "Cancelled" && <Card className="mt-4 space-y-3 p-5">
+            <h2 className="font-bold">Source PO withdrawn</h2>
+            <p className="text-sm text-muted-foreground">Review work already performed and close this TNA manually. Its completed stages, inspections, shipments and Finance records are retained.</p>
+            <Button variant="outline" disabled={!canWrite} onClick={() => { stop.reset(); setStopOpen(true); }}>Stop production TNA</Button>
+          </Card>}
+
           <ProductionSuborders orderId={publicId} />
 
           <Tabs defaultValue="summary" className="mt-4">
@@ -373,8 +387,9 @@ export function ProductionOrderDetail({
                   onAct={onAct}
                   onModal={setModal}
                   onStart={() => { setStartLineId(ln.publicId); setStartOpen(true); }}
-                  canWrite={canWrite}
+                  canWrite={canWrite && data.statusLabel !== "Cancelled"}
                   writeReason={writeReason}
+                  startBlockedReason={data.tnaStartBlockedReason}
                 />
               </TabsContent>
             ))}
@@ -419,6 +434,11 @@ export function ProductionOrderDetail({
         stageNames={data?.stageNames}
         onStarted={() => { setStartOpen(false); refresh(); }}
       />
+
+      <FinanceFormSheet open={stopOpen} onOpenChange={(open) => { if (!stop.isPending) setStopOpen(open); }}
+        title="Stop production TNA" description="Close the production work after PO withdrawal. Linked inspections, stock, shipments and Finance entries require separate manual follow-up."
+        fields={[{ name: "reason", label: "Reason", required: true }]} submitLabel="Stop TNA"
+        pending={stop.isPending} serverError={stop.error?.message} onSubmit={(values) => stop.mutate(String(values.reason))} />
 
       <FinanceFormSheet
         open={!!modal}

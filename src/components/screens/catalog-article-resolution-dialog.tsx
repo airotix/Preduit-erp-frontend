@@ -42,12 +42,18 @@ type Preview = {
   openStages: number;
   openInspections: number;
   canDelete: boolean;
+  awaitingReplacement?: boolean;
 };
 type Target =
-  | { kind: "order" | "po"; item: DocumentBlocker }
+  | { kind: "order"; item: DocumentBlocker }
   | { kind: "stock"; row: StockRow }
   | { kind: "shipment"; item: { id: string; ref: string } }
   | { kind: "cache" };
+type PoIssue = {
+  module: string; reference: string; status: string; href: string; action: string;
+  canResolve?: boolean; resolveKey?: string | null; resolveLabel?: string | null;
+};
+type PoImpact = { reviewToken: string; blockers: string[]; issues: PoIssue[] };
 
 export function CatalogArticleResolutionDialog({ id, onClose, onDeleted, onResolved }: {
   id: string;
@@ -71,6 +77,9 @@ export function CatalogArticleResolutionDialog({ id, onClose, onDeleted, onResol
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
   const [notice, setNotice] = React.useState("");
+  const [openPo, setOpenPo] = React.useState<string | null>(null);
+  const [poImpact, setPoImpact] = React.useState<PoImpact | null>(null);
+  const [poReason, setPoReason] = React.useState("");
 
   const refresh = React.useCallback(async () => {
     setPreview(await apiGet<Preview>(`/catalog/products/${id}/delete-preview`));
@@ -107,7 +116,7 @@ export function CatalogArticleResolutionDialog({ id, onClose, onDeleted, onResol
 
   const resolve = async () => {
     if (!target || !reason.trim()) return;
-    if ((target.kind === "order" || target.kind === "po" || target.kind === "shipment") && !confirmed) return;
+    if ((target.kind === "order" || target.kind === "shipment") && !confirmed) return;
     setBusy(true);
     setError("");
     try {
@@ -117,9 +126,6 @@ export function CatalogArticleResolutionDialog({ id, onClose, onDeleted, onResol
       } else if (target.kind === "order") {
         await apiPost(`/sales/orders/${target.item.id}/status`, { status: "Inactive", reason: reason.trim() });
         setNotice(`${target.item.ref} was marked inactive. Its stock reservations were released.`);
-      } else if (target.kind === "po") {
-        await apiPost(`/procurement/pos/${target.item.id}/status`, { status: "Inactive", reason: reason.trim() });
-        setNotice(`${target.item.ref} was marked inactive. Its active production and inspections were stopped.`);
       } else if (target.kind === "stock") {
         if (!Number.isInteger(quantity) || quantity < 1 || quantity > target.row.available) {
           throw new Error("Enter a whole quantity within the available stock.");
@@ -144,6 +150,52 @@ export function CatalogArticleResolutionDialog({ id, onClose, onDeleted, onResol
     }
   };
 
+  const loadPo = async (poId: string) => {
+    setOpenPo(poId);
+    setError("");
+    setPoImpact(null);
+    setBusy(true);
+    try {
+      setPoImpact(await apiGet<PoImpact>(`/procurement/pos/${poId}/impact?status=Inactive`));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load this purchase order.");
+      setOpenPo(null);
+    } finally { setBusy(false); }
+  };
+
+  const clearPoIssue = async (poId: string, key: string) => {
+    if (poReason.trim().length < 3) { setError("Enter a reason before removing a linked record."); return; }
+    setBusy(true);
+    setError("");
+    try {
+      await apiPost(`/procurement/pos/${poId}/impact/resolve`, { key, reason: poReason.trim() });
+      setPoImpact(await apiGet<PoImpact>(`/procurement/pos/${poId}/impact?status=Inactive`));
+      await refresh();
+      invalidate();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not remove that linked record.");
+    } finally { setBusy(false); }
+  };
+
+  const inactivatePo = async (po: DocumentBlocker) => {
+    if (!poImpact || poReason.trim().length < 3) { setError("Enter a reason before marking the purchase order inactive."); return; }
+    setBusy(true);
+    setError("");
+    try {
+      await apiPost(`/procurement/pos/${po.id}/status`, {
+        status: "Inactive", reason: poReason.trim(), reviewToken: poImpact.reviewToken, acknowledged: true,
+      });
+      setNotice(`${po.ref} was marked inactive.`);
+      setOpenPo(null);
+      setPoImpact(null);
+      await refresh();
+      invalidate();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not mark this purchase order inactive.");
+      try { setPoImpact(await apiGet<PoImpact>(`/procurement/pos/${po.id}/impact?status=Inactive`)); } catch { /* keep the error */ }
+    } finally { setBusy(false); }
+  };
+
   const deleteArticle = async () => {
     setBusy(true);
     setError("");
@@ -164,7 +216,7 @@ export function CatalogArticleResolutionDialog({ id, onClose, onDeleted, onResol
     !preview.batchMismatch && preview.reserved <= preview.batchReserved;
   const canReconcile = documentsClear && preview?.onHand === 0 && preview.legacyMismatch;
   const submitDisabled = busy || reason.trim().length < 3 ||
-    ((target?.kind === "order" || target?.kind === "po" || target?.kind === "shipment") && !confirmed) ||
+    ((target?.kind === "order" || target?.kind === "shipment") && !confirmed) ||
     (target?.kind === "stock" && (!Number.isInteger(quantity) || quantity < 1 || quantity > target.row.available ||
       (disposition === "Return to supplier" && !reference.trim())));
 
@@ -193,14 +245,36 @@ export function CatalogArticleResolutionDialog({ id, onClose, onDeleted, onResol
 
           {preview.purchaseOrders.length > 0 && <section>
             <h3 className="font-semibold">Purchase orders</h3>
-            <div className="mt-2 space-y-2">{preview.purchaseOrders.map((po) => <div key={po.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3">
-              <div><a className="font-medium underline" href={`/procurement/pos/${po.id}`}>{po.ref}</a> · {po.status}
-                {po.otherLines > 0 && <p className="text-muted-foreground">Contains {po.otherLines} other article line(s).</p>}</div>
-              {po.blockReason && <p className="w-full text-amber-800">{po.blockReason}</p>}
-              <button type="button" onClick={() => choose({ kind: "po", item: po })}
-                disabled={!procurementAccess.canWrite || !po.canMarkInactive || busy}
-                title={!procurementAccess.canWrite ? procurementAccess.reason ?? undefined : undefined}
-                className="rounded-md border px-3 py-1.5 font-medium disabled:opacity-50">Mark inactive</button>
+            <p className="mt-1 text-muted-foreground">Clear production, draft invoices, and unpaid payables here, then mark the purchase order inactive.</p>
+            <label className="mt-2 block">Reason
+              <textarea value={poReason} onChange={(e) => setPoReason(e.target.value)} maxLength={400} rows={2}
+                className="mt-1 w-full rounded-md border px-3 py-2" placeholder="Required before removing a linked record or marking a PO inactive" />
+            </label>
+            <div className="mt-2 space-y-2">{preview.purchaseOrders.map((po) => <div key={po.id} className="rounded-md border p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div><a className="font-medium underline" href={`/procurement/pos/${po.id}`}>{po.ref}</a> · {po.status}
+                  {po.otherLines > 0 && <p className="text-muted-foreground">Contains {po.otherLines} other article line(s).</p>}</div>
+                <button type="button" onClick={() => openPo === po.id ? setOpenPo(null) : loadPo(po.id)}
+                  disabled={!procurementAccess.canWrite || !po.canMarkInactive || busy}
+                  title={!procurementAccess.canWrite ? procurementAccess.reason ?? undefined : undefined}
+                  className="rounded-md border px-3 py-1.5 font-medium disabled:opacity-50">{openPo === po.id ? "Hide dependencies" : "Resolve dependencies"}</button>
+              </div>
+              {po.blockReason && <p className="mt-2 text-amber-800">{po.blockReason}</p>}
+              {openPo === po.id && <div className="mt-3 space-y-2">
+                {!poImpact && <p>Loading linked records…</p>}
+                {poImpact?.blockers.map((message) => <p key={message} className="rounded border border-red-200 bg-red-50 p-2 text-red-800">{message}</p>)}
+                {poImpact && poImpact.issues.length === 0 && !poImpact.blockers.length && <p className="text-muted-foreground">No linked records are blocking this purchase order.</p>}
+                {poImpact?.issues.map((issue) => <div key={issue.resolveKey || `${issue.module}-${issue.reference}`} className="rounded-md bg-white p-2">
+                  <div className="flex flex-wrap justify-between gap-2"><b>{issue.module} · {issue.reference || "Linked record"}</b><span>{issue.status}</span></div>
+                  <p className="my-1 text-muted-foreground">{issue.action}</p>
+                  <div className="flex flex-wrap gap-3">
+                    {issue.canResolve && issue.resolveKey && <button type="button" disabled={busy} onClick={() => clearPoIssue(po.id, issue.resolveKey!)} className="font-semibold underline disabled:opacity-50">{issue.resolveLabel || "Remove"}</button>}
+                    <a className="font-semibold underline" href={issue.href} target="_blank" rel="noopener noreferrer">Open {issue.module}</a>
+                  </div>
+                </div>)}
+                {poImpact && <button type="button" disabled={busy || poReason.trim().length < 3 || poImpact.blockers.length > 0} onClick={() => inactivatePo(po)}
+                  className="rounded-md bg-brand-ink px-3 py-2 font-semibold text-white disabled:opacity-50">Mark inactive</button>}
+              </div>}
             </div>)}</div>
           </section>}
 
@@ -230,7 +304,7 @@ export function CatalogArticleResolutionDialog({ id, onClose, onDeleted, onResol
 
           {(preview.stockRows.length > 0 || preview.legacyMismatch) && <section>
             <h3 className="font-semibold">Inventory · {preview.onHand} on hand</h3>
-            <p className="mt-1 text-muted-foreground">Record a write-off or supplier return for each SKU and location. Quantity changes are audited.</p>
+            <p className="mt-1 text-muted-foreground">Record a write-off here, or <a className="underline" href="/procurement/returns" target="_blank" rel="noopener noreferrer">record a supplier return in Procurement</a> with its source PO and credit, refund or replacement.</p>
             <div className="mt-2 space-y-2">{preview.stockRows.map((row) => <div key={row.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3">
               <div><span className="font-medium">{row.sku}</span>{row.color ? ` · ${row.color}` : ""}{row.size ? ` · ${row.size}` : ""}
                 <p className="text-muted-foreground">{row.location} · {row.onHand} on hand · {row.reserved} reserved</p></div>
@@ -246,6 +320,7 @@ export function CatalogArticleResolutionDialog({ id, onClose, onDeleted, onResol
             </div>}
           </section>}
 
+          {preview.awaitingReplacement && <p className="rounded-md bg-amber-50 p-3 text-amber-900">A supplier replacement is outstanding. Resolve it in <a className="underline" href="/procurement/returns">Supplier Returns</a> before deleting this article.</p>}
           {(preview.openStages > 0 || preview.openInspections > 0) && <p className="text-muted-foreground">
             Final retirement will stop {preview.openStages} active T&A stage(s) and {preview.openInspections} inspection(s), keeping their history.
           </p>}
@@ -260,15 +335,15 @@ export function CatalogArticleResolutionDialog({ id, onClose, onDeleted, onResol
             <label className="flex items-start gap-2"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
               <span>I confirm this article shipment should be cancelled.</span></label>
           </>}
-          {(target.kind === "order" || target.kind === "po") && <>
-            <p>This withdraws the entire {target.kind === "po" ? "PO" : "order"}{target.item.otherLines > 0 ? `, including ${target.item.otherLines} other article line(s)` : ""}. Existing history remains.</p>
+          {target.kind === "order" && <>
+            <p>This withdraws the entire order{target.item.otherLines > 0 ? `, including ${target.item.otherLines} other article line(s)` : ""}. Existing history remains.</p>
             <label className="flex items-start gap-2"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
               <span>I confirm the entire document is being withdrawn and its customer or supplier commitment has been resolved.</span></label>
           </>}
           {target.kind === "stock" && <>
             <label className="block">Disposition
               <select value={disposition} onChange={(e) => setDisposition(e.target.value)} className="mt-1 w-full rounded-md border bg-white px-3 py-2">
-                <option>Write off</option><option>Return to supplier</option>
+                <option>Write off</option>
               </select>
             </label>
             <label className="block">Quantity · {target.row.available} available

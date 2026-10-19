@@ -99,7 +99,7 @@ export function StockReceiptForm({
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="erp-scroll flex-1 space-y-4 overflow-y-auto px-6 pb-6">
-        <p className="text-sm text-muted-foreground">Use this form for independent stock arrivals. Receive production purchase orders through Warehouse receiving on the Inventory stock screen.</p>
+        <p className="text-sm text-muted-foreground">Use this form for independent stock arrivals. Receive production purchase orders from Inventory → Warehouse receiving.</p>
         <div className="space-y-1.5">
           <Label>Location<span className="ml-0.5 text-brand-orange">*</span></Label>
           <Select value={location} onValueChange={setLocation}>

@@ -10,6 +10,7 @@ import { apiPost, USE_BACKEND } from "@/lib/api-client";
 import type { BoardConfig } from "@/lib/screen-types";
 import Link from "next/link";
 import { TechPackPanel } from "@/components/screens/tech-pack-panel";
+import { POChangeReview } from "@/components/screens/po-change-review";
 
 /** module/tab → per-card status endpoint (approve/reject on the board). */
 const CARD_STATUS_ENDPOINTS: Record<string, (id: string) => string> = {
@@ -27,6 +28,7 @@ export function BoardView({
 }) {
   const queryClient = useQueryClient();
   const [busyId, setBusyId] = React.useState<string | null>(null);
+  const [reviewId, setReviewId] = React.useState<string | null>(null);
   const [selectedStage, setSelectedStage] = React.useState("");
   const mobileStage = config.columns.some((column) => column.title === selectedStage) ? selectedStage : config.columns[0]?.title;
   const key = `${module}/${tab}`;
@@ -50,12 +52,17 @@ export function BoardView({
 
   const act = (id: string | undefined, status: string) => {
     if (!id) return;
+    if (USE_BACKEND && key === "procurement/approvals" && status === "Rejected") {
+      setReviewId(id);
+      return;
+    }
     setBusyId(id);
     setStatus.mutate({ id, status });
   };
 
   return (
     <div className="min-w-0">
+      {reviewId && <POChangeReview id={reviewId} change={{ status: "Rejected" }} onClose={() => setReviewId(null)} />}
       <label className="mb-4 flex items-center gap-3 text-sm font-semibold sm:hidden">
         Stage
         <select aria-label="Board stage" className="min-h-11 min-w-0 flex-1 rounded-lg border bg-white px-3" value={mobileStage || ""} onChange={(event) => setSelectedStage(event.target.value)}>

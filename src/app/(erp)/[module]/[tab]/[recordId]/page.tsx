@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { notFound, useParams } from "next/navigation";
+import { notFound, useParams, useRouter } from "next/navigation";
 import { getModule, getTab } from "@/config/navigation";
 import { detailTypeFor } from "@/config/detail-types";
 import { fetchScreen } from "@/modules/registry";
@@ -90,6 +90,9 @@ export default function RecordPage() {
     );
   }
   const { screen, model, recordId } = detail.data;
+  if (mod!.id === "quality" && tab!.id === "inspections" && model?.taskKey) {
+    return <QualityRedirect taskKey={model.taskKey} />;
+  }
 
   const row = (screen.kind === "list" ? screen.rows[isPublicId ? 0 : index] : undefined) as Cell[] | undefined;
   if (!row) notFound();
@@ -129,4 +132,12 @@ export default function RecordPage() {
       />
     </div>
   );
+}
+
+function QualityRedirect({ taskKey }: { taskKey: string }) {
+  const router = useRouter();
+  React.useEffect(() => {
+    router.replace(`/quality/work?task=${encodeURIComponent(taskKey)}`);
+  }, [router, taskKey]);
+  return <p className="p-6 text-sm">Opening the inspection…</p>;
 }

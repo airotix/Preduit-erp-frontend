@@ -207,6 +207,8 @@ export function FinanceLedger({ variant }: { variant: "customer" | "supplier" })
         onExport={exportCsv}
       />
 
+      {!isCustomer && <p className="mb-4 text-sm text-muted-foreground">Supplier credit notes and refunds for returned goods are confirmed in <a className="font-semibold underline" href="/procurement/returns">Supplier Returns</a>.</p>}
+
       <FinanceFormSheet
         open={formOpen}
         onOpenChange={setFormOpen}

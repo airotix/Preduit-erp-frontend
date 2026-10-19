@@ -16,7 +16,8 @@ export type OrderFulfillment = {
   batchManaged?: boolean;
   shipments?: { publicId: string; shipmentNo: string; status: string; packed: boolean; dispatched: boolean }[];
   canCreatePO: boolean;
-  lines: { lineId: number; productId?: number | null; name: string; color: string | null; size: string | null; ordered: number; reserved: number; dispatched?: number; outstanding?: number; missing: number; toPurchase?: number }[];
+  lines: { lineId: number; productId?: number | null; name: string; color: string | null; size: string | null; ordered: number; reserved: number; dispatched?: number; outstanding?: number; missing: number; toPurchase?: number;
+    suppliers?: { publicId: string; name: string; price: number; currency: string }[] }[];
   purchaseOrders: { publicId: string; poNo: string }[];
   shipment: { publicId: string; shipmentNo: string } | null;
 };
@@ -41,11 +42,8 @@ export function CreateShortagePOButton({ orderId, onSaved }: { orderId: string; 
     }
     return Object.entries(groups);
   }, [detail]);
-  const { data: suppliers = [], isLoading, error: suppliersError } = useQuery({
-    queryKey: ["sales", "shortage-suppliers"],
-    queryFn: () => apiGet<{ publicId: string; name: string }[]>("/sales/shortage-suppliers"),
-    enabled: open,
-  });
+  const suppliers = Array.from(new Map((detail?.fulfillment?.lines ?? []).flatMap(l => l.suppliers ?? []).map(s => [s.publicId, s])).values());
+  const isLoading = loadingItems;
   const create = async () => {
     setPending(true); setError("");
     try {
@@ -77,16 +75,19 @@ export function CreateShortagePOButton({ orderId, onSaved }: { orderId: string; 
             <p className="text-xs text-muted-foreground">{lines.map((line) => `${[line.color, line.size].filter(Boolean).join(" / ")}: ${line.toPurchase ?? line.missing}`).join(" · ")}</p>
             <Select disabled={pending} value={supplierIds[name] ?? ""} onValueChange={(value) => setSupplierIds((current) => ({ ...current, [name]: value }))}>
               <SelectTrigger id={`shortage-supplier-${orderId}-${index}`}><SelectValue placeholder={isLoading ? "Loading suppliers…" : "Select supplier"} /></SelectTrigger>
-              <SelectContent>{suppliers.map((supplier) => <SelectItem key={supplier.publicId} value={supplier.publicId}>{supplier.name}</SelectItem>)}</SelectContent>
+              <SelectContent>{(lines[0].suppliers ?? []).filter(s => lines.every(l => l.suppliers?.some(x => x.publicId === s.publicId))).map(s =>
+                <SelectItem key={s.publicId} value={s.publicId}>{s.name}</SelectItem>)}</SelectContent>
             </Select>
           </div>)}
+          {items.some(([, lines]) => !(lines[0].suppliers ?? []).some(s => lines.every(l => l.suppliers?.some(x => x.publicId === s.publicId)))) &&
+            <p className="text-sm text-amber-700">An item has no supplier priced for all its missing variants. Configure suppliers and variant prices on its Catalog Pricing tab first.</p>}
           {!loadingItems && detail && !items.length && <p className="text-sm">All shortages are already covered by stock or active POs.</p>}
         </div>
-        {!isLoading && !suppliers.length && !suppliersError && <p className="text-sm text-muted-foreground">Add a supplier in Procurement first.</p>}
-        {(error || suppliersError || itemsError) && <p role="alert" className="text-sm text-destructive">{error || String(suppliersError || itemsError)}</p>}
+        {!isLoading && !suppliers.length && <p className="text-sm text-muted-foreground">Configure supplier prices on the article’s Catalog Pricing tab first.</p>}
+        {(error || itemsError) && <p role="alert" className="text-sm text-destructive">{error || String(itemsError)}</p>}
         <div className="flex justify-end gap-2">
           <Button variant="outline" disabled={pending} onClick={() => setOpen(false)}>Cancel</Button>
-          <Button disabled={pending || isLoading || loadingItems || !!suppliersError || !!itemsError || !items.length || items.some(([name]) => !supplierIds[name])} onClick={create}>{pending ? "Creating…" : `Create ${items.length} PO${items.length === 1 ? "" : "s"}`}</Button>
+          <Button disabled={pending || isLoading || loadingItems || !!itemsError || !items.length || items.some(([name, lines]) => !supplierIds[name] || !lines.every(l => l.suppliers?.some(s => s.publicId === supplierIds[name])))} onClick={create}>{pending ? "Creating…" : `Create ${items.length} PO${items.length === 1 ? "" : "s"}`}</Button>
         </div>
       </Dialog.Content>
       </Dialog.Portal>
