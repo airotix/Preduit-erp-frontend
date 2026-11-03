@@ -7,6 +7,8 @@ import { apiGet, apiPost } from "@/lib/api-client";
 import { useModuleAccess } from "@/lib/module-access";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { LoadingBlock, Notice } from "@/components/ui/notice";
+import { ToneBadge } from "@/components/tone-badge";
 import { Table as ResponsiveTable } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FinanceFormSheet, type FinanceField } from "@/components/screens/finance/finance-form-sheet";
@@ -41,7 +43,7 @@ function ProducedQuantity({ batch, line, ready }: { batch: Batch; line: Line; re
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
   const remaining = line.planned - line.completed;
-  if (!remaining) return <p className="text-sm text-green-700">{line.completed} of {line.planned} pieces produced</p>;
+  if (!remaining) return <ToneBadge tone="green" className="w-fit">{line.completed} of {line.planned} pieces produced</ToneBadge>;
   return <form className="flex flex-wrap items-end gap-3 rounded-lg border p-3" onSubmit={async (event) => {
     event.preventDefault(); setBusy(true); setError("");
     const form = event.currentTarget;
@@ -58,10 +60,10 @@ function ProducedQuantity({ batch, line, ready }: { batch: Batch; line: Line; re
     finally { setBusy(false); }
   }}>
     <div className="mr-auto"><strong className="text-sm">{[line.name, line.color, line.size].filter(Boolean).join(" / ")}</strong><p className="text-xs text-muted-foreground">{line.completed} of {line.planned} pieces produced</p></div>
-    <label className="text-xs">Pieces<input name="qty" type="number" required min={1} max={remaining} className="ml-2 w-24 rounded-md border px-2 py-1.5" /></label>
-    <label className="text-xs">Reference<input name="reason" required maxLength={400} className="ml-2 rounded-md border px-2 py-1.5" /></label>
+    <label className="text-xs">Pieces<input name="qty" type="number" required min={1} max={remaining} className="ml-2 h-9 w-24 rounded-lg border border-input bg-white px-2 py-1.5 text-sm" /></label>
+    <label className="text-xs">Reference<input name="reason" required maxLength={400} className="ml-2 h-9 rounded-lg border border-input bg-white px-2 py-1.5 text-sm" /></label>
     <Button type="submit" size="sm" disabled={!ready || !canWrite || busy || batch.status === "Cancelled"}>Record produced</Button>
-    {!ready && <p className="w-full text-xs text-amber-700">Complete this style’s production timeline first.</p>}
+    {!ready && <Notice tone="amber" className="w-full text-xs">Complete this style’s production timeline first.</Notice>}
     {error && <p role="alert" className="w-full text-xs text-destructive">{error}</p>}
   </form>;
 }
@@ -107,11 +109,11 @@ export function BatchProductionDetail({ batchId, orderId }: { batchId: string; o
   return <div className="mx-auto w-full max-w-[1180px] space-y-4">
     <Link className="text-sm font-semibold text-primary hover:underline" href={`/production/porders/${orderId}`}>← Back to {batch?.orderRef || "production order"}</Link>
     {error && <p role="alert" className="text-destructive">{String(error)}</p>}
-    {!data && !error && <p>Loading production suborder…</p>}
+    {!data && !error && <LoadingBlock rows={4} />}
     {data && !batch && <p role="alert">This batch does not belong to the production order.</p>}
     {batch && <>
       <Card className="p-6"><div className="text-xs font-bold uppercase text-muted-foreground">{batch.orderRef} / production suborder</div>
-        <h1 className="mt-1 text-2xl font-extrabold">{batch.name}</h1>
+        <h1 className="mt-1 text-[22px] font-extrabold tracking-tight sm:text-[26px]">{batch.name}</h1>
         <p className="mt-2 text-sm">{batch.summary.planned} planned · {batch.summary.completed} produced · {batch.productionStatus}</p>
         <p className="mt-1 text-xs text-muted-foreground">Factory: {batch.factory || "Unassigned"} · Target: {batch.dueOn || "Not set"}</p>
       </Card>

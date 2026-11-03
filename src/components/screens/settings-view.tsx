@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/select";
 import { useCurrency, CURRENCIES, currencySymbol } from "@/lib/currency";
 import { ExchangeRatesCard } from "@/components/screens/finance/exchange-rates-card";
+import { QualitySettingsCard } from "@/components/screens/quality/quality-settings-card";
 import type { SettingsConfig } from "@/lib/screen-types";
 
 function CurrencySetting() {
@@ -52,6 +53,7 @@ export function SettingsView({
     <div className="space-y-4">
       {showCurrency && <CurrencySetting />}
       {showCurrency && <ExchangeRatesCard />}
+      {showCurrency && <QualitySettingsCard />}
       {config.groups.map((g) => (
         <Card key={g.title}>
           <div className="border-b border-border/60 px-5 py-4 font-extrabold text-foreground">

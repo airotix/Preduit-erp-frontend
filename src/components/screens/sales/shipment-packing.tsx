@@ -4,6 +4,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost } from "@/lib/api-client";
 import { useModuleAccess } from "@/lib/module-access";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { LoadingBlock, Notice } from "@/components/ui/notice";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type Packing = { shipment: string; order: string; status: string; packedAt: string | null; packedBy: string | null;
   dispatched: boolean; allowPartialShipments: boolean;
@@ -28,18 +33,18 @@ export function ShipmentPacking({ shipmentId, onSaved }: { shipmentId: string; o
     } catch (e) { setError(e instanceof Error ? e.message : "Could not confirm packing"); }
     finally { setBusy(false); }
   };
-  return <section className="my-5 space-y-4 rounded-xl border border-border bg-background p-5"><h3 className="font-bold">Packing confirmation</h3>
-    {(error || q.error) && <p role="alert" className="text-sm text-destructive">{error || String(q.error)}</p>}
-    {q.isLoading && <p className="text-sm">Loading shipment quantities…</p>}
+  return <Card className="my-5 space-y-4 p-5"><h3 className="font-bold">Packing confirmation</h3>
+    {(error || q.error) && <Notice tone="red">{error || String(q.error)}</Notice>}
+    {q.isLoading && <LoadingBlock rows={2} />}
     {s && (s.packedAt ? <p className="text-sm">Packed by {s.packedBy} · {new Date(s.packedAt).toLocaleString()}. Quantities are fixed for this shipment.</p> : s.status === "Cancelled" ? <p className="text-sm">This shipment is cancelled.</p> :
       <form onSubmit={confirm} className="space-y-4"><p className="text-sm text-muted-foreground">{s.allowPartialShipments ? "Enter the units physically packed. Remaining units stay on the order for later shipments." : "This order must ship complete. Pack all outstanding units before dispatch."}</p>
-        <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr><th className="text-left">Item</th><th>Reserved</th><th>Outstanding</th><th>Actual packed</th></tr></thead>
-          <tbody>{s.lines.map(l => <tr className="border-t border-border" key={l.lineId}><td className="py-3">{l.name} · {l.color} / {l.size}</td><td className="text-center">{l.reserved}</td><td className="text-center">{l.outstanding}</td>
-            <td className="py-2 text-center"><input aria-label={`Packed quantity for ${l.name} ${l.color} ${l.size}`} type="number" min="0" max={Math.min(l.reserved, l.outstanding)} step="1" required
-              className="w-28 rounded-lg border border-border bg-background px-3 py-2" disabled={busy || !access.canWrite} value={quantities[l.lineId] ?? l.quantity}
-              onChange={e => setQuantities({ ...quantities, [l.lineId]: e.target.value })} /></td></tr>)}</tbody></table></div>
-        <label className="block text-sm">Packing reference / note<input required minLength={3} maxLength={400} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2"
-          value={reason} onChange={e => setReason(e.target.value)} /></label>
+        <Table><TableHeader><TableRow><TableHead className="px-0">Item</TableHead><TableHead className="text-center">Reserved</TableHead><TableHead className="text-center">Outstanding</TableHead><TableHead className="text-center">Actual packed</TableHead></TableRow></TableHeader>
+          <TableBody>{s.lines.map(l => <TableRow key={l.lineId}><TableCell className="px-0">{l.name} · {l.color} / {l.size}</TableCell><TableCell className="text-center tabular-nums">{l.reserved}</TableCell><TableCell className="text-center tabular-nums">{l.outstanding}</TableCell>
+            <TableCell className="text-center"><Input aria-label={`Packed quantity for ${l.name} ${l.color} ${l.size}`} type="number" min="0" max={Math.min(l.reserved, l.outstanding)} step="1" required
+              className="mx-auto w-28" disabled={busy || !access.canWrite} value={quantities[l.lineId] ?? l.quantity}
+              onChange={e => setQuantities({ ...quantities, [l.lineId]: e.target.value })} /></TableCell></TableRow>)}</TableBody></Table>
+        <div className="space-y-1.5"><Label htmlFor="pack-note">Packing reference / note</Label><Input id="pack-note" required minLength={3} maxLength={400}
+          value={reason} onChange={e => setReason(e.target.value)} /></div>
         <Button disabled={busy || !access.canWrite}>{busy ? "Saving…" : "Confirm packed quantities"}</Button></form>)}
-  </section>;
+  </Card>;
 }

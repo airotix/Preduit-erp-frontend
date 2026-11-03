@@ -4,6 +4,7 @@ import * as React from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Notice } from "@/components/ui/notice";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter, SheetClose,
 } from "@/components/ui/sheet";
@@ -101,7 +102,7 @@ export function ProductionStartModal({
             <span className="font-semibold text-muted-foreground">Total lead time</span>
             <span className="font-extrabold text-foreground">{total} days</span>
           </div>
-          {error && <div className="rounded-md bg-[#FBEAEA] p-3 text-sm font-semibold text-[#C0392B]">{error}</div>}
+          {error && <Notice tone="red">{error}</Notice>}
         </div>
         <SheetFooter>
           <SheetClose asChild><Button type="button" variant="outline">Cancel</Button></SheetClose>

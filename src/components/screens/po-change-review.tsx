@@ -40,7 +40,7 @@ export function POChangeReview({ id, change, onClose, onSaved }: {
   const [busy, setBusy] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
   const [error, setError] = React.useState("");
-  const query = new URLSearchParams(change as Record<string, string>).toString();
+  const query = new URLSearchParams(change as unknown as Record<string, string>).toString();
   const impact = useQuery({ queryKey: ["po-impact", id, query], queryFn: () => apiGet<Impact>(`/procurement/pos/${id}/impact?${query}`), refetchOnWindowFocus: false });
   const refresh = async () => { setAck(false); setError(""); await impact.refetch(); };
   const clearIssue = async (key: string) => {

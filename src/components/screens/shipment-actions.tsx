@@ -5,6 +5,15 @@ import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost } from "@/lib/api-client";
 import { useModuleAccess } from "@/lib/module-access";
+import { statusTone, tone } from "@/lib/tone";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
+import { LoadingBlock, Notice } from "@/components/ui/notice";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ToneBadge } from "@/components/tone-badge";
 
 type Line = { lineId: number; orderLineId: number | null; name: string; sku: string | null; qty: number;
   delivered: number | null; discrepancy: number; discrepancyStatus: string | null };
@@ -14,6 +23,10 @@ type State = { id: string; ref: string; direction: string; label: string; legacy
   receivingHref: string | null; lines: Line[];
   inbound: { allocationId: number; qty: number; accepted: number; discrepancy: number; discrepancyStatus: string }[];
   actions: Action[] };
+
+const FIELD_LABELS = { origin: "Origin", destination: "Destination", carrier: "Carrier", dispatchOn: "Dispatch on", eta: "ETA", tracking: "Tracking" } as const;
+// The steps that move the shipment forward are primary buttons; the rest are secondary.
+const PRIMARY_ACTIONS = new Set(["pack", "dispatch", "deliver", "resolve"]);
 
 export function ShipmentActions({ shipmentId }: { shipmentId: string }) {
   const access = useModuleAccess("shipments");
@@ -27,8 +40,8 @@ export function ShipmentActions({ shipmentId }: { shipmentId: string }) {
   const [busy, setBusy] = React.useState(false);
   const request = React.useRef<{ key: string; id: string } | null>(null);
   React.useEffect(() => { if (data && !transport) setTransport(data.transport); }, [data, transport]);
-  if (error) return <p role="alert" className="text-sm text-destructive">{error.message}</p>;
-  if (!data || !transport) return <p className="text-sm">Loading shipment actions…</p>;
+  if (error) return <Notice tone="red" className="my-5">{error.message}</Notice>;
+  if (!data || !transport) return <Card className="my-5 p-5"><LoadingBlock rows={3} /></Card>;
   const run = async (action: string, extra: Record<string, unknown> = {}) => {
     setMessage("");
     const body = { action, reason: reason.trim() || "Shipment action", ...transport, trackingStatus, ...extra };
@@ -44,45 +57,49 @@ export function ShipmentActions({ shipmentId }: { shipmentId: string }) {
       setMessage(err instanceof Error ? err.message : "The shipment action failed");
     } finally { setBusy(false); }
   };
-  const button = (action: Action) => <button key={action.id} type="button" disabled={busy || !access.canWrite || action.blocked}
-    className="rounded-md border px-3 py-2 text-sm font-semibold disabled:opacity-50" onClick={() => {
+  const button = (action: Action) => <Button key={action.id} type="button" size="sm" variant={PRIMARY_ACTIONS.has(action.id) ? "default" : "outline"}
+    disabled={busy || !access.canWrite || action.blocked} onClick={() => {
       if (action.id === "pack") return run("pack", { lines: data.lines.map((line) => ({ lineId: line.orderLineId || line.lineId, quantity: Number(quantities[line.lineId] ?? line.qty) })) });
       if (action.id === "deliver") return run("deliver", { lines: data.lines.map((line) => ({ lineId: line.lineId, quantity: Number(quantities[line.lineId] ?? line.qty) })) });
       if (action.id === "resolve") return run("resolve", { lines: data.lines.filter((line) => line.discrepancyStatus === "Open").map((line) => ({ lineId: line.lineId, quantity: line.discrepancy })), allocationId: data.inbound[0]?.allocationId });
       return run(action.id);
-    }}>{action.label}</button>;
-  return <section className="my-5 space-y-4 rounded-xl border p-5">
-    <div><h3 className="font-bold">{data.ref} · {data.direction} · {data.label}</h3>
-      {data.legacy && <p className="mt-1 text-sm text-amber-700">This historical delivery has no recorded arrival quantities. It is flagged for reconciliation and its quantities were not guessed.</p>}
+    }}>{action.label}</Button>;
+  return <Card className="my-5 space-y-4 p-5">
+    <div className="flex flex-wrap items-center gap-2"><h3 className="font-bold">{data.ref} · {data.direction}</h3><ToneBadge tone={statusTone(data.label)}>{data.label}</ToneBadge>
     </div>
-    <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="text-xs text-muted-foreground">
-      <th className="pb-2">Article</th><th>On shipment</th><th>This action</th><th>Delivered</th><th>Unresolved</th></tr></thead>
-      <tbody>{data.lines.map((line) => <tr key={line.lineId} className="border-t"><td className="py-2">{line.name}</td>
-        <td className="tabular-nums">{line.qty}</td>
-        <td><input aria-label={`Quantity for ${line.name}`} type="number" min={0} max={line.qty} className="w-24 rounded-md border px-2 py-1"
-          value={quantities[line.lineId] ?? line.qty} onChange={(e) => setQuantities({ ...quantities, [line.lineId]: e.target.value })} /></td>
-        <td className="tabular-nums">{line.delivered ?? "—"}</td>
-        <td>{line.discrepancy ? `${line.discrepancy} ${line.discrepancyStatus || ""}` : "—"}</td></tr>)}</tbody></table></div>
+    {data.legacy && <Notice tone="amber">This historical delivery has no recorded arrival quantities. It is flagged for reconciliation and its quantities were not guessed.</Notice>}
+    <Table>
+      <TableHeader><TableRow><TableHead className="px-0">Article</TableHead><TableHead>On shipment</TableHead><TableHead>This action</TableHead><TableHead>Delivered</TableHead><TableHead>Unresolved</TableHead></TableRow></TableHeader>
+      <TableBody>{data.lines.map((line) => <TableRow key={line.lineId}><TableCell className="px-0">{line.name}</TableCell>
+        <TableCell className="tabular-nums">{line.qty}</TableCell>
+        <TableCell><Input aria-label={`Quantity for ${line.name}`} type="number" min={0} max={line.qty} className="w-24"
+          value={quantities[line.lineId] ?? line.qty} onChange={(e) => setQuantities({ ...quantities, [line.lineId]: e.target.value })} /></TableCell>
+        <TableCell className="tabular-nums">{line.delivered ?? "—"}</TableCell>
+        <TableCell>{line.discrepancy ? <span style={{ color: tone("amber").fg }}>{line.discrepancy} {line.discrepancyStatus || ""}</span> : "—"}</TableCell></TableRow>)}</TableBody>
+    </Table>
     <div className="grid gap-3 sm:grid-cols-3">
-      {(["origin", "destination", "carrier", "dispatchOn", "eta", "tracking"] as const).map((field) => <label key={field} className="text-sm capitalize">{field}
-        <input className="mt-1 w-full rounded-md border px-3 py-2" value={transport[field]} onChange={(e) => setTransport({ ...transport, [field]: e.target.value })} /></label>)}
+      {(Object.keys(FIELD_LABELS) as (keyof typeof FIELD_LABELS)[]).map((field) => <div key={field} className="space-y-1.5"><Label htmlFor={`ship-${field}`}>{FIELD_LABELS[field]}</Label>
+        <Input id={`ship-${field}`} value={transport[field]} onChange={(e) => setTransport({ ...transport, [field]: e.target.value })} /></div>)}
     </div>
-    <label className="block text-sm">Tracking event
-      <select className="mt-1 rounded-md border px-3 py-2" value={trackingStatus} onChange={(e) => setTrackingStatus(e.target.value)}>
-        <option value="">No status change</option><option>In transit</option><option>Customs</option><option>Out for delivery</option>
-      </select></label>
-    <label className="block text-sm">Reason<input className="mt-1 w-full rounded-md border px-3 py-2" value={reason} onChange={(e) => setReason(e.target.value)} /></label>
+    <div className="grid gap-3 sm:grid-cols-3">
+      <div className="space-y-1.5"><Label htmlFor="ship-tracking-event">Tracking event</Label>
+        <NativeSelect id="ship-tracking-event" value={trackingStatus} onChange={(e) => setTrackingStatus(e.target.value)}>
+          <option value="">No status change</option><option>In transit</option><option>Customs</option><option>Out for delivery</option>
+        </NativeSelect></div>
+      <div className="space-y-1.5 sm:col-span-2"><Label htmlFor="ship-reason">Reason</Label>
+        <Input id="ship-reason" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
+    </div>
     <div className="flex flex-wrap gap-2">{data.actions.filter((action) => action.id !== "receive").map(button)}
-      {data.receivingHref && <Link className="rounded-md border px-3 py-2 text-sm font-semibold" href={data.receivingHref}>Open warehouse receiving</Link>}
-      {data.batchManaged && data.direction === "Outgoing" && ["Dispatched", "In transit", "Delivered"].includes(data.label) && <button type="button" disabled={busy} className="rounded-md border px-3 py-2 text-sm font-semibold" onClick={async () => {
+      {data.receivingHref && <Button asChild size="sm" variant="outline"><Link href={data.receivingHref}>Open warehouse receiving</Link></Button>}
+      {data.batchManaged && data.direction === "Outgoing" && ["Dispatched", "In transit", "Delivered"].includes(data.label) && <Button type="button" size="sm" variant="outline" disabled={busy} onClick={async () => {
         setMessage(""); setBusy(true);
         try { await apiPost(`/batches/shipments/${shipmentId}/status`, { status: "Returned", reason: reason.trim() || "Returned pieces held for QC", requestId: crypto.randomUUID() }); await client.invalidateQueries(); }
         catch (err) { setMessage(err instanceof Error ? err.message : "The return could not be recorded"); }
         finally { setBusy(false); }
-      }}>Record return for QC</button>}
+      }}>Record return for QC</Button>}
     </div>
     {data.actions.filter((action) => action.blocked && action.reason).map((action) => <p key={action.id} className="text-xs text-muted-foreground">{action.label}: {action.reason}</p>)}
-    {message && <p role="alert" className="text-sm text-destructive">{message}</p>}
+    {message && <Notice tone="red">{message}</Notice>}
     {!access.canWrite && <p className="text-sm text-muted-foreground">Shipment write access is required for these actions.</p>}
-  </section>;
+  </Card>;
 }

@@ -51,3 +51,13 @@ export function initials(s: string): string {
     .join("")
     .toUpperCase();
 }
+
+/** Maps a workflow status label (shipments, quality, production) to the standard badge tone. */
+export function statusTone(status: string | null | undefined): Tone {
+  const s = (status || "").toLowerCase();
+  if (/(cancel|reject|fail|return|overdue|blocked)/.test(s)) return "red";
+  if (/(deliver|received|complete|pass|cleared|approved|shipped|done|released)/.test(s)) return "green";
+  if (/(hold|partial|customs|transit|out for delivery|dispatch|await|inline)/.test(s)) return "amber";
+  if (/(progress|started|inspecting)/.test(s)) return "accent";
+  return "neutral";
+}

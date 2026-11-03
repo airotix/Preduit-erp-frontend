@@ -5,6 +5,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, USE_BACKEND } from "@/lib/api-client";
 import { useModuleAccess } from "@/lib/module-access";
 import { Button } from "@/components/ui/button";
+import { LoadingBlock, Notice } from "@/components/ui/notice";
+import { ToneBadge } from "@/components/tone-badge";
 import { STAGE_NAMES } from "./production-start-modal";
 
 export type BatchMode = "production" | "quality" | "shipments" | "inventory" | "overview";
@@ -18,7 +20,7 @@ type Ship = { publicId: string; ref: string; status: string; direction: "Inbound
 export type Data = { ref: string; summary: Totals; sources: { id: number; name: string; color: string; size: string; remainingToPlan: number }[]; batches: Batch[]; shipments: Ship[]; locations: { id: number; name: string }[]; productionOrders: { publicId: string; ref: string }[]; inventorySources: { reservationId: number; name: string; color: string; size: string; location: string; available: number }[] };
 type Send = (path: string, body: Record<string, unknown>) => Promise<boolean>;
 type Commands = { send: Send; busy: boolean };
-const field = "w-full rounded-md border bg-white px-3 py-2 text-sm";
+const field = "flex h-10 w-full min-w-0 rounded-lg border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50";
 const item = (line: { name: string; color?: string | null; size?: string | null }) => [line.name, line.color, line.size].filter(Boolean).join(" / ");
 const qty = (form: FormData, name: string) => Number(form.get(name) ?? 0);
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
@@ -77,7 +79,7 @@ function PlanBatch({ orderId, data, send, busy }: Commands & { orderId: string; 
 function TnaStage({ batch, stage, send, busy }: Commands & { batch: Batch; stage: Stage }) {
   const access = useModuleAccess("production");
   return <article className="space-y-3 rounded-lg border p-4">
-    <div className="font-semibold">{stage.name} · {stage.status}{stage.overdue && <span className="ml-2 text-red-700">Overdue</span>}</div>
+    <div className="font-semibold">{stage.name} · {stage.status}{stage.overdue && <ToneBadge tone="red" dot={false} className="ml-2">Overdue</ToneBadge>}</div>
     <p className="text-sm">Planned: {stage.startOn || "Unscheduled"} → {stage.endOn || "Unscheduled"} · {stage.durationDays} days · {stage.worker || "Unassigned"}</p>
     <p className="text-xs">Actual: {stage.actualStartOn || "Not started"} → {stage.actualEndOn || "Not completed"}</p>{stage.notes && <p className="text-xs">{stage.notes}</p>}
     {stage.status !== "Completed" && access.canWrite && <>
@@ -103,7 +105,7 @@ function LineAction({ batch, line, mode, send, busy }: Commands & { batch: Batch
     if (await send(`/batches/${batch.publicId}/lines/${line.id}/${qc ? "qc" : "complete"}`, body)) form.reset();
   }}><fieldset disabled={busy || !allowed} className="space-y-3">
     {qc ? <><label className="text-sm">Inspection type<select className={field} value={qcKind} onChange={(e) => setKind(e.target.value)}><option>Final</option><option>Inline</option><option>Reinspection</option></select></label><p className="text-xs">{qcKind === "Inline" ? "Inline observations are recorded without releasing stock." : qcKind === "Reinspection" ? `${line.held} held pieces eligible.` : `${line.awaitingQC} completed pieces awaiting QC.`} Sample size is separate from assessed lot quantity.</p><div className="grid gap-3 sm:grid-cols-3">{[["assessed", "Lot quantity assessed"], ["sampleSize", "Sample size"], ...(qcKind === "Inline" ? [] : [["approved", "Approved"], ["held", "Hold / rework"], ["rejected", "Rejected / scrap"]])].map(([name, label]) => <Input key={name} name={name} label={label} type="number" min={name === "assessed" || name === "sampleSize" ? 1 : 0} value={0} />)}</div></> : <Input name="qty" label="Produced quantity" type="number" max={line.planned-line.completed} />}
-    {blocked && <p className="text-sm text-amber-700">Complete this batch's TNA first.</p>}<Input name="reason" label={qc ? "Inspection findings / reference" : "Production reference"} /><Button type="submit" disabled={busy || !allowed || blocked}>Save {qc ? "inspection" : "production"}</Button>
+    {blocked && <Notice tone="amber">Complete this batch's TNA first.</Notice>}<Input name="reason" label={qc ? "Inspection findings / reference" : "Production reference"} /><Button type="submit" disabled={busy || !allowed || blocked}>Save {qc ? "inspection" : "production"}</Button>
   </fieldset></form></details>;
 }
 
@@ -155,9 +157,9 @@ export function BatchWorkspace({ orderId, kind = "production", mode, batchId }: 
   const commands = useCommands(), production = useModuleAccess("production");
   if (!USE_BACKEND) return null;
   const data = all && batchId ? { ...all, batches: all.batches.filter((b) => b.publicId === batchId), shipments: all.shipments.filter((s) => s.sources.some((a) => a.batchId === batchId)), inventorySources: [] } : all;
-  return <section className="my-4 space-y-4 rounded-xl border bg-white p-5" aria-label={`${owner} batch tracking`}><h2 className="text-lg font-bold">{owner === "production" ? "Production batches & TNA" : owner === "quality" ? "Batch QC & inspections" : owner === "shipments" ? "Batch shipment tracking" : owner === "inventory" ? "Batch warehouse receiving" : "Batch progress"}</h2>
+  return <section className="my-4 space-y-4 rounded-[14px] border border-border/70 bg-card shadow-erp-sm p-5" aria-label={`${owner} batch tracking`}><h2 className="text-lg font-bold">{owner === "production" ? "Production batches & TNA" : owner === "quality" ? "Batch QC & inspections" : owner === "shipments" ? "Batch shipment tracking" : owner === "inventory" ? "Batch warehouse receiving" : "Batch progress"}</h2>
     <p className="text-sm text-muted-foreground">One parent PO, independently tracked batches. Each Batch ID stays the same across Production, Quality and Shipments.</p>
-    {isLoading && <p>Loading batches…</p>}{(error || commands.error) && <p role="alert" className="text-destructive">{commands.error || String(error)}</p>}{commands.notice && <p role="status" className="text-green-700">{commands.notice}</p>}
+    {isLoading && <LoadingBlock rows={3} />}{(error || commands.error) && <Notice tone="red">{commands.error || String(error)}</Notice>}{commands.notice && <Notice tone="green" role="status">{commands.notice}</Notice>}
     {data && <>{!batchId && <><Summary data={data.summary} mode={owner} />{owner === "production" ? <PlanBatch orderId={orderId} data={data} {...commands} /> : data.productionOrders.map((w) => <Link key={w.publicId} className="block text-sm text-primary underline" href={`/production/porders/${w.publicId}`}>Production order {w.ref}</Link>)}</>}
       {data.batches.map((b) => <details open={!!batchId} id={`batch-${b.publicId}`} key={b.publicId} className="rounded-lg border p-4"><summary className="cursor-pointer font-semibold">{b.name} · {b.poRef} · {b.summary.planned} pieces · {batchStatus(b, owner)}</summary><p className="mt-3 break-all font-mono text-xs">Batch ID: {b.publicId}</p><p className="text-sm">Parent PO: {b.poRef} · Production order: {b.orderRef} · Factory: {b.factory || "Unassigned"} · Target: {b.dueOn || "Not set"}</p><BatchLinks batch={b} /><p className="text-sm font-semibold">{owner === "quality" ? `${b.summary.completed} produced · ${b.summary.awaitingQC} awaiting QC · ${b.summary.approved} approved · ${b.summary.held} held` : owner === "shipments" || owner === "inventory" ? `${b.summary.readyToShip} ready to ship · ${b.summary.inboundTransit} inbound in transit · ${b.summary.received} received` : `${b.summary.planned} planned · ${b.summary.completed} produced · TNA ${b.tnaProgress}%`}</p><Summary data={b.summary} mode={owner} />
         {owner === "production" && b.status !== "Cancelled" && <div className="space-y-3"><h3 className="font-semibold">Time & Action timeline</h3><div className="flex flex-wrap gap-2">{b.stages.map((s) => <span key={s.id} className={`rounded border px-3 py-2 text-xs ${s.status === "Completed" ? "bg-green-50" : s.overdue ? "bg-red-50" : "bg-muted/30"}`}>{s.name} · {s.status}</span>)}</div>{b.stages.map((s) => <TnaStage key={s.id} batch={b} stage={s} {...commands} />)}</div>}
@@ -179,13 +181,13 @@ export function BatchShipmentPanel({ shipmentId }: { shipmentId: string }) {
   const commands = useCommands();
   if (error) return <p role="alert">{String(error)}</p>;
   if (!data) return null;
-  return <section className="my-4 space-y-3 rounded-xl border bg-white p-5"><h2 className="font-bold">{data.direction} shipment · batch sources</h2><ShipmentCard ship={data} />{commands.error && <p role="alert" className="text-destructive">{commands.error}</p>}{commands.notice && <p role="status">{commands.notice}</p>}</section>;
+  return <section className="my-4 space-y-3 rounded-[14px] border border-border/70 bg-card shadow-erp-sm p-5"><h2 className="font-bold">{data.direction} shipment · batch sources</h2><ShipmentCard ship={data} />{commands.error && <Notice tone="red">{commands.error}</Notice>}{commands.notice && <p role="status">{commands.notice}</p>}</section>;
 }
 
 export function BatchWorkList({ kind }: { kind: "production" | "quality" | "shipments" | "inventory" }) {
   const { data, error } = useQuery({ queryKey: ["batches", "work", kind], queryFn: () => apiGet<{ batches: { publicId: string; name: string; orderId: string; orderRef: string; poRef: string; status: string; productionStatus: string; qualityStatus: string; shipmentStatus: string; planned: number; completed: number; awaitingQC: number; held: number; readyToShip: number; received: number; tnaComplete: boolean }[] }>(`/batches/work/${kind}`), enabled: USE_BACKEND, refetchInterval: 30000 });
   if (!USE_BACKEND) return null;
-  return <section className="mb-4 rounded-xl border bg-white p-4"><h2 className="mb-3 font-bold">{kind === "quality" ? "Batch QC work" : kind === "shipments" ? "Batch shipment tracking" : kind === "inventory" ? "Batch warehouse receiving" : "Production batches"}</h2>{error && <p role="alert">{String(error)}</p>}<div className="max-h-80 space-y-2 overflow-auto">{data?.batches.map((b) => <Link key={b.publicId} href={`/${kind}/batches/${b.publicId}`} className="block rounded-lg border p-3 text-sm"><strong>{b.name} · {b.poRef} · {b.orderRef} · {batchStatus(b, kind)}</strong><div>{kind === "quality" ? `Produced ${b.completed} · Awaiting QC ${b.awaitingQC} · Hold ${b.held}` : kind === "shipments" || kind === "inventory" ? `Ready for inbound shipment ${b.readyToShip} · Received ${b.received}` : `Planned ${b.planned} · Produced ${b.completed} · TNA ${b.tnaComplete ? "Complete" : "In progress"}`}</div><div className="break-all font-mono text-xs">Batch ID: {b.publicId}</div></Link>)}{data && !data.batches.length && <p className="text-sm text-muted-foreground">No batches in this queue.</p>}</div></section>;
+  return <section className="mb-4 rounded-[14px] border border-border/70 bg-card shadow-erp-sm p-4"><h2 className="mb-3 font-bold">{kind === "quality" ? "Batch QC work" : kind === "shipments" ? "Batch shipment tracking" : kind === "inventory" ? "Batch warehouse receiving" : "Production batches"}</h2>{error && <p role="alert">{String(error)}</p>}<div className="max-h-80 space-y-2 overflow-auto">{data?.batches.map((b) => <Link key={b.publicId} href={`/${kind}/batches/${b.publicId}`} className="block rounded-lg border p-3 text-sm"><strong>{b.name} · {b.poRef} · {b.orderRef} · {batchStatus(b, kind)}</strong><div>{kind === "quality" ? `Produced ${b.completed} · Awaiting QC ${b.awaitingQC} · Hold ${b.held}` : kind === "shipments" || kind === "inventory" ? `Ready for inbound shipment ${b.readyToShip} · Received ${b.received}` : `Planned ${b.planned} · Produced ${b.completed} · TNA ${b.tnaComplete ? "Complete" : "In progress"}`}</div><div className="break-all font-mono text-xs">Batch ID: {b.publicId}</div></Link>)}{data && !data.batches.length && <p className="text-sm text-muted-foreground">No batches in this queue.</p>}</div></section>;
 }
 
 /** The main production order owns the plan; batches appear as its suborders. */
@@ -198,13 +200,13 @@ export function ProductionSuborders({ orderId }: { orderId: string }) {
   });
   const commands = useCommands();
   if (!USE_BACKEND) return null;
-  return <section className="my-4 space-y-4 rounded-xl border bg-white p-5" aria-label="Production suborders">
+  return <section className="my-4 space-y-4 rounded-[14px] border border-border/70 bg-card shadow-erp-sm p-5" aria-label="Production suborders">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><h2 className="text-lg font-bold">Production suborders</h2><p className="text-sm text-muted-foreground">Plan batches against this order and run each batch through its own production timeline.</p></div>
       {data && <span className="text-sm font-semibold">Planned {data.summary.planned} · Produced {data.summary.completed}</span>}
     </div>
-    {isLoading && <p>Loading batches…</p>}
-    {(error || commands.error) && <p role="alert" className="text-destructive">{commands.error || String(error)}</p>}
+    {isLoading && <LoadingBlock rows={3} />}
+    {(error || commands.error) && <Notice tone="red">{commands.error || String(error)}</Notice>}
     {commands.notice && <p role="status">{commands.notice}</p>}
     {data && <>
       {data.batches.length > 0 && <div className="space-y-2">{data.batches.map((batch, index) =>

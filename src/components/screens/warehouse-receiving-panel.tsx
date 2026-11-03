@@ -5,6 +5,15 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost } from "@/lib/api-client";
 import { useModuleAccess } from "@/lib/module-access";
+import { statusTone } from "@/lib/tone";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
+import { LoadingBlock, Notice } from "@/components/ui/notice";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ToneBadge } from "@/components/tone-badge";
 
 type ReceiptLine = { id: string; name: string; color: string | null; size: string | null;
   sku: string | null; ordered: number; received: number; remaining: number };
@@ -14,7 +23,6 @@ type ReceiptOrder = { id: string; poNo: string; supplier: string; ready: boolean
 type BatchShipment = { id: string; ref: string; supplier: string; destination: string | null; status: string;
   lines: { allocationId: number; name: string; color: string | null; size: string | null; batch: string; shipped: number }[] };
 type Queue = { orders: ReceiptOrder[]; total: number; locations: { id: string; name: string }[]; batchShipments?: BatchShipment[] };
-const input = "rounded-md border border-border/70 bg-background px-3 py-2 text-sm disabled:opacity-50";
 
 function ReceiveOrder({ order, locations, canWrite, onPosted }: {
   order: ReceiptOrder; locations: Queue["locations"]; canWrite: boolean;
@@ -54,53 +62,53 @@ function ReceiveOrder({ order, locations, canWrite, onPosted }: {
     if (!request.current || request.current.key !== key) request.current = { key, id: crypto.randomUUID() };
     receive.mutate({ ...body, requestId: request.current.id });
   };
-  return <details className="rounded-lg border border-border/60">
+  return <details className="rounded-[14px] border border-border/70 bg-card shadow-erp-sm">
     <summary className="cursor-pointer px-4 py-3 text-sm">
       <span className="font-semibold">{order.poNo} · {order.supplier}</span>
-      <span className={`ml-3 ${order.ready ? "text-green-700" : "text-muted-foreground"}`}>{order.status}</span>
+      <ToneBadge className="ml-3" tone={order.ready ? "green" : "neutral"}>{order.status}</ToneBadge>
     </summary>
     <div className="space-y-3 border-t border-border/60 p-4">
       <p className="text-sm text-muted-foreground">Record only the units physically received. Remaining quantities stay open for a later receipt.</p>
-      {order.shipment && <p className="text-sm">Supplier shipment: <Link className="underline" href={`/shipments/shipments/${order.shipment.id}`}>{order.shipment.ref}</Link> · {order.shipment.status}</p>}
+      {order.shipment && <p className="text-sm">Supplier shipment: <Link className="font-bold text-primary hover:underline" href={`/shipments/shipments/${order.shipment.id}`}>{order.shipment.ref}</Link> · <ToneBadge tone={statusTone(order.shipment.status)}>{order.shipment.status}</ToneBadge></p>}
       {order.plannedLocation && <p className="text-sm">Planned warehouse: <strong>{order.plannedLocation}</strong>. Select the actual receiving location below.</p>}
       <form onSubmit={submit} className="space-y-3">
-        <div className="overflow-x-auto"><table className="w-full text-left text-sm">
-          <thead><tr className="text-xs text-muted-foreground">
-            <th className="pb-2">Item / colour / size</th><th className="pb-2 text-right">Ordered</th>
-            <th className="pb-2 text-right">Received</th><th className="pb-2 text-right">Remaining</th>
-            <th className="pb-2 text-right">Arrived now</th>
-          </tr></thead>
-          <tbody>{order.lines.map((line) => <tr key={line.id} className="border-t border-border/50">
-            <td className="py-2">{line.name} · {line.color || "—"} · {line.size || "—"}
-              <span className="block text-xs text-muted-foreground">{line.sku}</span></td>
-            <td className="text-right tabular-nums">{line.ordered}</td>
-            <td className="text-right tabular-nums">{line.received}</td>
-            <td className="text-right tabular-nums">{line.remaining}</td>
-            <td className="py-2 text-right"><input type="number" min={0} max={line.remaining} step={1}
+        <Table>
+          <TableHeader><TableRow>
+            <TableHead className="px-0">Item / colour / size</TableHead><TableHead className="text-right">Ordered</TableHead>
+            <TableHead className="text-right">Received</TableHead><TableHead className="text-right">Remaining</TableHead>
+            <TableHead className="text-right">Arrived now</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>{order.lines.map((line) => <TableRow key={line.id}>
+            <TableCell className="px-0">{line.name} · {line.color || "—"} · {line.size || "—"}
+              <span className="block text-xs text-muted-foreground">{line.sku}</span></TableCell>
+            <TableCell className="text-right tabular-nums">{line.ordered}</TableCell>
+            <TableCell className="text-right tabular-nums">{line.received}</TableCell>
+            <TableCell className="text-right tabular-nums">{line.remaining}</TableCell>
+            <TableCell className="text-right"><Input type="number" min={0} max={line.remaining} step={1}
               aria-label={`${line.name} ${line.color} ${line.size} arrived now`}
               disabled={!order.ready || !canWrite || receive.isPending || !line.remaining}
               value={quantities[line.id] ?? ""} placeholder="0"
               onChange={(event) => setQuantities((current) => ({ ...current, [line.id]: event.target.value }))}
-              className={`${input} w-24 text-right`} /></td>
-          </tr>)}</tbody>
-        </table></div>
-        {order.ready && !locations.length && <p className="text-sm text-amber-700">Create an Inventory location before confirming receipt.</p>}
+              className="ml-auto w-24 text-right" /></TableCell>
+          </TableRow>)}</TableBody>
+        </Table>
+        {order.ready && !locations.length && <Notice tone="amber">Create an Inventory location before confirming receipt.</Notice>}
         {order.ready && <fieldset disabled={!canWrite || receive.isPending || !locations.length} className="grid gap-3 sm:grid-cols-3">
-          <label className="space-y-1 text-sm"><span className="block font-semibold">Received at</span>
-            <select value={location} onChange={(event) => setLocation(event.target.value)} className={`${input} w-full`}>
+          <div className="space-y-1.5"><Label htmlFor={`recv-loc-${order.id}`}>Received at</Label>
+            <NativeSelect id={`recv-loc-${order.id}`} value={location} onChange={(event) => setLocation(event.target.value)}>
               <option value="">Choose warehouse / store</option>
               {locations.map((loc) => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
-            </select></label>
-          <label className="space-y-1 text-sm"><span className="block font-semibold">Receipt reference</span>
-            <input value={reference} maxLength={80} onChange={(event) => setReference(event.target.value)}
-              placeholder="Delivery note / receipt reference" className={`${input} w-full`} /></label>
-          <label className="space-y-1 text-sm"><span className="block font-semibold">Reason</span>
-            <input value={reason} maxLength={400} onChange={(event) => setReason(event.target.value)} className={`${input} w-full`} /></label>
-          {canWrite && <button type="submit" className="rounded-md bg-[#23263A] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-            {receive.isPending ? "Recording receipt…" : "Confirm physical receipt"}</button>}
+            </NativeSelect></div>
+          <div className="space-y-1.5"><Label htmlFor={`recv-ref-${order.id}`}>Receipt reference</Label>
+            <Input id={`recv-ref-${order.id}`} value={reference} maxLength={80} onChange={(event) => setReference(event.target.value)}
+              placeholder="Delivery note / receipt reference" /></div>
+          <div className="space-y-1.5"><Label htmlFor={`recv-reason-${order.id}`}>Reason</Label>
+            <Input id={`recv-reason-${order.id}`} value={reason} maxLength={400} onChange={(event) => setReason(event.target.value)} /></div>
+          {canWrite && <Button type="submit" className="sm:col-span-3 sm:justify-self-start">
+            {receive.isPending ? "Recording receipt…" : "Confirm physical receipt"}</Button>}
         </fieldset>}
-        {!order.ready && <p className="text-sm text-amber-700">{order.status}</p>}
-        {(error || receive.error) && <p role="alert" className="text-sm text-destructive">{error || receive.error?.message}</p>}
+        {!order.ready && <Notice tone="amber">{order.status}</Notice>}
+        {(error || receive.error) && <Notice tone="red">{error || receive.error?.message}</Notice>}
       </form>
     </div>
   </details>;
@@ -136,25 +144,25 @@ function BatchReceive({ ship, locations, canWrite, onPosted }: {
     if (!request.current || request.current.key !== key) request.current = { key, id: crypto.randomUUID() };
     receive.mutate({ ...body, requestId: request.current.id });
   };
-  return <form onSubmit={submit} className="space-y-3 rounded-lg border border-border/60 p-4">
-    <p className="text-sm"><span className="font-semibold">{ship.ref} · {ship.supplier}</span> · {ship.status}</p>
-    <table className="w-full text-left text-sm"><thead><tr className="text-xs text-muted-foreground">
-      <th>Article</th><th>Batch</th><th className="text-right">Dispatched</th><th className="text-right">Arrived now</th></tr></thead>
-      <tbody>{ship.lines.map((line) => <tr key={line.allocationId} className="border-t border-border/50">
-        <td className="py-2">{line.name} · {line.color || "—"} · {line.size || "—"}</td>
-        <td>{line.batch}</td><td className="text-right tabular-nums">{line.shipped}</td>
-        <td className="py-2 text-right"><input type="number" min={0} max={line.shipped} className={`${input} w-24 text-right`}
+  return <form onSubmit={submit} className="space-y-3 rounded-[14px] border border-border/70 bg-card p-4 shadow-erp-sm">
+    <p className="flex flex-wrap items-center gap-2 text-sm"><span className="font-semibold">{ship.ref} · {ship.supplier}</span><ToneBadge tone={statusTone(ship.status)}>{ship.status}</ToneBadge></p>
+    <Table>
+      <TableHeader><TableRow><TableHead className="px-0">Article</TableHead><TableHead>Batch</TableHead><TableHead className="text-right">Dispatched</TableHead><TableHead className="text-right">Arrived now</TableHead></TableRow></TableHeader>
+      <TableBody>{ship.lines.map((line) => <TableRow key={line.allocationId}>
+        <TableCell className="px-0">{line.name} · {line.color || "—"} · {line.size || "—"}</TableCell>
+        <TableCell>{line.batch}</TableCell><TableCell className="text-right tabular-nums">{line.shipped}</TableCell>
+        <TableCell className="text-right"><Input type="number" min={0} max={line.shipped} className="ml-auto w-24 text-right"
           aria-label={`${line.name} arrived now`} value={quantities[line.allocationId] ?? line.shipped}
-          onChange={(event) => setQuantities((current) => ({ ...current, [line.allocationId]: event.target.value }))} /></td>
-      </tr>)}</tbody></table>
+          onChange={(event) => setQuantities((current) => ({ ...current, [line.allocationId]: event.target.value }))} /></TableCell>
+      </TableRow>)}</TableBody></Table>
     <div className="grid gap-3 sm:grid-cols-3">
-      <label className="text-sm">Received at<select className={`${input} mt-1 w-full`} value={location} onChange={(e) => setLocation(e.target.value)}>
-        <option value="">Choose warehouse / store</option>{locations.map((loc) => <option key={loc.id} value={loc.id}>{loc.name}</option>)}</select></label>
-      <label className="text-sm">Receipt reference<input className={`${input} mt-1 w-full`} value={reference} onChange={(e) => setReference(e.target.value)} /></label>
-      <label className="text-sm">Reason<input className={`${input} mt-1 w-full`} value={reason} onChange={(e) => setReason(e.target.value)} /></label>
+      <div className="space-y-1.5"><Label htmlFor={`batch-loc-${ship.id}`}>Received at</Label><NativeSelect id={`batch-loc-${ship.id}`} value={location} onChange={(e) => setLocation(e.target.value)}>
+        <option value="">Choose warehouse / store</option>{locations.map((loc) => <option key={loc.id} value={loc.id}>{loc.name}</option>)}</NativeSelect></div>
+      <div className="space-y-1.5"><Label htmlFor={`batch-ref-${ship.id}`}>Receipt reference</Label><Input id={`batch-ref-${ship.id}`} value={reference} onChange={(e) => setReference(e.target.value)} /></div>
+      <div className="space-y-1.5"><Label htmlFor={`batch-reason-${ship.id}`}>Reason</Label><Input id={`batch-reason-${ship.id}`} value={reason} onChange={(e) => setReason(e.target.value)} /></div>
     </div>
-    {canWrite && <button className="rounded-md bg-[#23263A] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={receive.isPending}>Confirm physical receipt</button>}
-    {(error || receive.error) && <p role="alert" className="text-sm text-destructive">{error || receive.error?.message}</p>}
+    {canWrite && <Button type="submit" disabled={receive.isPending}>Confirm physical receipt</Button>}
+    {(error || receive.error) && <Notice tone="red">{error || receive.error?.message}</Notice>}
   </form>;
 }
 
@@ -169,11 +177,11 @@ export function WarehouseReceivingPanel() {
   React.useEffect(() => {
     if (data && offset > 0 && offset >= data.total) setOffset(Math.max(0, (Math.ceil(data.total / 25) - 1) * 25));
   }, [data, offset]);
-  return <section className="mb-4 space-y-3 rounded-xl border border-border/60 bg-background p-4">
+  return <Card className="mb-4 space-y-3 p-4">
     <div><h2 className="font-semibold">Warehouse receiving</h2>
       <p className="mt-1 text-sm text-muted-foreground">Production and QC prepare goods for receipt. Confirm their arrival here to add warehouse stock.</p></div>
-    {posted && <p role="status" className="text-sm text-green-700">Recorded <Link className="underline" href={`/procurement/receipts/${posted.public_id}`}>{posted.grn_no}</Link>.</p>}
-    {error ? <p role="alert" className="text-sm text-destructive">{error.message}</p> : isLoading ? <p>Loading receipts…</p> :
+    {posted && <Notice tone="green" role="status">Recorded <Link className="underline" href={`/procurement/receipts/${posted.public_id}`}>{posted.grn_no}</Link>.</Notice>}
+    {error ? <Notice tone="red">{error.message}</Notice> : isLoading ? <LoadingBlock rows={2} /> :
       data?.orders.length ? data.orders.map((order) => <ReceiveOrder key={order.id} order={order}
         locations={data.locations} canWrite={canWrite} onPosted={setPosted} />) : <p className="text-sm text-muted-foreground">No outstanding production purchase orders to receive.</p>}
     {!!data?.batchShipments?.length && <div className="space-y-3 border-t border-border/60 pt-3">
@@ -182,9 +190,9 @@ export function WarehouseReceivingPanel() {
       {data.batchShipments.map((ship) => <BatchReceive key={ship.id} ship={ship} locations={data.locations} canWrite={canWrite} onPosted={setPosted} />)}
     </div>}
     {data && (offset > 0 || offset + 25 < data.total) && <div className="flex items-center gap-3 text-sm">
-      <button disabled={!offset} onClick={() => setOffset(Math.max(0, offset - 25))}>Previous</button>
+      <Button variant="outline" size="sm" disabled={!offset} onClick={() => setOffset(Math.max(0, offset - 25))}>Previous</Button>
       <span>{offset + 1}–{Math.min(offset + 25, data.total)} of {data.total}</span>
-      <button disabled={offset + 25 >= data.total} onClick={() => setOffset(offset + 25)}>Next</button>
+      <Button variant="outline" size="sm" disabled={offset + 25 >= data.total} onClick={() => setOffset(offset + 25)}>Next</Button>
     </div>}
-  </section>;
+  </Card>;
 }

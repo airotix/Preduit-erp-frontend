@@ -3,6 +3,11 @@ import * as React from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Notice } from "@/components/ui/notice";
+import { SheetDescription, SheetOverlay, SheetTitle } from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
 import { apiPost } from "@/lib/api-client";
 import { useModuleAccess } from "@/lib/module-access";
 
@@ -31,29 +36,29 @@ export function QCReopenDialog({ inspectionId, open, onOpenChange, canReopenProd
   };
   const close = () => { if (created) onSaved?.(); onOpenChange(false); };
   return <Dialog.Root open={open} onOpenChange={(value) => { if (!busy) { if (!value) close(); else onOpenChange(true); } }}>
-    <Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-50 bg-black/40" />
-      <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[85vh] w-[min(92vw,480px)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border bg-background p-6 shadow-xl">
-        <Dialog.Title className="text-lg font-semibold">Inspection failed</Dialog.Title>
-        <Dialog.Description className="mt-2 text-sm text-muted-foreground">Choose what to reopen. Previous inspection and production records are retained.</Dialog.Description>
+    <Dialog.Portal><SheetOverlay />
+      <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[85vh] w-[min(92vw,480px)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-[14px] border border-border/70 bg-white p-6 shadow-erp-lg">
+        <SheetTitle>Inspection failed</SheetTitle>
+        <SheetDescription className="mt-2">Choose what to reopen. Previous inspection and production records are retained.</SheetDescription>
         {created ? <div className="mt-4 space-y-3 text-sm">
-          <p>Created inspection <Link className="underline" href={`/quality/inspections/${created.publicId}`}>{created.inspectionNo}</Link>.</p>
+          <p>Created inspection <Link className="font-semibold text-primary hover:underline" href={`/quality/inspections/${created.publicId}`}>{created.inspectionNo}</Link>.</p>
           {mode === "production" && created.productionId && <p>Complete the reopened <Link className="underline" href={`/production/porders/${created.productionId}`}>production TNA</Link> before starting this inspection.</p>}
         </div> : <fieldset disabled={busy} className="mt-4 space-y-3">
-          <label className="flex gap-3 rounded-lg border p-3 text-sm"><input type="radio" name="qc-recovery" checked={mode === "inspection"} onChange={() => setMode("inspection")} />
+          <label className="flex gap-3 rounded-lg border border-border/70 p-3 text-sm"><input type="radio" name="qc-recovery" checked={mode === "inspection"} onChange={() => setMode("inspection")} />
             <span><b>Reopen inspection only</b><br />Keep the completed TNA and perform a fresh inspection.</span></label>
-          <label className="flex gap-3 rounded-lg border p-3 text-sm"><input type="radio" name="qc-recovery" checked={mode === "production"} disabled={!canReopenProduction || !access.canWrite} onChange={() => setMode("production")} />
+          <label className="flex gap-3 rounded-lg border border-border/70 p-3 text-sm"><input type="radio" name="qc-recovery" checked={mode === "production"} disabled={!canReopenProduction || !access.canWrite} onChange={() => setMode("production")} />
             <span><b>Reopen production TNA</b><br />Repeat the failed item's production stages, then inspect again.
               {!canReopenProduction && <span className="block text-muted-foreground">No linked production TNA.</span>}
               {canReopenProduction && !access.canWrite && <span className="block text-muted-foreground">Production write access required.</span>}</span></label>
         </fieldset>}
-        {!created && <details className="mt-4 rounded-lg border p-3"><summary className="cursor-pointer text-sm font-semibold">Corrective action details (optional)</summary>
+        {!created && <details className="mt-4 rounded-lg border border-border/70 p-3"><summary className="cursor-pointer text-sm font-semibold">Corrective action details (optional)</summary>
           <div className="mt-3 space-y-3">
-            <label className="block text-sm">Assigned to<input disabled={busy} maxLength={120} className="mt-1 w-full rounded-md border bg-background p-2" value={details.assignedTo} onChange={(e) => setDetails({ ...details, assignedTo: e.target.value })} /></label>
-            <label className="block text-sm">Due date<input disabled={busy} type="date" className="mt-1 w-full rounded-md border bg-background p-2" value={details.dueDate} onChange={(e) => setDetails({ ...details, dueDate: e.target.value })} /></label>
-            <label className="block text-sm">Notes<textarea disabled={busy} maxLength={400} className="mt-1 w-full rounded-md border bg-background p-2" value={details.notes} onChange={(e) => setDetails({ ...details, notes: e.target.value })} /></label>
+            <label className="block text-sm font-semibold">Assigned to<Input disabled={busy} maxLength={120} className="mt-1 font-normal" value={details.assignedTo} onChange={(e) => setDetails({ ...details, assignedTo: e.target.value })} /></label>
+            <label className="block text-sm font-semibold">Due date<Input disabled={busy} type="date" className="mt-1 font-normal" value={details.dueDate} onChange={(e) => setDetails({ ...details, dueDate: e.target.value })} /></label>
+            <label className="block text-sm font-semibold">Notes<Textarea disabled={busy} maxLength={400} className="mt-1 font-normal" value={details.notes} onChange={(e) => setDetails({ ...details, notes: e.target.value })} /></label>
           </div>
         </details>}
-        {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
+        {error && <Notice tone="red" className="mt-3">{error}</Notice>}
         <div className="mt-5 flex justify-end gap-2"><Button variant="outline" disabled={busy} onClick={close}>{created ? "Close" : "Later"}</Button>
           {!created && <Button disabled={busy} onClick={save}>{busy ? "Saving..." : "Reopen"}</Button>}</div>
       </Dialog.Content>

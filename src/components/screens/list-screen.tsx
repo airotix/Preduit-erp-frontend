@@ -14,9 +14,7 @@ import { CatalogArticleActions } from "@/components/screens/catalog-article-acti
 import { OrderForm } from "@/components/screens/order-form";
 import { CreateShortagePOButton } from "@/components/screens/sales/order-fulfillment";
 import { PurchaseOrderForm } from "@/components/screens/po-form";
-import { QCReopenDialog } from "@/components/screens/qc-reopen-dialog";
 import type { DetailModel } from "@/modules/detail/detail-data";
-import { InspectionForm } from "@/components/screens/inspection-form";
 import { TransferForm } from "@/components/screens/transfer-form";
 import { StockReceiptForm } from "@/components/screens/stock-receipt-form";
 import { Button } from "@/components/ui/button";
@@ -55,7 +53,6 @@ const CREATE_ENDPOINTS: Record<string, string> = {
   "finance/payments": "/finance/payments",
   "finance/bills": "/finance/bills",
   "production/bom": "/production/bom",
-  "quality/inspections": "/quality/inspections",
   "quality/defects": "/quality/defects",
   "shipments/shipments": "/shipments/shipments",
   "shipments/carriers": "/shipments/carriers",
@@ -100,7 +97,6 @@ const STATUS_OPTIONS: Record<string, string[]> = {
   "sales/invoices": ["Open", "Paid", "Overdue", "Void"],
   "sales/returns": ["Inspecting", "Refunded", "Rejected"],
   "inventory/transfers": ["Draft", "In transit", "Received", "Cancelled"],
-  "quality/inspections": ["Pending", "Pass", "Fail"],
 };
 
 /** module/tab → a bulk action button (no create form). */
@@ -271,12 +267,6 @@ export function ListScreen({
   const rowStatuses = config.records?.map(
     (r) => (r as { status?: string } | undefined)?.status
   );
-  const [failedInspectionId, setFailedInspectionId] = React.useState<string | null>(null);
-  const { data: failedInspection } = useQuery({
-    queryKey: ["quality", "recovery", failedInspectionId],
-    queryFn: () => apiGet<DetailModel>(`/quality/inspections/${failedInspectionId}/detail`),
-    enabled: !!failedInspectionId,
-  });
   const setStatus = useMutation({
     mutationFn: async ({ index, status }: { index: number; status: string }) => {
       const id = config.ids?.[index];
@@ -293,9 +283,6 @@ export function ListScreen({
         }
       }
       if (module === "finance") queryClient.invalidateQueries({ queryKey: ["finance"] });
-      if (module === "quality" && tab === "inspections" && variables.status === "Fail") {
-        setFailedInspectionId(config.ids?.[variables.index] ?? null);
-      }
       queryClient.invalidateQueries({ queryKey: ["screen", module, tab] });
       if (module === "sales" || module === "shipments" || module === "quality") {
         for (const key of [["screen", "sales"], ["screen", "shipments"], ["screen", "inventory"], ["screen", "procurement"]]) {
@@ -318,8 +305,6 @@ export function ListScreen({
   const isReorderPOCreate = !isEdit && module === "inventory" && tab === "alerts";
   const isTransferCreate = !isEdit && module === "inventory" && tab === "transfers";
   const isStockReceiptCreate = !isEdit && module === "inventory" && tab === "stock";
-  // New inspection uses a bespoke form with an order-driven Item picker.
-  const isInspectionCreate = !isEdit && module === "quality" && tab === "inspections";
   // Production orders get a per-row "Start production" button + modal.
   const isProductionOrders = module === "production" && tab === "porders";
   // Order History is a read-only cross-module drill-down — no create form.
@@ -350,12 +335,6 @@ export function ListScreen({
       {USE_BACKEND && module === "inventory" && tab === "stock" && <div className="mb-4">
         <Link href="/inventory/movements" className="inline-block rounded-md border px-3 py-2 text-sm font-semibold">View stock movement history</Link>
       </div>}
-      {failedInspectionId && <QCReopenDialog inspectionId={failedInspectionId} open onOpenChange={(value) => { if (!value) setFailedInspectionId(null); }}
-        canReopenProduction={failedInspection?.inspection?.items.some((item) => item.publicId === failedInspectionId && !item.placeholder && item.canReopenProduction)}
-        onSaved={() => {
-          queryClient.invalidateQueries({ queryKey: ["screen", "quality"] });
-          queryClient.invalidateQueries({ queryKey: ["screen", "production"] });
-        }} />}
       <DataTable
         columns={USE_BACKEND && (isProductionOrders || (module === "shipments" && tab === "shipments")) ? buildColumns(config.columns) : columns}
         data={config.rows}
@@ -455,11 +434,6 @@ export function ListScreen({
             />
           ) : isStockReceiptCreate ? (
             <StockReceiptForm
-              pending={save.isPending}
-              onSubmit={(v) => save.mutate(v as unknown as Record<string, unknown>)}
-            />
-          ) : isInspectionCreate ? (
-            <InspectionForm
               pending={save.isPending}
               onSubmit={(v) => save.mutate(v as unknown as Record<string, unknown>)}
             />
