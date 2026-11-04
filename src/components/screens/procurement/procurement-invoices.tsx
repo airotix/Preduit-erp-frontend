@@ -22,6 +22,7 @@ import { apiGet, apiPost, apiPut, USE_BACKEND } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { zeroToBlank } from "@/lib/number-input";
 import { useModuleAccess } from "@/lib/module-access";
+import { InvoiceLogo } from "@/components/screens/invoice-logo";
 
 // ----- types + helpers ------------------------------------------------------
 type Row = { color: string; qty: Record<string, number>; unitPrice: number; total?: number; amount?: number };
@@ -318,11 +319,6 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
       {locked && <p className="text-sm text-muted-foreground print:hidden">Quantities, unit prices, supplier, currency and totals are fixed from the saved PO. Resolve supplier differences through a PO revision or Finance adjustment.</p>}
       {doc._reconciliationRequired && <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 print:hidden">{doc._reconciliationRequired}</p>}
       <div className="invoice-paper mx-auto w-full max-w-[900px] border border-[#e2e2e2] bg-white p-8 text-[#111] shadow-erp-lg">
-        <div className="mb-3 text-[11px]">
-          <label>Prepared by <input className={FIELD} value={doc.preparedBy || ""} onChange={(e) => update((d) => { d.preparedBy = e.target.value; })} /></label>
-          <label>Preparer email <input className={FIELD} value={doc.preparedByEmail || ""} onChange={(e) => update((d) => { d.preparedByEmail = e.target.value; })} /></label>
-          <div>Company banking: {[doc.companyBank?.title, doc.companyBank?.bank, doc.companyBank?.account, doc.companyBank?.iban, doc.companyBank?.swift].filter(Boolean).join(" · ")}</div>
-        </div>
         <div className="mb-1 flex items-center justify-between text-[9px] text-[#8a8a8a]">
           <span>{doc.exporter?.name || "Commercial invoice"}</span><span>Page 1 / 1</span>
         </div>
@@ -330,8 +326,11 @@ function InvoiceEditor({ doc: initial, publicId, onBack }: { doc: Doc; publicId:
         {/* header: exporter | title + buyer */}
         <div className="grid grid-cols-[1.15fr_1fr] gap-4">
           <div className={cn(BOX, "p-3 text-center")}>
-            <input className={cn(FIELD, "border-b-0 text-center text-[15px] font-extrabold")} value={doc.exporter?.name || ""}
+            <div className="relative flex items-center justify-center">
+              <InvoiceLogo className="absolute left-0 top-1/2 max-h-14 max-w-[100px] -translate-y-1/2 object-contain" />
+              <input className={cn(FIELD, "w-full border-b-0 px-[108px] text-center text-[15px] font-extrabold")} value={doc.exporter?.name || ""}
                    onChange={(e) => update((d) => { d.exporter.name = e.target.value; })} />
+            </div>
             <input className={cn(FIELD, "border-b-0 text-center text-[11px] font-normal text-[#555]")} value={doc.exporter?.address || ""}
                    placeholder="Street address · Industrial estate · City · PAKISTAN"
                    onChange={(e) => update((d) => { d.exporter.address = e.target.value; })} />

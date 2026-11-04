@@ -23,6 +23,7 @@ import { StockMovementHistory } from "@/components/screens/stock-movement-histor
 import { OrderFulfillmentPanel } from "@/components/screens/sales/order-fulfillment";
 import { CatalogSupplierPricing } from "@/components/screens/catalog-supplier-pricing";
 import { ShipmentActions } from "@/components/screens/shipment-actions";
+import { CarrierList, NewCarrierHint } from "@/components/screens/carrier-input";
 import { CatalogPOButton } from "@/components/screens/catalog-po-button";
 import { CatalogArticleActions } from "@/components/screens/catalog-article-actions";
 import { QCReopenDialog } from "@/components/screens/qc-reopen-dialog";
@@ -785,7 +786,7 @@ function VariantPricingEditor({ variants, status, recordId, canWrite, onSaved }:
       setError(err instanceof Error ? err.message : "Could not save variant prices.");
     } finally { setSaving(false); }
   };
-  return <Panel title="Prices by colour and size" sub="Sales prices are independent for each variant. Reference cost is legacy information; POs use the supplier-specific prices configured above.">
+  return <Panel title="Prices by colour and size" sub="Each colour and size has its own selling price. Purchase orders use the supplier buying prices below.">
     {variants.length === 0 ? <p className="text-sm text-muted-foreground">Save colour and size variants before entering prices.</p> : <>
       <div className="overflow-x-auto"><ResponsiveTable className="w-full min-w-[720px] text-[13px]">
         <thead><tr className="text-left text-[11px] uppercase text-muted-foreground">
@@ -809,50 +810,6 @@ function VariantPricingEditor({ variants, status, recordId, canWrite, onSaved }:
           {saving ? "Saving…" : "Save variant prices"}
         </Button>
       </div>}
-    </>}
-  </Panel>;
-}
-
-function VariantGtinEditor({ variants, recordId, canWrite, onSaved }: {
-  variants: PriceVariant[]; recordId: string; canWrite: boolean; onSaved: () => void;
-}) {
-  const [values, setValues] = React.useState<Record<string, string>>(() =>
-    Object.fromEntries(variants.map((variant) => [variant.id, variant.gtin ?? ""])));
-  const [saving, setSaving] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-  React.useEffect(() => {
-    setValues(Object.fromEntries(variants.map((variant) => [variant.id, variant.gtin ?? ""])));
-  }, [variants]);
-  const changed = variants.filter((variant) => (values[variant.id] ?? "").trim() !== (variant.gtin ?? ""));
-  const save = async () => {
-    const invalid = changed.find((variant) => {
-      const value = (values[variant.id] ?? "").trim();
-      return value && (!/^\d+$/.test(value) || ![8, 12, 13, 14].includes(value.length));
-    });
-    if (invalid) { setError("Enter a GTIN with 8, 12, 13 or 14 digits, or leave it blank."); return; }
-    setSaving(true); setError(null);
-    try {
-      await apiPut(`/catalog/products/${recordId}/variant-gtins`, { variants: changed.map((variant) => ({
-        variantId: variant.id, gtin: (values[variant.id] ?? "").trim() || null,
-      })) });
-      onSaved();
-    } catch (err) { setError(err instanceof Error ? err.message : "Could not save GTINs."); }
-    finally { setSaving(false); }
-  };
-  return <Panel title="Variant GTINs" sub="Optional trade barcodes. Each colour and size needs its own unique GTIN when used for retail scanning.">
-    {variants.length === 0 ? <p className="text-sm text-muted-foreground">Save colour and size variants first.</p> : <>
-      <div className="space-y-2">{variants.map((variant) => <div key={variant.id}
-        className="flex flex-wrap items-center gap-3 border-b border-border/50 py-2 text-sm">
-        <span className="w-44 font-semibold">{variant.color} / {variant.size}</span>
-        <span className="w-32 text-muted-foreground">{variant.sku}</span>
-        <input type="text" inputMode="numeric" maxLength={14} aria-label={`${variant.color} ${variant.size} GTIN`}
-          value={values[variant.id] ?? ""} disabled={!canWrite || saving}
-          onChange={(event) => setValues((current) => ({ ...current, [variant.id]: event.target.value }))}
-          placeholder="Optional GTIN" className="w-44 rounded-md border border-border/70 px-2 py-1.5 tabular outline-none focus:border-primary" />
-      </div>)}</div>
-      {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
-      {canWrite && <div className="mt-4 flex justify-end"><Button variant="navy" size="sm"
-        onClick={save} disabled={saving || changed.length === 0}>{saving ? "Saving…" : "Save GTINs"}</Button></div>}
     </>}
   </Panel>;
 }
@@ -1617,7 +1574,7 @@ function InspectionShipmentBar({
   );
 }
 
-type EditField = { name: string; label: string; type?: "text" | "select"; options?: string[] };
+type EditField = { name: string; label: string; type?: "text" | "select" | "date" | "carrier"; options?: string[] };
 
 /** Generic header-field editor used by the drill-down Edit button (shipment,
  *  inspection header). PUTs the whole field set to `endpoint`. */
@@ -1648,8 +1605,12 @@ function InlineFieldEditor({
                 {(fl.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
             ) : (
-              <input value={f[fl.name] ?? ""} onChange={(e) => set(fl.name, e.target.value)}
-                className="w-full rounded-md border border-border/70 bg-transparent px-2 py-1.5 text-[13px] outline-none" />
+              <>
+                <input value={f[fl.name] ?? ""} onChange={(e) => set(fl.name, e.target.value)}
+                  type={fl.type === "date" ? "date" : "text"} list={fl.type === "carrier" ? "edit-carrier-list" : undefined} autoComplete="off"
+                  className="w-full rounded-md border border-border/70 bg-transparent px-2 py-1.5 text-[13px] outline-none" />
+                {fl.type === "carrier" && <><CarrierList id="edit-carrier-list" /><NewCarrierHint value={f[fl.name] ?? ""} /></>}
+              </>
             )}
           </div>
         ))}
@@ -1733,9 +1694,6 @@ function tabContentFor(
             <VariantMatrix product={p} />
           </Panel>
           <div className="space-y-4">
-            {ctx.recordId && USE_BACKEND && <Panel title="Tech Pack" sub="Article specification file shared with production">
-              <TechPackPanel articleId={ctx.recordId} />
-            </Panel>}
             {p.image && (
               <Panel title="Image">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1745,6 +1703,10 @@ function tabContentFor(
             <Panel title="Specifications">
               <Specs specs={p.specs} />
             </Panel>
+            {ctx.recordId && USE_BACKEND && <details className="rounded-[14px] border border-border/70 bg-card p-5 shadow-erp-sm">
+              <summary className="cursor-pointer font-bold">Tech Pack <span className="font-normal text-muted-foreground">· file shared with production</span></summary>
+              <div className="mt-3"><TechPackPanel articleId={ctx.recordId} /></div>
+            </details>}
           </div>
         </div>
       ),
@@ -1790,15 +1752,12 @@ function tabContentFor(
       ),
       Pricing: (
         <div className="space-y-4">
-          {ctx.recordId && USE_BACKEND && <CatalogSupplierPricing key={ctx.recordId} productId={ctx.recordId}
-            sizes={p.sizes} colors={p.matrix.map(color => ({ name: color.name, hex: color.hex }))} onSaved={ctx.onSaved} />}
-        <Panel title="Pricing & trade" sub="Retail, wholesale & online prices and trade details">
+        <Panel title="Selling prices" sub="Retail, wholesale and online prices, plus trade details">
           <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
             {[
               { k: "Retail price", v: p.prices?.retail ?? d.meta.find((m) => m.k === "Retail price")?.v ?? "—" },
               { k: "Wholesale price", v: p.prices?.wholesale ?? "—" },
               { k: "Online price", v: p.prices?.online ?? "—" },
-              { k: "Reference cost (legacy)", v: p.prices?.supplier ?? "—" },
               ...p.specs.filter((s) =>
                 ["HS code", "Origin", "Weight", "Composition", "Fabric"].includes(s.k)
               ),
@@ -1816,8 +1775,11 @@ function tabContentFor(
         {ctx.recordId && USE_BACKEND && <VariantPricingEditor variants={p.variants ?? []}
           status={d.statusLabel} recordId={ctx.recordId} canWrite={!!ctx.canWrite}
           onSaved={() => ctx.onSaved?.()} />}
-        {ctx.recordId && USE_BACKEND && <VariantGtinEditor variants={p.variants ?? []}
-          recordId={ctx.recordId} canWrite={!!ctx.canWrite} onSaved={() => ctx.onSaved?.()} />}
+        {ctx.recordId && USE_BACKEND && <details className="rounded-[14px] border border-border/70 bg-card p-5 shadow-erp-sm">
+          <summary className="cursor-pointer font-bold">Buying prices from suppliers <span className="font-normal text-muted-foreground">· used on purchase orders</span></summary>
+          <div className="mt-4"><CatalogSupplierPricing key={ctx.recordId} productId={ctx.recordId}
+            sizes={p.sizes} colors={p.matrix.map(color => ({ name: color.name, hex: color.hex }))} onSaved={ctx.onSaved} /></div>
+        </details>}
         </div>
       ),
       Activity: (
@@ -2408,7 +2370,8 @@ export function RecordDetailPage({
   const content: Record<string, React.ReactNode> = {
     ...tabContentFor(d, { recordId, onSaved: afterSave, canWrite, writeReason }),
   };
-  const tabs = d.tabs.length ? d.tabs : ["Overview"];
+  const tabs = (d.variant === "product" ? d.tabs.filter((t) => t !== "Variant matrix" && t !== "Activity") : d.tabs);
+  if (!tabs.length) tabs.push("Overview");
 
   // The stock article grid is editable in place via the header Edit button.
   const canEditStock = d.variant === "stockarticle" && !!d.stock && !!recordId;
@@ -2456,9 +2419,9 @@ export function RecordDetailPage({
         endpoint={`/shipments/shipments/${recordId}`}
         initial={{ carrier: sf.carrier, destination: sf.destination, eta: sf.eta, status: sf.status }}
         fields={[
-          { name: "carrier", label: "Carrier" },
+          { name: "carrier", label: "Carrier", type: "carrier" },
           { name: "destination", label: "Destination" },
-          { name: "eta", label: "ETA" },
+          { name: "eta", label: "ETA", type: "date" },
         ]}
         onCancel={() => setEditing(false)} onSaved={afterSave}
       />

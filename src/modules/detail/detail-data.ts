@@ -106,7 +106,7 @@ export interface DetailModel {
     matrix: { name: string; hex: string; cells: { q: number; tone: "red" | "amber" | "neutral" }[] }[];
     specs: MetaItem[];
     prices?: { retail: string; wholesale: string; online: string; supplier: string };
-    variants?: { id: string; sku: string; gtin: string | null;
+    variants?: { id: string; sku: string;
       color: string; size: string; currency: string;
       retailPrice: number | null; wholesalePrice: number | null;
       onlinePrice: number | null; supplierPrice: number | null }[];

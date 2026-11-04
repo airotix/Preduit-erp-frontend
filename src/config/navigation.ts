@@ -128,7 +128,7 @@ export const MODULES: ModuleDef[] = [
     icon: "History",
     label: "Order History",
     tabs: [
-      { id: "shipped", label: "Shipped Orders", kind: "list" },
+      { id: "shipped", label: "Completed Orders", kind: "list" },
     ],
   },
   {

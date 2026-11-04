@@ -71,14 +71,39 @@ interface ShipmentTab {
   shipment: { tracking: TimelineItem[]; contents: { name: string; sku: string; qty: number }[] };
 }
 
+interface ProcurementTab {
+  orders: {
+    publicId: string; poNo: string; supplier: string; status: string; statusTone: Tone;
+    expected: string; total: string;
+    lines: { name: string; sku: string; qty: number; price: string; total: string }[];
+  }[];
+}
+interface ReceivingTab {
+  receipts: {
+    grnNo: string; poRef: string; supplier: string; receivedOn: string; location: string;
+    reference: string; reason: string; actor: string; status: string;
+    lines: { name: string; sku: string; ordered: number; received: number }[];
+  }[];
+  inbound: {
+    shipmentNo: string; status: string; receivedOn: string;
+    lines: { name: string; location: string; shipped: number; accepted: number; discrepancy: number; discrepancyStatus: string }[];
+  }[];
+}
+interface ShipmentEntry { direction: "Inbound" | "Outbound"; route: string; dispatchOn: string; eta: string; detail: ShipmentTab }
+
 interface Detail {
+  kind: "sales" | "purchase";
   orderNo: string; customer: string; channel: string; status: string; statusTone: Tone;
   orderDate: string; total: string;
   tabs: string[];
+  summary: MetaItem[];
+  timeline: TimelineItem[];
   order: OrderTab | null;
+  procurement: ProcurementTab;
   production: ProductionTab | null;
   quality: QualityTab | null;
-  shipment: ShipmentTab | null;
+  shipments: ShipmentEntry[];
+  receiving: ReceivingTab;
   finance: { invoices: OrderInvoice[] };
 }
 
@@ -381,6 +406,145 @@ function ShipmentPanel({ data }: { data: ShipmentTab }) {
   );
 }
 
+/* ------------------- Procurement / Receiving / Shipments ------------------- */
+
+function ProcurementPanel({ data }: { data: ProcurementTab }) {
+  if (!data.orders.length) return <EmptyStage label="No purchase order is linked to this order" />;
+  return (
+    <div className="space-y-4">
+      {data.orders.map((po) => (
+        <Card key={po.publicId} className="p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-[17px] font-extrabold tracking-tight text-foreground">{po.poNo} · {po.supplier}</h3>
+              <p className="mt-1 text-[13px] text-muted-foreground">Expected {po.expected} · Total {po.total}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <ToneBadge tone={po.statusTone}>{po.status}</ToneBadge>
+              <Link href={`/procurement/pos/${po.publicId}`} className="text-[13px] font-semibold text-primary hover:underline">Open PO</Link>
+            </div>
+          </div>
+          <ResponsiveTable className="mt-4 w-full text-[13px]">
+            <thead>
+              <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                <th className="pb-2 text-left font-bold">Item</th>
+                <th className="pb-2 text-left font-bold">SKU</th>
+                <th className="pb-2 text-right font-bold">Qty</th>
+                <th className="pb-2 text-right font-bold">Price</th>
+                <th className="pb-2 text-right font-bold">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {po.lines.map((l, i) => (
+                <tr key={i} className="border-t border-border/50">
+                  <td className="py-2.5 font-semibold text-foreground">{l.name}</td>
+                  <td className="py-2.5">{l.sku}</td>
+                  <td className="py-2.5 text-right tabular">{l.qty}</td>
+                  <td className="py-2.5 text-right tabular">{l.price}</td>
+                  <td className="py-2.5 text-right tabular font-semibold text-foreground">{l.total}</td>
+                </tr>
+              ))}
+            </tbody>
+          </ResponsiveTable>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function ReceivingPanel({ data }: { data: ReceivingTab }) {
+  if (!data.receipts.length && !data.inbound.length) return <EmptyStage label="Nothing has been received yet" />;
+  return (
+    <div className="space-y-4">
+      {data.receipts.map((r) => (
+        <Card key={r.grnNo} className="p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-[17px] font-extrabold tracking-tight text-foreground">{r.grnNo} · {r.supplier}</h3>
+              <p className="mt-1 text-[13px] text-muted-foreground">
+                PO {r.poRef} · received {r.receivedOn} at {r.location} · reference {r.reference} · by {r.actor}
+              </p>
+              {r.reason && <p className="mt-1 text-[13px] text-muted-foreground">Note: {r.reason}</p>}
+            </div>
+            <ToneBadge tone="green">{r.status}</ToneBadge>
+          </div>
+          <ResponsiveTable className="mt-4 w-full text-[13px]">
+            <thead>
+              <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                <th className="pb-2 text-left font-bold">Item</th>
+                <th className="pb-2 text-left font-bold">SKU</th>
+                <th className="pb-2 text-right font-bold">Outstanding before</th>
+                <th className="pb-2 text-right font-bold">Received</th>
+              </tr>
+            </thead>
+            <tbody>
+              {r.lines.map((l, i) => (
+                <tr key={i} className="border-t border-border/50">
+                  <td className="py-2.5 font-semibold text-foreground">{l.name}</td>
+                  <td className="py-2.5">{l.sku}</td>
+                  <td className="py-2.5 text-right tabular">{l.ordered}</td>
+                  <td className="py-2.5 text-right tabular font-semibold text-foreground">{l.received}</td>
+                </tr>
+              ))}
+            </tbody>
+          </ResponsiveTable>
+        </Card>
+      ))}
+      {data.inbound.map((s) => (
+        <Card key={s.shipmentNo} className="p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-[17px] font-extrabold tracking-tight text-foreground">Inbound shipment {s.shipmentNo}</h3>
+            <span className="text-[13px] text-muted-foreground">{s.status}{s.receivedOn !== "—" ? ` · ${s.receivedOn}` : ""}</span>
+          </div>
+          <ResponsiveTable className="mt-4 w-full text-[13px]">
+            <thead>
+              <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                <th className="pb-2 text-left font-bold">Item</th>
+                <th className="pb-2 text-left font-bold">Warehouse</th>
+                <th className="pb-2 text-right font-bold">Shipped</th>
+                <th className="pb-2 text-right font-bold">Accepted</th>
+                <th className="pb-2 text-right font-bold">Difference</th>
+              </tr>
+            </thead>
+            <tbody>
+              {s.lines.map((l, i) => (
+                <tr key={i} className="border-t border-border/50">
+                  <td className="py-2.5 font-semibold text-foreground">{l.name}</td>
+                  <td className="py-2.5">{l.location}</td>
+                  <td className="py-2.5 text-right tabular">{l.shipped}</td>
+                  <td className="py-2.5 text-right tabular font-semibold text-foreground">{l.accepted}</td>
+                  <td className="py-2.5 text-right tabular">
+                    {l.discrepancy ? <span className="font-semibold text-amber-700">{l.discrepancy} {l.discrepancyStatus}</span> : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </ResponsiveTable>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function ShipmentsPanel({ entries }: { entries: ShipmentEntry[] }) {
+  if (!entries.length) return <EmptyStage label="No shipment recorded yet" />;
+  return (
+    <div className="space-y-6">
+      {entries.map((e) => (
+        <div key={e.detail.ref}>
+          <div className="mb-2 flex flex-wrap items-center gap-2 text-[14px]">
+            <ToneBadge tone={e.direction === "Inbound" ? "navy" : "accent"} dot={false}>
+              {e.direction === "Inbound" ? "Inbound · supplier to warehouse" : "Outbound · to customer"}</ToneBadge>
+            <span className="font-bold text-foreground">{e.detail.ref}</span>
+            <span className="text-muted-foreground">{e.route} · dispatch {e.dispatchOn} · ETA {e.eta}</span>
+          </div>
+          <ShipmentPanel data={e.detail} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ---------------------------- Finance tab ---------------------------- */
 
 function FinancePanel({ invoices }: { invoices: OrderInvoice[] }) {
@@ -467,9 +631,10 @@ export function OrderHistoryDetail({ publicId, backHref }: { publicId: string; b
             </div>
             <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
               {[
-                { k: "Channel", v: data.channel },
-                { k: "Order date", v: data.orderDate },
+                { k: data.kind === "purchase" ? "Type" : "Channel", v: data.channel },
+                { k: data.kind === "purchase" ? "First received" : "Order date", v: data.orderDate },
                 { k: "Total", v: data.total },
+                ...(data.summary ?? []),
               ].map((m) => (
                 <div key={m.k} className="rounded-[12px] border border-border/70 bg-muted/40 px-4 py-3.5">
                   <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">{m.k}</div>
@@ -486,8 +651,19 @@ export function OrderHistoryDetail({ publicId, backHref }: { publicId: string; b
               ))}
             </TabsList>
 
+            <TabsContent value="Timeline">
+              <Card className="p-6">
+                <h3 className="mb-4 text-[17px] font-extrabold tracking-tight text-foreground">
+                  Order journey · {data.kind === "purchase" ? "purchase order to receiving" : "creation to shipment and receiving"}
+                </h3>
+                {data.timeline.length ? <Timeline items={data.timeline} /> : <p className="text-[13px] text-muted-foreground">No events recorded.</p>}
+              </Card>
+            </TabsContent>
             <TabsContent value="Order">
               {data.order ? <OrderPanel data={data.order} /> : <EmptyStage label="No order details available" />}
+            </TabsContent>
+            <TabsContent value="Procurement">
+              <ProcurementPanel data={data.procurement} />
             </TabsContent>
             <TabsContent value="Production">
               {data.production ? <ProductionPanel data={data.production} /> : <EmptyStage label="Production hasn't started yet" />}
@@ -495,8 +671,11 @@ export function OrderHistoryDetail({ publicId, backHref }: { publicId: string; b
             <TabsContent value="Quality">
               {data.quality ? <QualityPanel data={data.quality} /> : <EmptyStage label="No inspection recorded yet" />}
             </TabsContent>
-            <TabsContent value="Shipment">
-              {data.shipment ? <ShipmentPanel data={data.shipment} /> : <EmptyStage label="Not shipped yet" />}
+            <TabsContent value="Shipments">
+              <ShipmentsPanel entries={data.shipments} />
+            </TabsContent>
+            <TabsContent value="Receiving">
+              <ReceivingPanel data={data.receiving} />
             </TabsContent>
             <TabsContent value="Finance">
               <FinancePanel invoices={data.finance.invoices} />

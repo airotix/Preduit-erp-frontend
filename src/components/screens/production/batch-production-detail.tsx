@@ -78,7 +78,7 @@ export function BatchProductionDetail({ batchId, orderId }: { batchId: string; o
   });
   const { data: parentDetail } = useQuery({
     queryKey: ["production", "porder", orderId],
-    queryFn: () => apiGet<{ tnaStartBlockedReason?: string | null; materials: { component: string; material: string; qty: string; cost: string }[] }>(`/production/porders/${orderId}/detail`),
+    queryFn: () => apiGet<{ tnaStartBlockedReason?: string | null; failedChecks?: { article: string; scope: string; inspectionNo: string | null }[]; materials: { component: string; material: string; qty: string; cost: string }[] }>(`/production/porders/${orderId}/detail`),
   });
   const batch = data?.batches.find((entry) => entry.publicId === batchId);
   const [startStyle, setStartStyle] = React.useState<{ id: number; lineId: string; names: string[] } | null>(null);
@@ -118,9 +118,12 @@ export function BatchProductionDetail({ batchId, orderId }: { batchId: string; o
         <p className="mt-1 text-xs text-muted-foreground">Factory: {batch.factory || "Unassigned"} · Target: {batch.dueOn || "Not set"}</p>
       </Card>
       {actionError && <p role="alert" className="text-sm text-destructive">{actionError}</p>}
+      {(parentDetail?.failedChecks ?? []).filter((f) => f.scope === batch.name.slice(0, 60)).map((f) =>
+        <p key={f.article} role="alert" className="rounded-xl bg-[#FBEAEA] px-4 py-3 text-[13px] font-semibold text-[#C0392B]">
+          Mid-production check failed for {f.article}{f.inspectionNo ? ` (${f.inspectionNo})` : ""}. Fix the problem and run another check.</p>)}
       <Tabs defaultValue="summary">
         <TabsList className="erp-scroll mb-4 w-full justify-start overflow-x-auto border-b">
-          <TabsTrigger value="summary">Summary</TabsTrigger>
+          <TabsTrigger value="summary">Items in this batch</TabsTrigger>
           {styles.map(([styleId, variants]) => <TabsTrigger key={styleId} value={`style-${styleId}`}>{variants[0].name}</TabsTrigger>)}
           <TabsTrigger value="materials">Bill of materials</TabsTrigger>
         </TabsList>
@@ -138,6 +141,7 @@ export function BatchProductionDetail({ batchId, orderId }: { batchId: string; o
         return <TabsContent key={styleId} value={`style-${styleId}`} className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-bold">{style.name}</h2><span className="text-sm">{style.qty} pieces · {style.progress}% stages complete</span></div>
           <LineTimeline line={style} busy={busy} onAct={(id, action, body) => { void act(id, action, body); }}
+            midCheckHref={`/quality/work?task=${encodeURIComponent(`batch:${batchId}:${style.name}`)}`}
             onModal={setModal} onStart={() => setStartStyle({ id: styleId, lineId: style.publicId, names: styleStages.map((stage) => stage.name) })}
             canWrite={canWrite && batch.status !== "Cancelled" && styleId > 0} writeReason={writeReason}
             startBlockedReason={parentDetail?.tnaStartBlockedReason} />

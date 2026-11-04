@@ -19,6 +19,7 @@ type ReceiptLine = { id: string; name: string; color: string | null; size: strin
   sku: string | null; ordered: number; received: number; remaining: number };
 type ReceiptOrder = { id: string; poNo: string; supplier: string; ready: boolean;
   shipment?: { id: string; ref: string; status: string } | null;
+  shipments?: { id: string; ref: string; status: string; lines: { poLineId: string; quantity: number }[] }[];
   status: string; plannedLocation: string | null; lines: ReceiptLine[] };
 type BatchShipment = { id: string; ref: string; supplier: string; destination: string | null; status: string;
   lines: { allocationId: number; name: string; color: string | null; size: string | null; batch: string; shipped: number }[] };
@@ -34,10 +35,16 @@ function ReceiveOrder({ order, locations, canWrite, onPosted }: {
   const [reference, setReference] = React.useState("");
   const [reason, setReason] = React.useState("Physical warehouse receipt");
   const [error, setError] = React.useState<string | null>(null);
+  const [shipmentId, setShipmentId] = React.useState("");
   const request = React.useRef<{ key: string; id: string } | null>(null);
+  // A purchase order can arrive in several shipments; the one that arrived decides the quantities.
+  const flights = order.shipments ?? [];
+  const chosen = flights.find((s) => s.id === shipmentId) ?? flights[0];
+  const sentOf = (line: ReceiptLine) => chosen ? chosen.lines.find((l) => l.poLineId === line.id)?.quantity ?? 0 : line.remaining;
+  const limitOf = (line: ReceiptLine) => Math.min(line.remaining, sentOf(line));
   const receive = useMutation({
     mutationFn: (body: { locationId: string; lines: { poLineId: string; quantity: number }[];
-      reference: string; reason: string; requestId: string }) =>
+      reference: string; reason: string; requestId: string; shipmentId?: string }) =>
       apiPost<{ public_id: string; grn_no: string }>(`/inventory/receiving/${order.id}`, body),
     onSuccess: (result) => {
       onPosted(result); setQuantities({}); setReference(""); request.current = null;
@@ -51,13 +58,13 @@ function ReceiveOrder({ order, locations, canWrite, onPosted }: {
       return setError("Enter a receipt reference and reason of at least three characters.");
     const lines = [];
     for (const line of order.lines) {
-      const quantity = Number(quantities[line.id] || 0);
-      if (!Number.isInteger(quantity) || quantity < 0 || quantity > line.remaining)
-        return setError(`Enter between 0 and ${line.remaining} units for ${line.name} / ${line.color} / ${line.size}.`);
+      const quantity = Number(quantities[line.id] ?? (chosen ? limitOf(line) : 0));
+      if (!Number.isInteger(quantity) || quantity < 0 || quantity > limitOf(line))
+        return setError(`Enter between 0 and ${limitOf(line)} units for ${line.name} / ${line.color} / ${line.size}.`);
       if (quantity) lines.push({ poLineId: line.id, quantity });
     }
     if (!lines.length) return setError("Enter the quantities that actually arrived.");
-    const body = { locationId: location, lines, reference: reference.trim(), reason: reason.trim() };
+    const body = { locationId: location, lines, reference: reference.trim(), reason: reason.trim(), ...(chosen ? { shipmentId: chosen.id } : {}) };
     const key = JSON.stringify(body);
     if (!request.current || request.current.key !== key) request.current = { key, id: crypto.randomUUID() };
     receive.mutate({ ...body, requestId: request.current.id });
@@ -69,13 +76,18 @@ function ReceiveOrder({ order, locations, canWrite, onPosted }: {
     </summary>
     <div className="space-y-3 border-t border-border/60 p-4">
       <p className="text-sm text-muted-foreground">Record only the units physically received. Remaining quantities stay open for a later receipt.</p>
-      {order.shipment && <p className="text-sm">Supplier shipment: <Link className="font-bold text-primary hover:underline" href={`/shipments/shipments/${order.shipment.id}`}>{order.shipment.ref}</Link> · <ToneBadge tone={statusTone(order.shipment.status)}>{order.shipment.status}</ToneBadge></p>}
+      {flights.length > 1 && <div className="max-w-sm space-y-1.5"><Label htmlFor={`recv-ship-${order.id}`}>Which shipment arrived?</Label>
+        <NativeSelect id={`recv-ship-${order.id}`} value={chosen?.id ?? ""} onChange={(event) => { setShipmentId(event.target.value); setQuantities({}); }}>
+          {flights.map((s) => <option key={s.id} value={s.id}>{s.ref} · {s.status} · {s.lines.reduce((sum, l) => sum + l.quantity, 0)} pieces</option>)}
+        </NativeSelect></div>}
+      {order.shipment && flights.length <= 1 && <p className="text-sm">Supplier shipment: <Link className="font-bold text-primary hover:underline" href={`/shipments/shipments/${order.shipment.id}`}>{order.shipment.ref}</Link> · <ToneBadge tone={statusTone(order.shipment.status)}>{order.shipment.status}</ToneBadge></p>}
       {order.plannedLocation && <p className="text-sm">Planned warehouse: <strong>{order.plannedLocation}</strong>. Select the actual receiving location below.</p>}
       <form onSubmit={submit} className="space-y-3">
         <Table>
           <TableHeader><TableRow>
             <TableHead className="px-0">Item / colour / size</TableHead><TableHead className="text-right">Ordered</TableHead>
             <TableHead className="text-right">Received</TableHead><TableHead className="text-right">Remaining</TableHead>
+            <TableHead className="text-right">{chosen ? `On ${chosen.ref}` : "On the way"}</TableHead>
             <TableHead className="text-right">Arrived now</TableHead>
           </TableRow></TableHeader>
           <TableBody>{order.lines.map((line) => <TableRow key={line.id}>
@@ -84,10 +96,11 @@ function ReceiveOrder({ order, locations, canWrite, onPosted }: {
             <TableCell className="text-right tabular-nums">{line.ordered}</TableCell>
             <TableCell className="text-right tabular-nums">{line.received}</TableCell>
             <TableCell className="text-right tabular-nums">{line.remaining}</TableCell>
-            <TableCell className="text-right"><Input type="number" min={0} max={line.remaining} step={1}
+            <TableCell className="text-right tabular-nums">{chosen ? sentOf(line) : "—"}</TableCell>
+            <TableCell className="text-right"><Input type="number" min={0} max={limitOf(line)} step={1}
               aria-label={`${line.name} ${line.color} ${line.size} arrived now`}
-              disabled={!order.ready || !canWrite || receive.isPending || !line.remaining}
-              value={quantities[line.id] ?? ""} placeholder="0"
+              disabled={!order.ready || !canWrite || receive.isPending || !limitOf(line)}
+              value={quantities[line.id] ?? (chosen ? String(limitOf(line)) : "")} placeholder="0"
               onChange={(event) => setQuantities((current) => ({ ...current, [line.id]: event.target.value }))}
               className="ml-auto w-24 text-right" /></TableCell>
           </TableRow>)}</TableBody>

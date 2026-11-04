@@ -23,6 +23,7 @@ import { apiGet, apiPost, apiPut, USE_BACKEND } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { zeroToBlank } from "@/lib/number-input";
 import { useModuleAccess } from "@/lib/module-access";
+import { InvoiceLogo } from "@/components/screens/invoice-logo";
 
 // ----- types + helpers ------------------------------------------------------
 type FlatLine = { article: string; colour: string; size: string; qty: number; unitPrice: number; amount?: number };
@@ -373,15 +374,17 @@ function RetailPaper({ doc, ccy, totals, update }: {
     ["Invoice no", "invoiceNo"], ["Date", "invoiceDate"],
     ["Payment method", "paymentMethod"], ["Order ref", "orderRef"],
     ["Cashier", "cashier"], ["Status", "status"],
-    ["Prepared by", "preparedBy"], ["Preparer email", "preparedByEmail"],
   ];
   return (
     <div className="invoice-paper mx-auto w-full max-w-[900px] border border-[#e2e2e2] bg-white p-8 text-[#111] shadow-erp-lg">
       {/* header: exporter | title + customer */}
       <div className="grid grid-cols-[1.15fr_1fr] gap-4">
         <div className={cn(BOX, "p-3 text-center")}>
-          <input className={cn(FIELD, "border-b-0 text-center text-[15px] font-extrabold")} value={doc.exporter?.name || ""}
+          <div className="relative flex items-center justify-center">
+            <InvoiceLogo className="absolute left-0 top-1/2 max-h-14 max-w-[100px] -translate-y-1/2 object-contain" />
+            <input className={cn(FIELD, "w-full border-b-0 px-[108px] text-center text-[15px] font-extrabold")} value={doc.exporter?.name || ""}
                  onChange={(e) => update((d) => { d.exporter.name = e.target.value; })} />
+          </div>
           <input className={cn(FIELD, "border-b-0 text-center text-[11px] font-normal text-[#555]")} value={doc.exporter?.address || ""}
                  placeholder="Address · City" onChange={(e) => update((d) => { d.exporter.address = e.target.value; })} />
           <div className="mt-1 grid grid-cols-2 gap-x-3">
@@ -493,7 +496,6 @@ function WholesalePaper({ doc, ccy, totals, update }: {
   const META: [string, string][] = [
     ["Invoice no", "invoiceNo"], ["PO no", "poNo"], ["Order date", "orderDate"],
     ["Payment terms", "paymentTerms"], ["Sales rep", "salesRep"], ["Ship to", "shipTo"],
-    ["Prepared by", "preparedBy"], ["Preparer email", "preparedByEmail"],
   ];
   const REMIT = REMIT_ROWS;
   return (
@@ -505,8 +507,11 @@ function WholesalePaper({ doc, ccy, totals, update }: {
       {/* header: exporter | title + buyer */}
       <div className="grid grid-cols-[1.15fr_1fr] gap-4">
         <div className={cn(BOX, "p-3 text-center")}>
-          <input className={cn(FIELD, "border-b-0 text-center text-[15px] font-extrabold")} value={doc.exporter?.name || ""}
+          <div className="relative flex items-center justify-center">
+            <InvoiceLogo className="absolute left-0 top-1/2 max-h-14 max-w-[100px] -translate-y-1/2 object-contain" />
+            <input className={cn(FIELD, "w-full border-b-0 px-[108px] text-center text-[15px] font-extrabold")} value={doc.exporter?.name || ""}
                  onChange={(e) => update((d) => { d.exporter.name = e.target.value; })} />
+          </div>
           <input className={cn(FIELD, "border-b-0 text-center text-[11px] font-normal text-[#555]")} value={doc.exporter?.address || ""}
                  placeholder="Warehouse · Industrial estate · City" onChange={(e) => update((d) => { d.exporter.address = e.target.value; })} />
           <div className="mt-1 grid grid-cols-2 gap-x-3">

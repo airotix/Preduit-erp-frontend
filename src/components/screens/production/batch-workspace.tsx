@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { LoadingBlock, Notice } from "@/components/ui/notice";
 import { ToneBadge } from "@/components/tone-badge";
 import { STAGE_NAMES } from "./production-start-modal";
+import { CarrierList, NewCarrierHint } from "@/components/screens/carrier-input";
 
 export type BatchMode = "production" | "quality" | "shipments" | "inventory" | "overview";
 type Totals = { ordered: number; planned: number; completed: number; approved: number; held: number; rejected: number; received: number; awaitingQC: number; allocated: number; dispatched: number; delivered: number; available: number; remaining: number; readyToShip: number; inboundPending: number; inboundTransit: number; inboundDelivered: number };
@@ -41,6 +42,13 @@ function useCommands() {
     finally { setBusy(false); }
   };
   return { send, busy, error, notice };
+}
+
+function CarrierInput() {
+  const [value, setValue] = React.useState("");
+  return <label className="block text-sm">Carrier<input name="carrier" required list="batch-carrier-list" autoComplete="off" maxLength={120}
+    placeholder="Pick a carrier or type a new one" value={value} onChange={(e) => setValue(e.target.value)} className={field} />
+    <CarrierList id="batch-carrier-list" /><NewCarrierHint value={value} /></label>;
 }
 
 function Input({ name, label, type = "text", value, max, min = 1, required = true }: { name: string; label: string; type?: string; value?: string | number; max?: number; min?: number; required?: boolean }) {
@@ -117,7 +125,7 @@ function InboundForm({ data, orderId, send, busy }: Commands & { data: Data; ord
     if (await send(`/batches/orders/${orderId}/inbound-shipments`, { carrier: f.get("carrier"), eta: f.get("eta"), reason: f.get("reason"), allocations: sources.map(({ line }) => ({ lineId: line.id, qty: qty(f, `qty-${line.id}`), locationId: qty(f, "locationId") })).filter((a) => a.qty > 0) })) form.reset();
   }}><fieldset disabled={busy || !access.canWrite} className="space-y-3"><p className="text-sm">Only quantities approved by QC with completed TNA are eligible. Stock is added on confirmed warehouse delivery.</p>
     {sources.map(({ batch, line }) => <Input key={line.id} name={`qty-${line.id}`} label={`${batch.name} · ${item(line)} · ${line.readyToShip} eligible`} type="number" min={0} max={line.readyToShip} value={0} />)}
-    {!sources.length && <p>No batches are ready for inbound shipment.</p>}<label className="text-sm">Receiving warehouse<select name="locationId" required className={field}><option value="">Select warehouse</option>{data.locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label><Input name="carrier" label="Carrier" /><Input name="eta" label="ETA" required={false} /><Input name="reason" label="Shipment plan / reference" /><Button type="submit" disabled={busy || !access.canWrite || !sources.length}>Save pending inbound shipment</Button>
+    {!sources.length && <p>No batches are ready for inbound shipment.</p>}<label className="text-sm">Receiving warehouse<select name="locationId" required className={field}><option value="">Select warehouse</option>{data.locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label><CarrierInput /><Input name="eta" label="ETA" type="date" required={false} /><Input name="reason" label="Shipment plan / reference" /><Button type="submit" disabled={busy || !access.canWrite || !sources.length}>Save pending inbound shipment</Button>
   </fieldset></form></details>;
 }
 
@@ -128,7 +136,7 @@ function OutboundForm({ data, orderId, kind, send, busy }: Commands & { data: Da
   return <details className="rounded-lg border p-4"><summary className="cursor-pointer font-semibold">Create outbound customer shipment</summary><form className="mt-4 space-y-3" onSubmit={async (e) => {
     e.preventDefault(); const form = e.currentTarget, f = new FormData(form);
     if (await send(`/batches/orders/${orderId}/shipments?kind=${kind}`, { carrier: f.get("carrier"), destination: f.get("destination"), eta: f.get("eta"), reason: f.get("reason"), allocations: lots.map(({ lot }) => ({ lotId: lot.id, qty: qty(f, `lot-${lot.id}`) })).filter((a) => a.qty > 0), inventoryAllocations: data.inventorySources.map((s) => ({ reservationId: s.reservationId, qty: qty(f, `stock-${s.reservationId}`) })).filter((a) => a.qty > 0) })) form.reset();
-  }}><fieldset disabled={busy || !access.canWrite} className="space-y-3"><p className="text-sm">Uses stock already received at the warehouse. Dispatch reduces inventory; customer delivery does not add stock.</p>{lots.map(({ lot, batch, line }) => <Input key={lot.id} name={`lot-${lot.id}`} label={`${batch.name} · ${item(line)} · ${lot.location} · ${lot.available} available`} type="number" min={0} max={lot.available} value={0} />)}{data.inventorySources.map((s) => <Input key={s.reservationId} name={`stock-${s.reservationId}`} label={`Existing ${item(s)} · ${s.location} · ${s.available} available`} type="number" min={0} max={s.available} value={0} />)}<Input name="carrier" label="Carrier" /><Input name="destination" label="Customer destination" /><Input name="eta" label="ETA" required={false} /><Input name="reason" label="Dispatch plan / reference" /><Button type="submit" disabled={busy || !access.canWrite}>Save pending outbound shipment</Button></fieldset></form></details>;
+  }}><fieldset disabled={busy || !access.canWrite} className="space-y-3"><p className="text-sm">Uses stock already received at the warehouse. Dispatch reduces inventory; customer delivery does not add stock.</p>{lots.map(({ lot, batch, line }) => <Input key={lot.id} name={`lot-${lot.id}`} label={`${batch.name} · ${item(line)} · ${lot.location} · ${lot.available} available`} type="number" min={0} max={lot.available} value={0} />)}{data.inventorySources.map((s) => <Input key={s.reservationId} name={`stock-${s.reservationId}`} label={`Existing ${item(s)} · ${s.location} · ${s.available} available`} type="number" min={0} max={s.available} value={0} />)}<CarrierInput /><Input name="destination" label="Customer destination" /><Input name="eta" label="ETA" type="date" required={false} /><Input name="reason" label="Dispatch plan / reference" /><Button type="submit" disabled={busy || !access.canWrite}>Save pending outbound shipment</Button></fieldset></form></details>;
 }
 
 function BatchTransfer({ batch, line, locations, send, busy }: Commands & { batch: Batch; line: Line; locations: Data["locations"] }) {

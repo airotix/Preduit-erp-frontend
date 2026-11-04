@@ -49,6 +49,13 @@ function SupplierPriceMatrix({ supplier, variants, sizes, colors, canWrite, draf
   }, [signature]);
   const visible = new Set(colors.flatMap(color => sizes.map(size => cellKey(color.name, size))));
   const matrixChanged = variants.some(v => !visible.has(cellKey(v.color, v.size)));
+  const [bulk, setBulk] = React.useState("");
+  const applyAll = () => {
+    const price = bulk.trim();
+    if (!price || Number(price) <= 0) return;
+    dirty.current = true; setNotice(""); setError("");
+    setValues(Object.fromEntries([...groups.keys()].map(key => [key, price])));
+  };
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!canWrite || busy) return;
@@ -69,6 +76,13 @@ function SupplierPriceMatrix({ supplier, variants, sizes, colors, canWrite, draf
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={active} disabled={!canWrite || busy}
           onChange={e => { dirty.current = true; setActive(e.target.checked); setNotice(""); }} />Available for new POs</label>}
     </div>
+    {canWrite && <div className="flex flex-wrap items-end gap-2">
+      <label className="text-sm font-medium">Same price for all colours and sizes
+        <input type="number" min="0.0001" step="0.0001" data-wheel-step="1" aria-label={`${supplier.name}: price for all colours and sizes, in EUR`}
+          className="mt-1 block w-32 rounded-md border border-border bg-background px-2 py-2 text-right tabular" placeholder="e.g. 25"
+          value={bulk} disabled={busy} onChange={e => setBulk(e.target.value)} /></label>
+      <Button type="button" variant="outline" disabled={busy || !bulk.trim() || Number(bulk) <= 0} onClick={applyAll}>Apply to all</Button>
+    </div>}
     <Table className="w-full text-sm"><thead><tr className="border-b border-border"><th className="sticky left-0 z-10 bg-background px-3 py-2 text-left">Colour / Size</th>
       {sizes.map(size => <th key={size} className="min-w-24 px-2 py-2 text-center">{size}</th>)}</tr></thead>
       <tbody>{colors.map(color => <tr key={color.name} className="border-b border-border last:border-0">

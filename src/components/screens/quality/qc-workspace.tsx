@@ -13,8 +13,10 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { LoadingBlock, Notice } from "@/components/ui/notice";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ToneBadge } from "@/components/tone-badge";
+import { QcShip } from "@/components/screens/quality/qc-ship";
 
-type Source = { id: number; color: string | null; size: string | null; sku: string | null; awaiting: number; held: number; approved: number; rejected: number; tnaComplete: boolean };
+type Variant = { color: string | null; size: string | null; qty: number };
+type Source = { id: number; variants?: Variant[]; color: string | null; size: string | null; sku: string | null; awaiting: number; held: number; approved: number; rejected: number; tnaComplete: boolean };
 type Check = { publicId: string; criterion: string; requirement: string | null; actual: string | null; result: string; notes: string | null; targetValue: number | null; tolerance: number | null };
 type Defect = { publicId: string; name: string | null; severity: string | null; qty: number; notes: string | null; imageDocId: string | null };
 type DefectOption = { publicId: string; name: string; category: string | null; severity: string | null };
@@ -27,7 +29,7 @@ type Inspection = {
 type Task = {
   taskKey: string; orderRef: string; poRef: string | null; poId: string | null; supplier: string | null;
   article: string; scope: string; awaiting: number; held: number; approved: number; rejected: number;
-  status: string; legacy: boolean; legacyNote: string | null; aql: string; suggestedSampleSize: number; suggestedMaxDefects: number;
+  status: string; legacy: boolean; legacyNote: string | null; aql: string; inProduction?: boolean; plannedQty?: number; suggestedSampleSize: number; suggestedMaxDefects: number;
   plan: string; sources: Source[]; reworkOpen: boolean; canReleaseException: boolean;
   inspection: Inspection | null; history: { inspectionNo: string | null; stage: string; result: string; legacy: boolean; approved: number | null; held: number | null; rejected: number | null; decision: string | null }[];
   links: { production: string; purchaseOrder: string | null; shipments: string; inventory: string };
@@ -40,6 +42,93 @@ const whole = (value: string) => { const n = Number(value); return value.trim() 
 const optionalNumber = (value: string) => value.trim() === "" ? null : Number(value);
 const colourSize = (row: { color?: string | null; size?: string | null; sku?: string | null } | undefined, fallback: string) =>
   [row?.color, row?.size].filter(Boolean).join(" / ") || row?.sku || fallback;
+
+const SIZE_ORDER = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "2XL", "3XL", "4XL", "5XL"];
+const sizeRank = (size: string) => { const i = SIZE_ORDER.indexOf(size.toUpperCase()); return i === -1 ? SIZE_ORDER.length : i; };
+const swatch = (name: string) => {
+  const css = name.replace(/\s+/g, "").toLowerCase();
+  return typeof CSS !== "undefined" && CSS.supports("color", css) ? css : "#C9CCD3";
+};
+const MEASURES = [["inspect", "To inspect"], ["held", "On hold"], ["approved", "Released"], ["rejected", "Rejected"]] as const;
+type Measure = (typeof MEASURES)[number][0];
+
+/** Colour × size grid of the pieces being inspected, like the catalog variant matrix. */
+function SizeBreakdown({ sources, article, inspected }: { sources: Source[]; article: string; inspected: { sourceId: number; qty: number }[] | null }) {
+  const [measure, setMeasure] = useState<Measure>("inspect");
+  const valueOf = (row: Source): number => {
+    if (measure === "inspect") return inspected ? inspected.filter((entry) => entry.sourceId === row.id).reduce((sum, entry) => sum + entry.qty, 0) : row.awaiting;
+    return measure === "held" ? row.held : measure === "approved" ? row.approved : row.rejected;
+  };
+  // A source can cover several colours and sizes; share its quantity across them in
+  // proportion to what was ordered (exact whenever the whole order is in view).
+  const cells = sources.flatMap((row) => {
+    const value = valueOf(row);
+    const parts = (row.variants ?? []).filter((v) => v.qty > 0);
+    if (parts.length === 0) return [{ colour: row.color || "No colour", size: row.size || "—", value }];
+    const base = parts.reduce((sum, v) => sum + v.qty, 0);
+    const shares = parts.map((v) => ({ v, exact: value * v.qty / base }));
+    const given = shares.map((s) => Math.floor(s.exact));
+    let left = value - given.reduce((sum, n) => sum + n, 0);
+    [...shares.keys()].sort((a, b) => (shares[b].exact - given[b]) - (shares[a].exact - given[a]))
+      .forEach((i) => { if (left > 0) { given[i] += 1; left -= 1; } });
+    return parts.map((v, i) => ({ colour: v.color || "No colour", size: v.size || "—", value: given[i] }));
+  });
+  const colours = [...new Set(cells.map((c) => c.colour))];
+  const sizes = [...new Set(cells.map((c) => c.size))].sort((a, b) => sizeRank(a) - sizeRank(b));
+  const cellValue = (colour: string, size: string) => cells
+    .filter((c) => c.colour === colour && c.size === size).reduce((sum, c) => sum + c.value, 0);
+  const total = cells.reduce((sum, c) => sum + c.value, 0);
+  return (
+    <div className="p-5">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {MEASURES.map(([id, label]) => (
+          <Button key={id} type="button" size="sm" variant={measure === id ? "navy" : "outline"} onClick={() => setMeasure(id)}>
+            {id === "inspect" && inspected ? "In this inspection" : label}
+          </Button>
+        ))}
+        <span className="ml-auto text-sm font-semibold">Total: {total}</span>
+      </div>
+      {cells.every((c) => c.colour === "No colour" && c.size === "—") && (
+        <p className="mb-2 text-xs text-muted-foreground">{article} has no colour or size set, so all pieces are counted together.</p>
+      )}
+      <div className="overflow-x-auto">
+        <Table className="w-full text-[13px]">
+          <TableHeader><TableRow>
+            <TableHead>Colour</TableHead>
+            {sizes.map((size) => <TableHead key={size} className="text-center">{size}</TableHead>)}
+            <TableHead className="text-center">Total</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>
+            {colours.map((colour) => {
+              const rowTotal = sizes.reduce((sum, size) => sum + cellValue(colour, size), 0);
+              return (
+                <TableRow key={colour}>
+                  <TableCell><span className="flex items-center gap-2 font-semibold">
+                    <span className="h-3.5 w-3.5 rounded-full border border-black/10" style={{ background: swatch(colour) }} />{colour}</span></TableCell>
+                  {sizes.map((size) => {
+                    const value = cellValue(colour, size);
+                    return <TableCell key={size} className="px-1">
+                      <div className={`rounded-lg py-2 text-center font-bold tabular-nums ${value > 0 ? "bg-primary/10 text-foreground" : "bg-muted/50 text-muted-foreground"}`}>{value}</div>
+                    </TableCell>;
+                  })}
+                  <TableCell className="text-center font-extrabold tabular-nums">{rowTotal}</TableCell>
+                </TableRow>
+              );
+            })}
+            {colours.length > 1 && (
+              <TableRow>
+                <TableCell className="font-extrabold">Total</TableCell>
+                {sizes.map((size) => <TableCell key={size} className="text-center font-bold tabular-nums">
+                  {colours.reduce((sum, colour) => sum + cellValue(colour, size), 0)}</TableCell>)}
+                <TableCell className="text-center font-extrabold tabular-nums">{total}</TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
 
 export function QcWorkspace({ taskKey }: { taskKey: string }) {
   const client = useQueryClient();
@@ -61,12 +150,14 @@ export function QcWorkspace({ taskKey }: { taskKey: string }) {
   const [sampleSize, setSampleSize] = useState("");
   const [inspector, setInspector] = useState("");
   const [check, setCheck] = useState({ criterion: "", requirement: "", target: "", tolerance: "", actual: "" });
+  const [measure, setMeasureKind] = useState(false);
   const [defect, setDefect] = useState({ typeId: "", defectName: "", severity: "Major", qtyAffected: "1", description: "", imageDocId: "" });
   const [exceptionReason, setExceptionReason] = useState("");
   const [split, setSplit] = useState<Record<number, Split>>({});
   const [resolveReason, setResolveReason] = useState("");
   const [holdPick, setHoldPick] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState(false);
+  const [step, setStep] = useState<"checks" | "decide">("checks");
   const reload = () => client.invalidateQueries({ queryKey: ["quality", "task", taskKey] });
 
   if (!taskKey) return <p className="p-6 text-sm">Choose an inspection from the quality queue.</p>;
@@ -76,6 +167,12 @@ export function QcWorkspace({ taskKey }: { taskKey: string }) {
   const inspection = data.inspection;
   const needsReservation = !!inspection && inspection.stage === "Final" && inspection.reservations.length === 0;
   const sourceFor = (id: number) => data.sources.find((item) => item.id === id);
+  const lot = inspection?.lotQty ?? inspection?.sampleSize ?? data.plannedQty ?? 0;
+  const percentOf = (pieces: number) => lot ? Math.round(pieces * 10000 / lot) / 100 : null;
+  const livePercent = Number(check.tolerance.replace("%", "").trim());
+  const tolerancePreview = check.tolerance.trim() !== "" && lot && Number.isFinite(livePercent) ? Math.round(livePercent * lot) / 100 : null;
+  const liveTarget = Number(check.target);
+  const rangeText = tolerancePreview !== null && check.target.trim() !== "" && Number.isFinite(liveTarget) ? `${Math.round((liveTarget - tolerancePreview) * 100) / 100} to ${Math.round((liveTarget + tolerancePreview) * 100) / 100}` : null;
 
   // Decision table: every colour and size gets its own approved / held / rejected quantity.
   const reserved = inspection?.reservations ?? [];
@@ -120,20 +217,21 @@ export function QcWorkspace({ taskKey }: { taskKey: string }) {
   );
   const advanced = (covered: number) => (
     <details className="mt-3 rounded-lg border border-border/70 px-3 py-2">
-      <summary className="cursor-pointer text-sm font-semibold">Advanced options</summary>
+      <summary className="cursor-pointer text-sm font-semibold">Change how many pieces to check, or the inspector</summary>
       <div className="mt-3 grid gap-3 sm:grid-cols-3">
-        <label className="text-sm font-semibold">Coverage<NativeSelect className="mt-1 font-normal" value={samplingMode} onChange={(e) => setSamplingMode(e.target.value as "sample" | "full")}><option value="sample">Sampling</option><option value="full">100% inspection</option></NativeSelect></label>
-        <label className="text-sm font-semibold">Sample size<Input className="mt-1 font-normal" value={samplingMode === "full" ? String(covered) : sampleSize} placeholder={String(data.suggestedSampleSize || "")} disabled={samplingMode === "full"} onChange={(e) => setSampleSize(e.target.value)} /></label>
+        <label className="text-sm font-semibold">What to check<NativeSelect className="mt-1 font-normal" value={samplingMode} onChange={(e) => setSamplingMode(e.target.value as "sample" | "full")}><option value="sample">A sample of the pieces</option><option value="full">Every piece (100%)</option></NativeSelect></label>
+        <label className="text-sm font-semibold">Pieces to check<Input className="mt-1 font-normal" value={samplingMode === "full" ? String(covered) : sampleSize} placeholder={String(data.suggestedSampleSize || "")} disabled={samplingMode === "full"} onChange={(e) => setSampleSize(e.target.value)} /></label>
         <label className="text-sm font-semibold">Inspector<Input className="mt-1 font-normal" value={inspector} placeholder="Defaults to you" onChange={(e) => setInspector(e.target.value)} /></label>
       </div>
-      <p className="mt-2 text-xs text-muted-foreground">Company AQL {data.aql} (an administrator sets it in System Settings). Suggested sample {data.suggestedSampleSize || "—"} for this lot, acceptance number {data.suggestedMaxDefects}. {data.plan}</p>
+      <p className="mt-2 text-xs text-muted-foreground">Suggested: check {data.suggestedSampleSize || "—"} pieces from this lot; up to {data.suggestedMaxDefects} faulty pieces are allowed. (Company AQL {data.aql}, set by an administrator in System Settings.) {data.plan}</p>
     </details>
   );
 
   const begin = async (nextPurpose: "awaiting" | "held", midProduction = false) => {
     if (busy) return;
     const requestId = startRequest ?? crypto.randomUUID();
-    const covered = nextPurpose === "held" ? heldLines().reduce((total, row) => total + row.qty, 0) : data.awaiting;
+    const covered = nextPurpose === "held" ? heldLines().reduce((total, row) => total + row.qty, 0)
+      : midProduction && data.awaiting === 0 ? data.plannedQty ?? 0 : data.awaiting;
     const asked = samplingMode === "full" ? covered : Number(sampleSize || data.suggestedSampleSize || covered);
     setStartRequest(requestId); setBusy(true); setError(null);
     try {
@@ -178,8 +276,12 @@ export function QcWorkspace({ taskKey }: { taskKey: string }) {
   const addCheck = async () => {
     setError(null);
     const targetValue = optionalNumber(check.target);
-    const tolerance = optionalNumber(check.tolerance);
-    if (Number.isNaN(targetValue) || Number.isNaN(tolerance)) { setError("Target and tolerance must be numbers."); return; }
+    const percent = optionalNumber(check.tolerance.replace("%", ""));
+    if (Number.isNaN(targetValue) || Number.isNaN(percent)) { setError("Target and tolerance must be numbers."); return; }
+    if (percent !== null && (percent < 0 || percent > 100)) { setError("Tolerance is a percentage between 0 and 100."); return; }
+    if (percent !== null && !lot) { setError("This inspection covers no pieces, so a percentage tolerance cannot be worked out."); return; }
+    // The user enters a percentage of the lot; the allowed number of pieces is worked out here.
+    const tolerance = percent === null ? null : Math.round(percent * lot) / 100;
     try {
       await apiPost(`/quality/inspections/${inspection?.publicId}/checks`, {
         criterion: check.criterion, requirement: check.requirement, actual: check.actual, targetValue, tolerance, result: "Pending",
@@ -206,20 +308,22 @@ export function QcWorkspace({ taskKey }: { taskKey: string }) {
     } catch (error) { setError(message(error)); }
   };
 
-  const decide = async () => {
+  const decide = async (all?: keyof Split) => {
     if (!inspection || busy) return;
     const requestId = decideRequest ?? crypto.randomUUID();
     setDecideRequest(requestId); setBusy(true); setError(null);
+    // One-click outcomes send the whole lot to a single result; the table sends the split.
     const allocations = reserved.map((row) => {
+      if (all) return { sourceId: row.sourceId, approved: all === "approved" ? row.qty : 0, held: all === "held" ? row.qty : 0, rejected: all === "rejected" ? row.qty : 0 };
       const c = cell(row);
       return { sourceId: row.sourceId, approved: whole(c.approved), held: whole(c.held), rejected: whole(c.rejected) };
     });
     const decision = inspection.stage === "In-line" ? "inline"
-      : totals.approved === totals.qty ? "approve_all"
-      : totals.held === totals.qty ? "hold_all" : "split";
+      : all === "approved" || (!all && totals.approved === totals.qty) ? "approve_all"
+      : all === "held" || (!all && totals.held === totals.qty) ? "hold_all" : "split";
     try {
       await apiPost("/quality/tasks/decide", { taskKey: data.taskKey, requestId, decision, exceptionReason, allocations });
-      setDecideRequest(null); setSplit({}); setExceptionReason(""); reload();
+      setDecideRequest(null); setSplit({}); setExceptionReason(""); setStep("checks"); reload();
     } catch (error) { setError(message(error)); }
     finally { setBusy(false); }
   };
@@ -266,74 +370,125 @@ export function QcWorkspace({ taskKey }: { taskKey: string }) {
       </Card>
 
       <Card className="overflow-hidden">
-        <header className="border-b border-border/60 px-5 py-3"><h2 className="font-bold">Colour and size</h2></header>
-        <Table>
-          <TableHeader><TableRow><TableHead>Colour / size</TableHead><TableHead className="text-center">To inspect</TableHead><TableHead className="text-center">On hold</TableHead><TableHead className="text-center">Released</TableHead><TableHead className="text-center">Rejected</TableHead></TableRow></TableHeader>
-          <TableBody>{data.sources.map((row) => (
-            <TableRow key={row.id}>
-              <TableCell className="font-semibold">{colourSize(row, data.article)}</TableCell>
-              <TableCell className="text-center tabular-nums">{row.awaiting}</TableCell>
-              <TableCell className="text-center tabular-nums">{row.held}</TableCell>
-              <TableCell className="text-center tabular-nums">{row.approved}</TableCell>
-              <TableCell className="text-center tabular-nums">{row.rejected}</TableCell>
-            </TableRow>
-          ))}</TableBody>
-        </Table>
+        <details open>
+        <summary className="cursor-pointer border-b border-border/60 px-5 py-3 font-bold">Colour and size</summary>
+        <SizeBreakdown sources={data.sources} article={data.article} inspected={inspection?.reservations ?? null} />
+        </details>
       </Card>
 
-      {(!inspection || needsReservation) && (data.awaiting > 0 || needsReservation) && (
+      {inspection && !needsReservation && (
+        <ol className="flex flex-wrap items-center gap-2 text-sm" aria-label="Inspection steps">
+          <li className="flex items-center gap-2"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#2E9E6B] text-xs font-bold text-white">✓</span><span className="text-muted-foreground">Start inspection</span><span className="mx-1 h-px w-6 bg-border" /></li>
+          {([["checks", "2", "Checks and defects"], ["decide", "3", "Decision"]] as const).map(([id, number, label]) => (
+            <li key={id} className="flex items-center gap-2">
+              <button type="button" onClick={() => setStep(id)} className="flex items-center gap-2">
+                <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${step === id ? "bg-[#2563EB] text-white" : "bg-[#E3E5EA] text-foreground"}`}>{number}</span>
+                <span className={step === id ? "font-bold" : "text-muted-foreground"}>{label}</span>
+              </button>
+              {id === "checks" && <span className="mx-1 h-px w-6 bg-border" />}
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {!inspection && data.approved > 0 && (
+        <>
+          <Card className="border-[#2E9E6B]/40 bg-[#2E9E6B]/5 p-5">
+            <h2 className="font-bold">{data.approved} pieces released</h2>
+            <p className="text-sm text-muted-foreground">These pieces passed quality and can now be shipped.</p>
+          </Card>
+          <QcShip poRef={data.poRef} orderRef={data.orderRef} article={data.article} />
+        </>
+      )}
+
+      {(!inspection || needsReservation) && (data.awaiting > 0 || needsReservation || data.inProduction) && (
         <Card className="p-5">
           <h2 className="font-bold">Inspect finished pieces</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{data.awaiting} pieces are waiting. You inspect a sample, then decide what happens to all {data.awaiting} pieces, colour by colour and size by size.</p>
+          {data.awaiting > 0
+            ? <p className="mt-1 text-sm text-muted-foreground">{data.awaiting} pieces are waiting. You inspect a sample, then decide what happens to all {data.awaiting} pieces, colour by colour and size by size.</p>
+            : <p className="mt-1 text-sm text-muted-foreground">Production is still running for this article ({data.plannedQty ?? 0} pieces planned). You can run a mid-production check at any stage.</p>}
           {needsReservation && <Notice tone="amber" className="mt-2">This inspection is open but has not reserved a quantity. Start it to lock the pieces this decision covers.</Notice>}
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button type="button" disabled={busy} onClick={() => begin("awaiting")}>Start inspection</Button>
-            {!needsReservation && <Button type="button" variant="outline" disabled={busy} onClick={() => begin("awaiting", true)}>Mid-production check</Button>}
+            {(data.awaiting > 0 || needsReservation) && <Button type="button" disabled={busy} onClick={() => begin("awaiting")}>Start inspection</Button>}
+            {!needsReservation && <Button type="button" variant={data.awaiting > 0 ? "outline" : "default"} disabled={busy} onClick={() => begin("awaiting", true)}>Mid-production check</Button>}
           </div>
           <p className="mt-2 text-xs text-muted-foreground">A mid-production check records pass or fail only. It does not release, hold or reject pieces.</p>
           {advanced(data.awaiting)}
         </Card>
       )}
 
-      {inspection && (
+      {inspection && (step === "checks" || needsReservation) && (
         <Card className="p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 className="font-bold">Checks and defects · {inspection.inspectionNo}</h2>
-              <p className="text-sm text-muted-foreground">{inspection.stage === "In-line" ? "Mid-production check" : inspection.stage} · sample {inspection.sampleSize ?? "—"} · lot covered {inspection.lotQty ?? "not a release"} · defects {inspection.defectCount} / limit {inspection.maxDefects ?? "—"}</p>
+              <p className="text-sm text-muted-foreground">{inspection.stage === "In-line" ? "Mid-production check" : inspection.stage} · checking {inspection.sampleSize ?? "—"} pieces · covers {inspection.lotQty ?? "no pieces (check only)"} · faults found {inspection.defectCount} (up to {inspection.maxDefects ?? "—"} allowed)</p>
             </div>
             {inspection.checks.some((row) => row.result === "Pending") && (
-              <Button type="button" size="sm" variant="outline" disabled={busy} onClick={markAllPass}>Mark all pending as pass</Button>
+              <Button type="button" size="sm" variant="outline" disabled={busy} onClick={markAllPass}>Mark all as passed</Button>
             )}
           </div>
           <div className="mt-3 space-y-2">
             {inspection.checks.map((row) => (
-              <div key={row.publicId} className="grid items-center gap-2 rounded-lg border border-border/70 p-2 sm:grid-cols-[1fr_120px_1fr_auto]">
-                <div>
-                  <strong>{row.criterion}</strong>
-                  <p className="text-xs text-muted-foreground">{row.requirement}{row.targetValue !== null && row.tolerance !== null ? ` · target ${row.targetValue} ± ${row.tolerance}` : ""}</p>
+              <div key={row.publicId} className="rounded-lg border border-border/70 p-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <strong>{row.criterion}</strong>
+                    <p className="text-xs text-muted-foreground">{row.requirement}{row.targetValue !== null && row.tolerance !== null ? ` · target ${row.targetValue} ± ${row.tolerance} pieces${percentOf(row.tolerance) !== null ? ` (${percentOf(row.tolerance)}% of ${lot})` : ""}` : ""}</p>
+                  </div>
+                  <div className="flex items-center gap-1" role="group" aria-label={`Result for ${row.criterion}`}>
+                    <Button type="button" size="sm" className="h-9 min-w-14" variant={row.result === "Pass" ? "default" : "outline"} onClick={() => saveCheck(row, { result: "Pass" })}>Pass</Button>
+                    <Button type="button" size="sm" className="h-9 min-w-14" variant={row.result === "Fail" ? "destructive" : "outline"} onClick={() => saveCheck(row, { result: "Fail" })}>Fail</Button>
+                    <Button type="button" size="sm" className="h-9" variant={row.result === "Warning" ? "navy" : "outline"} onClick={() => saveCheck(row, { result: "Warning" })}>Warning</Button>
+                    <Button type="button" size="sm" className="h-9" variant={row.result === "NA" ? "navy" : "outline"} onClick={() => saveCheck(row, { result: "NA" })}>N/A</Button>
+                    <Button type="button" size="sm" className="h-9 text-destructive" variant="ghost" aria-label={`Delete check ${row.criterion}`}
+                      onClick={() => { if (window.confirm(`Delete the check “${row.criterion}”?`)) apiDelete(`/quality/checks/${row.publicId}`).then(reload).catch((err) => setError(message(err))); }}>Delete</Button>
+                  </div>
                 </div>
-                <Input defaultValue={row.actual ?? ""} placeholder="Actual" onBlur={(e) => saveCheck(row, { actual: e.target.value })} />
-                <Input defaultValue={row.notes ?? ""} placeholder="Notes" onBlur={(e) => saveCheck(row, { notes: e.target.value })} />
-                <NativeSelect value={row.result} onChange={(e) => saveCheck(row, { result: e.target.value })}>
-                  {["Pending", "Pass", "Fail", "Warning", "NA"].map((item) => <option key={item}>{item}</option>)}
-                </NativeSelect>
+                <details className="mt-1" open={!!(row.actual || row.notes) || row.targetValue !== null}>
+                  <summary className="cursor-pointer text-xs font-semibold text-primary">Measurement and notes</summary>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-[160px_1fr]">
+                    <Input defaultValue={row.actual ?? ""} placeholder="Actual" onBlur={(e) => saveCheck(row, { actual: e.target.value })} />
+                    <Input defaultValue={row.notes ?? ""} placeholder="Notes" onBlur={(e) => saveCheck(row, { notes: e.target.value })} />
+                  </div>
+                </details>
               </div>
             ))}
           </div>
-          <div className="mt-3 grid gap-2 sm:grid-cols-6">
-            <Input placeholder="Check" value={check.criterion} onChange={(e) => setCheck({ ...check, criterion: e.target.value })} />
-            <Input placeholder="Requirement" value={check.requirement} onChange={(e) => setCheck({ ...check, requirement: e.target.value })} />
-            <Input placeholder="Target" inputMode="decimal" value={check.target} onChange={(e) => setCheck({ ...check, target: e.target.value })} />
-            <Input placeholder="± Tolerance" inputMode="decimal" value={check.tolerance} onChange={(e) => setCheck({ ...check, tolerance: e.target.value })} />
-            <Input placeholder="Actual" value={check.actual} onChange={(e) => setCheck({ ...check, actual: e.target.value })} />
-            <Button type="button" variant="outline" onClick={addCheck}>Add check</Button>
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">With a target and tolerance, the result is set automatically from the actual value.</p>
+          <details className="mt-3 rounded-lg border border-border/70 px-3 py-2">
+            <summary className="cursor-pointer text-sm font-semibold">Add your own check</summary>
+            <p className="mt-2 text-sm text-muted-foreground">Add a point the inspector should look at that is not already in the list.</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="block text-sm font-semibold">What to check
+                <Input className="mt-1 font-normal" placeholder="e.g. Stitching, Chest width, Label position" value={check.criterion} onChange={(e) => setCheck({ ...check, criterion: e.target.value })} /></label>
+              <label className="block text-sm font-semibold">What good looks like <span className="font-normal text-muted-foreground">(optional)</span>
+                <Input className="mt-1 font-normal" placeholder="e.g. No loose threads" value={check.requirement} onChange={(e) => setCheck({ ...check, requirement: e.target.value })} /></label>
+            </div>
+            <label className="mt-3 flex items-center gap-2 text-sm">
+              <input type="checkbox" className="h-4 w-4" checked={measure} onChange={(e) => { setMeasureKind(e.target.checked); if (!e.target.checked) setCheck({ ...check, target: "", tolerance: "", actual: "" }); }} />
+              This is a count or measurement, not just pass or fail
+            </label>
+            {measure && (
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                <label className="block text-sm font-semibold">Expected number
+                  <Input className="mt-1 font-normal" inputMode="decimal" placeholder="e.g. 30" value={check.target} onChange={(e) => setCheck({ ...check, target: e.target.value })} /></label>
+                <label className="block text-sm font-semibold">Allowed difference, % of lot
+                  <Input className="mt-1 font-normal" inputMode="decimal" placeholder="e.g. 5" value={check.tolerance} onChange={(e) => setCheck({ ...check, tolerance: e.target.value })} /></label>
+                <label className="block text-sm font-semibold">Number you found <span className="font-normal text-muted-foreground">(optional now)</span>
+                  <Input className="mt-1 font-normal" inputMode="decimal" value={check.actual} onChange={(e) => setCheck({ ...check, actual: e.target.value })} /></label>
+                <p className="text-xs text-muted-foreground sm:col-span-3">
+                  {rangeText ? `5% of ${lot} pieces is ${tolerancePreview}, so it passes if the number found is ${rangeText}.`.replace("5%", `${livePercent}%`) : `Passes when the number found is close enough to the expected number. The lot is ${lot || "—"} pieces.`}
+                </p>
+              </div>
+            )}
+            <Button type="button" className="mt-3" variant="outline" disabled={!check.criterion.trim()} onClick={addCheck}>Add check</Button>
+          </details>
 
-          <h3 className="mt-4 font-bold">Defects</h3>
-          {inspection.defects.length === 0 && <p className="text-sm text-muted-foreground">No defects logged.</p>}
+          <h3 className="mt-4 font-bold">Defects found</h3>
+          {inspection.defects.length === 0 && <p className="text-sm text-muted-foreground">None logged. Use “Log a defect” below only if you find faulty pieces.</p>}
           {inspection.defects.map((row) => <p key={row.publicId} className="text-sm">{row.name} · {row.severity} · {row.qty}{row.notes ? ` · ${row.notes}` : ""} <button type="button" className="font-semibold text-primary hover:underline" onClick={() => apiDelete(`/quality/defects/log/${row.publicId}`).then(reload).catch((error) => setError(message(error)))}>Remove</button></p>)}
+          <details className="mt-2 rounded-lg border border-border/70 px-3 py-2" open={inspection.defects.length === 0 && inspection.checks.some((row) => row.result === "Fail") ? true : undefined}>
+          <summary className="cursor-pointer text-sm font-semibold">Log a defect</summary>
           <div className="mt-2 grid gap-2 sm:grid-cols-5">
             <NativeSelect aria-label="Defect type" value={defect.typeId} onChange={(e) => setDefect({ ...defect, typeId: e.target.value })}>
               <option value="">Choose defect…</option>
@@ -358,24 +513,43 @@ export function QcWorkspace({ taskKey }: { taskKey: string }) {
             }} /></label>
             <Button type="button" variant="outline" disabled={!defect.typeId} onClick={addDefect}>Add defect</Button>
           </div>
+          </details>
+          {!needsReservation && <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm text-muted-foreground">{inspection.checks.filter((row) => row.result !== "Pending").length} of {inspection.checks.length} checks done{inspection.checks.some((row) => row.result === "Fail") ? " · some failed" : ""}</span>
+            <Button type="button" onClick={() => setStep("decide")}>Next: Decision</Button></div>}
         </Card>
       )}
 
-      {inspection && !needsReservation && (
+      {inspection && !needsReservation && step === "decide" && (
         <Card className="p-5">
+          <button type="button" className="mb-2 text-sm font-semibold text-primary hover:underline" onClick={() => setStep("checks")}>← Back to checks and defects</button>
           <h2 className="font-bold">Decision</h2>
           <ul className="mt-2 list-disc pl-5 text-sm">{inspection.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
           {inspection.stage === "Final" ? (
             <div className="mt-3 space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-semibold">Fill every colour and size:</span>
-                <Button type="button" size="sm" variant="outline" onClick={() => fillAll("approved")}>Approve all</Button>
+              <p className="text-sm font-semibold">{inspection.accepted ? "This lot passed. What should happen to all " : "This lot did not pass. What should happen to all "}{totals.qty} pieces?</p>
+              {!inspection.accepted && <Notice tone="amber">Releasing a lot that did not meet the acceptance rules needs an exception reason from someone with release-exception permission.</Notice>}
+              {!inspection.accepted && (
+                <label className="block text-sm font-semibold">Exception reason, only needed to release {data.canReleaseException ? "" : "(administrator required)"}
+                  <Input className="mt-1 font-normal" value={exceptionReason} disabled={!data.canReleaseException} onChange={(e) => setExceptionReason(e.target.value)} />
+                </label>
+              )}
+              <div className="grid gap-2 sm:grid-cols-3">
+                <Button type="button" size="lg" variant={inspection.accepted ? "default" : "outline"} disabled={busy || (!inspection.accepted && (!data.canReleaseException || !exceptionReason.trim()))} onClick={() => decide("approved")}>Release all {totals.qty}</Button>
+                <Button type="button" size="lg" variant={inspection.accepted ? "outline" : "default"} disabled={busy} onClick={() => decide("held")}>Hold all {totals.qty}</Button>
+                <Button type="button" size="lg" variant="outline" disabled={busy} onClick={() => decide("rejected")}>Reject all {totals.qty}</Button>
+              </div>
+              <details className="rounded-lg border border-border/70 px-3 py-2">
+              <summary className="cursor-pointer text-sm font-semibold">Split by colour and size instead</summary>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="text-sm font-semibold">Set every colour and size to:</span>
+                <Button type="button" size="sm" variant="outline" onClick={() => fillAll("approved")}>Release all</Button>
                 <Button type="button" size="sm" variant="outline" onClick={() => fillAll("held")}>Hold all</Button>
                 <Button type="button" size="sm" variant="outline" onClick={() => fillAll("rejected")}>Reject all</Button>
-                <button type="button" className="text-sm font-semibold text-primary hover:underline" onClick={() => setSplit({})}>Reset to suggested</button>
+                <button type="button" className="text-sm font-semibold text-primary hover:underline" onClick={() => setSplit({})}>Reset to suggestion</button>
               </div>
               <Table>
-                <TableHeader><TableRow><TableHead className="px-0">Colour / size</TableHead><TableHead className="text-center">In this inspection</TableHead><TableHead>Approve</TableHead><TableHead>Hold</TableHead><TableHead>Reject</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead className="px-0">Colour / size</TableHead><TableHead className="text-center">Pieces</TableHead><TableHead>Approve</TableHead><TableHead>Hold</TableHead><TableHead>Reject</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {reserved.map((row) => {
                     const current = cell(row);
@@ -402,17 +576,13 @@ export function QcWorkspace({ taskKey }: { taskKey: string }) {
                   </TableRow>
                 </TableBody>
               </Table>
-              {!inspection.accepted && <Notice tone="amber">This lot did not meet the acceptance rules, so the suggestion is to hold it. Approving any pieces needs an exception reason from someone with release-exception permission.</Notice>}
-              {needsException && (
-                <label className="block text-sm font-semibold">Exception reason {data.canReleaseException ? "" : "(administrator required)"}
-                  <Input className="mt-1 font-normal" value={exceptionReason} disabled={!data.canReleaseException} onChange={(e) => setExceptionReason(e.target.value)} />
-                </label>
-              )}
+              <Button type="button" className="mt-3" variant="outline" disabled={busy || decisionBlocked} onClick={() => decide()}>Save this split</Button>
+              </details>
             </div>
-          ) : <p className="mt-2 text-sm">A mid-production check records the result only. It does not approve, hold, or reject pieces.</p>}
-          <Button type="button" className="mt-3" disabled={busy || (inspection.stage === "Final" && decisionBlocked)} onClick={decide}>
-            {inspection.stage === "Final" ? "Complete inspection" : "Record result"}
-          </Button>
+          ) : <>
+            <p className="mt-2 text-sm">A mid-production check records the result only. It does not release, hold or reject pieces.</p>
+            <Button type="button" className="mt-3" disabled={busy} onClick={() => decide()}>Record result</Button>
+          </>}
         </Card>
       )}
 

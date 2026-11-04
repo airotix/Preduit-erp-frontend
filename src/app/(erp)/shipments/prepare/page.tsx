@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost } from "@/lib/api-client";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ type Workspace = { sources: Source[]; locations: { id: number; name: string }[] 
 
 export default function PrepareShipmentPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [keys, setKeys] = React.useState<string[]>([]);
   const [qty, setQty] = React.useState<Record<string, string>>({});
   const [origin, setOrigin] = React.useState("");
@@ -42,15 +43,33 @@ export default function PrepareShipmentPage() {
     queryKey: ["shipments-prepare"],
     queryFn: () => apiGet<Workspace>("/shipments/workspace?view=ready"),
   });
+  const { data: carrierData } = useQuery({
+    queryKey: ["shipment-carriers"],
+    queryFn: () => apiGet<{ carriers: { name: string; service: string }[] }>("/shipments/carriers/search?q="),
+  });
+  const carriers = carrierData?.carriers ?? [];
+  const typedCarrier = carrier.trim();
+  const isNewCarrier = !!typedCarrier && !carriers.some((c) => c.name.toLowerCase() === typedCarrier.toLowerCase());
+  const today = new Date().toISOString().slice(0, 10);
+  React.useEffect(() => { setDispatchOn((v) => v || today); }, [today]);
   const selected = (data?.sources || []).filter((row) => keys.includes(row.key));
   const incoming = selected.some((row) => row.direction === "Incoming");
   const needsWarehouse = selected.some((row) => row.key.startsWith("bin:"));
+  // Selected goods tell us where they are coming from; the chosen warehouse is where they go.
+  React.useEffect(() => {
+    if (!origin && incoming && selected[0]?.party) setOrigin(selected[0].party);
+  }, [selected, incoming, origin]);
+  React.useEffect(() => {
+    const loc = data?.locations.find((l) => String(l.id) === locationId);
+    if (loc) setDestination(loc.name);
+  }, [locationId, data]);
   React.useEffect(() => {
     if (selected[0]?.savedDestination && !destination) setDestination(selected[0].savedDestination);
   }, [selected, destination]);
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError("");
+    if (eta && dispatchOn && eta < dispatchOn) { setError("ETA cannot be earlier than the planned dispatch date."); return; }
     const lines = selected.map((row) => ({ key: row.key, quantity: Number(qty[row.key] ?? row.eligible) }));
     const body = { direction: incoming ? "Incoming" : "Outgoing", origin, destination, carrier, dispatchOn, eta, tracking,
       reason, locationId: locationId ? Number(locationId) : null, lines };
@@ -60,6 +79,7 @@ export default function PrepareShipmentPage() {
     try {
       const result = await apiPost<{ publicId: string }>(`/shipments/prepare`, { ...body, requestId: request.current.id });
       request.current = null;
+      void queryClient.invalidateQueries({ queryKey: ["shipment-carriers"] });
       sessionStorage.removeItem("shipment-prepare-keys");
       router.push(`/shipments/shipments/${result.publicId}`);
     } catch (err) {
@@ -93,12 +113,19 @@ export default function PrepareShipmentPage() {
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5"><Label htmlFor="prep-origin">Origin</Label><Input id="prep-origin" required value={origin} onChange={(e) => setOrigin(e.target.value)} /></div>
         <div className="space-y-1.5"><Label htmlFor="prep-destination">Destination</Label><Input id="prep-destination" required value={destination} onChange={(e) => setDestination(e.target.value)} /></div>
-        <div className="space-y-1.5"><Label htmlFor="prep-carrier">Carrier or transport method</Label><Input id="prep-carrier" required value={carrier} onChange={(e) => setCarrier(e.target.value)} /></div>
-        <div className="space-y-1.5"><Label htmlFor="prep-dispatch">Planned dispatch date</Label><Input id="prep-dispatch" value={dispatchOn} onChange={(e) => setDispatchOn(e.target.value)} /></div>
-        <div className="space-y-1.5"><Label htmlFor="prep-eta">ETA</Label><Input id="prep-eta" value={eta} onChange={(e) => setEta(e.target.value)} /></div>
-        <div className="space-y-1.5"><Label htmlFor="prep-tracking">Tracking reference</Label><Input id="prep-tracking" value={tracking} onChange={(e) => setTracking(e.target.value)} /></div>
+        <div className="space-y-1.5"><Label htmlFor="prep-carrier">Carrier or transport method</Label><Input id="prep-carrier" required list="prep-carrier-list" autoComplete="off" placeholder="Pick a carrier or type a new one" value={carrier} onChange={(e) => setCarrier(e.target.value)} />
+          <datalist id="prep-carrier-list">{carriers.map((c) => <option key={c.name} value={c.name}>{c.service}</option>)}</datalist>
+          {isNewCarrier && <p className="text-xs text-muted-foreground">“{typedCarrier}” is new and will be added to your carriers list.</p>}</div>
       </div>
-      <div className="space-y-1.5"><Label htmlFor="prep-note">Preparation note</Label><Input id="prep-note" required minLength={3} value={reason} onChange={(e) => setReason(e.target.value)} /></div>
+      <details className="rounded-lg border border-border/70 px-3 py-2">
+        <summary className="cursor-pointer text-sm font-semibold">Dates, tracking and note <span className="font-normal text-muted-foreground">· dispatch {dispatchOn || "today"}{eta ? `, ETA ${eta}` : ""} (optional, can be changed later)</span></summary>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5"><Label htmlFor="prep-dispatch">Planned dispatch date</Label><Input id="prep-dispatch" type="date" value={dispatchOn} onChange={(e) => setDispatchOn(e.target.value)} /></div>
+          <div className="space-y-1.5"><Label htmlFor="prep-eta">ETA <span className="font-normal text-muted-foreground">(optional)</span></Label><Input id="prep-eta" type="date" min={dispatchOn || undefined} value={eta} onChange={(e) => setEta(e.target.value)} /></div>
+          <div className="space-y-1.5"><Label htmlFor="prep-tracking">Tracking reference <span className="font-normal text-muted-foreground">(optional)</span></Label><Input id="prep-tracking" value={tracking} onChange={(e) => setTracking(e.target.value)} /></div>
+          <div className="space-y-1.5"><Label htmlFor="prep-note">Preparation note</Label><Input id="prep-note" required minLength={3} value={reason} onChange={(e) => setReason(e.target.value)} /></div>
+        </div>
+      </details>
       {error && <Notice tone="red">{error}</Notice>}
       <Button disabled={busy} type="submit">{busy ? "Saving…" : "Create prepared shipment"}</Button>
     </form>}
